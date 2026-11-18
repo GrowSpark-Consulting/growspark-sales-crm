@@ -1,0 +1,35 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit",
+    "lint": "eslint .",
+    "test": "echo \"no tests in apps/web yet\""
+  },
+  "dependencies": {
+    "@growspark/shared": "workspace:*",
+    "@tanstack/react-query": "5.108.0",
+    "class-variance-authority": "0.7.1",
+    "cn": "0.5.2",
+    "next": "16.4.6",
+    "radix-ui": "1.8.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "4.3.5",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "10.15.0",
+    "eslint-config-next": "16.4.6",
+    "shadcn": "4.23.0",
+    "tailwindcss": "4.3.5",
+    "typescript": "6.0.3"
+  },
+  "packageManager": "pnpm@11.10.0"
+}
