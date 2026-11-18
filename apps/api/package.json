@@ -13,7 +13,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:reset": "tsx scripts/db-reset.ts"
+    "db:reset": "tsx scripts/db-reset.ts",
+    "db:verify-fresh": "tsx scripts/db-verify-fresh.ts"
   },
   "dependencies": {
     "@growspark/shared": "workspace:*",
