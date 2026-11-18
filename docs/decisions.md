@@ -94,3 +94,11 @@ is a decision made once and not re-litigated without a new entry.
   - Verified end-to-end: deleted `node_modules`, `packages/shared/dist`, and
     `apps/web/.next` repo-wide, ran `pnpm install --frozen-lockfile`, then `pnpm
     typecheck && pnpm lint && pnpm test` with no manual steps — all passed.
+- **D13** — Same-organisation integrity (e.g. a `Deal.companyId` actually belonging
+  to the same `organizationId` as the deal itself) is **not** enforced by the
+  database. Postgres composite foreign keys were deliberately not used for this.
+  It will be enforced at the service layer instead (tested Day 6, per the package
+  1.2 brief). This is a conscious scope boundary for the schema package, not an
+  oversight — every table still gets its own `organization_id` NOT NULL column +
+  single-column FK to `organizations`, just not a composite FK tying it to each
+  parent row's organisation.
