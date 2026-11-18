@@ -9,6 +9,12 @@
 -- because Prisma's schema language cannot express it:
 --   - CHECK constraints (Prisma has no @@check / @check attribute in v7).
 --   - Partial indexes (Prisma's @@index has no WHERE clause support).
+--
+-- This is the regenerated version of the schema-approved migration (same
+-- name, new timestamp, folder 20261118201529_init deleted — it was never
+-- applied). It incorporates the index/unique-constraint amendments requested
+-- at approval time (see docs/decisions.md D14) in addition to everything
+-- from the original Phase A migration.
 -- ============================================================================
 
 -- CreateEnum
@@ -390,6 +396,15 @@ CREATE INDEX "leads_organization_id_phone_normalized_idx" ON "leads"("organizati
 CREATE INDEX "leads_organization_id_company_name_normalized_idx" ON "leads"("organization_id", "company_name_normalized");
 
 -- CreateIndex
+CREATE INDEX "leads_organization_id_owner_id_idx" ON "leads"("organization_id", "owner_id");
+
+-- CreateIndex
+CREATE INDEX "leads_organization_id_source_id_idx" ON "leads"("organization_id", "source_id");
+
+-- CreateIndex
+CREATE INDEX "lead_status_histories_organization_id_lead_id_created_at_idx" ON "lead_status_histories"("organization_id", "lead_id", "created_at");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "lead_conversions_lead_id_key" ON "lead_conversions"("lead_id");
 
 -- CreateIndex
@@ -408,7 +423,13 @@ CREATE INDEX "contacts_organization_id_phone_normalized_idx" ON "contacts"("orga
 CREATE INDEX "contacts_organization_id_company_id_idx" ON "contacts"("organization_id", "company_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "pipelines_organization_id_name_key" ON "pipelines"("organization_id", "name");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "pipeline_stages_organization_id_pipeline_id_position_key" ON "pipeline_stages"("organization_id", "pipeline_id", "position");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "pipeline_stages_organization_id_pipeline_id_name_key" ON "pipeline_stages"("organization_id", "pipeline_id", "name");
 
 -- CreateIndex
 CREATE INDEX "deals_organization_id_status_expected_close_date_idx" ON "deals"("organization_id", "status", "expected_close_date");
@@ -420,7 +441,10 @@ CREATE INDEX "deals_organization_id_company_id_idx" ON "deals"("organization_id"
 CREATE INDEX "deals_organization_id_owner_id_idx" ON "deals"("organization_id", "owner_id");
 
 -- CreateIndex
-CREATE INDEX "deal_contacts_organization_id_idx" ON "deal_contacts"("organization_id");
+CREATE INDEX "deal_contacts_organization_id_contact_id_idx" ON "deal_contacts"("organization_id", "contact_id");
+
+-- CreateIndex
+CREATE INDEX "deal_stage_histories_organization_id_deal_id_created_at_idx" ON "deal_stage_histories"("organization_id", "deal_id", "created_at");
 
 -- CreateIndex
 CREATE INDEX "activities_organization_id_lead_id_idx" ON "activities"("organization_id", "lead_id");
@@ -436,6 +460,9 @@ CREATE INDEX "activities_organization_id_deal_id_idx" ON "activities"("organizat
 
 -- CreateIndex
 CREATE INDEX "website_submissions_organization_id_status_received_at_idx" ON "website_submissions"("organization_id", "status", "received_at");
+
+-- CreateIndex
+CREATE INDEX "website_submissions_organization_id_lead_id_idx" ON "website_submissions"("organization_id", "lead_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "website_submissions_organization_id_external_id_key" ON "website_submissions"("organization_id", "external_id");
@@ -625,9 +652,10 @@ ALTER TABLE "activities" ADD CONSTRAINT "activities_has_link"
 ALTER TABLE "activities" ADD CONSTRAINT "activities_done_has_completed_at"
   CHECK ("status" <> 'DONE' OR "completed_at" IS NOT NULL);
 
--- CreateCheckConstraint
+-- CreateCheckConstraint (amended at approval: blank strings now also rejected,
+-- not just NULL — see docs/decisions.md D14)
 ALTER TABLE "leads" ADD CONSTRAINT "leads_has_email_or_phone"
-  CHECK ("email_normalized" IS NOT NULL OR "phone_normalized" IS NOT NULL);
+  CHECK (NULLIF(btrim("email_normalized"), '') IS NOT NULL OR NULLIF(btrim("phone_normalized"), '') IS NOT NULL);
 
 -- CreateCheckConstraint
 ALTER TABLE "leads" ADD CONSTRAINT "leads_converted_has_converted_at"
@@ -645,9 +673,10 @@ ALTER TABLE "deals" ADD CONSTRAINT "deals_probability_range"
 ALTER TABLE "deals" ADD CONSTRAINT "deals_value_non_negative"
   CHECK ("value" >= 0);
 
--- CreateCheckConstraint
+-- CreateCheckConstraint (amended at approval: blank strings now also rejected,
+-- not just NULL — see docs/decisions.md D14)
 ALTER TABLE "deals" ADD CONSTRAINT "deals_lost_requires_reason"
-  CHECK ("status" <> 'LOST' OR "lost_reason" IS NOT NULL);
+  CHECK ("status" <> 'LOST' OR NULLIF(btrim("lost_reason"), '') IS NOT NULL);
 
 -- CreateCheckConstraint
 ALTER TABLE "deals" ADD CONSTRAINT "deals_open_has_no_closed_at"
@@ -656,3 +685,28 @@ ALTER TABLE "deals" ADD CONSTRAINT "deals_open_has_no_closed_at"
 -- CreateCheckConstraint
 ALTER TABLE "deals" ADD CONSTRAINT "deals_closed_status_has_closed_at"
   CHECK ("status" NOT IN ('WON', 'LOST') OR "closed_at" IS NOT NULL);
+
+-- CreateCheckConstraint (added at approval — see docs/decisions.md D14)
+ALTER TABLE "users" ADD CONSTRAINT "users_email_lowercase"
+  CHECK ("email" = lower(btrim("email")));
+
+-- CreateCheckConstraint (not-blank checks, added at approval — see
+-- docs/decisions.md D14)
+ALTER TABLE "companies" ADD CONSTRAINT "companies_name_not_blank"
+  CHECK (NULLIF(btrim("name"), '') IS NOT NULL);
+
+-- CreateCheckConstraint
+ALTER TABLE "contacts" ADD CONSTRAINT "contacts_first_name_not_blank"
+  CHECK (NULLIF(btrim("first_name"), '') IS NOT NULL);
+
+-- CreateCheckConstraint
+ALTER TABLE "leads" ADD CONSTRAINT "leads_first_name_not_blank"
+  CHECK (NULLIF(btrim("first_name"), '') IS NOT NULL);
+
+-- CreateCheckConstraint
+ALTER TABLE "deals" ADD CONSTRAINT "deals_name_not_blank"
+  CHECK (NULLIF(btrim("name"), '') IS NOT NULL);
+
+-- CreateCheckConstraint
+ALTER TABLE "activities" ADD CONSTRAINT "activities_subject_not_blank"
+  CHECK (NULLIF(btrim("subject"), '') IS NOT NULL);

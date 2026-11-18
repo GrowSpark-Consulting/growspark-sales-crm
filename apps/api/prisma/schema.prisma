@@ -285,6 +285,8 @@ model Lead {
   @@index([organizationId, emailNormalized])
   @@index([organizationId, phoneNormalized])
   @@index([organizationId, companyNameNormalized])
+  @@index([organizationId, ownerId])
+  @@index([organizationId, sourceId])
   @@map("leads")
 }
 
@@ -301,6 +303,7 @@ model LeadStatusHistory {
   lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Restrict)
   changedBy    User         @relation("LeadStatusHistoryChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
 
+  @@index([organizationId, leadId, createdAt])
   @@map("lead_status_histories")
 }
 
@@ -415,6 +418,7 @@ model Pipeline {
   stages       PipelineStage[]
   deals        Deal[]
 
+  @@unique([organizationId, name])
   @@map("pipelines")
 }
 
@@ -437,6 +441,7 @@ model PipelineStage {
 
   // CHECK (probability BETWEEN 0 AND 100) added by hand to the migration SQL.
   @@unique([organizationId, pipelineId, position])
+  @@unique([organizationId, pipelineId, name])
   @@map("pipeline_stages")
 }
 
@@ -495,7 +500,7 @@ model DealContact {
   contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Restrict)
 
   @@id([dealId, contactId])
-  @@index([organizationId])
+  @@index([organizationId, contactId])
   @@map("deal_contacts")
 }
 
@@ -514,6 +519,7 @@ model DealStageHistory {
   toStage      PipelineStage  @relation("DealStageHistoryToStage", fields: [toStageId], references: [id], onDelete: Restrict)
   changedBy    User           @relation("DealStageHistoryChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
 
+  @@index([organizationId, dealId, createdAt])
   @@map("deal_stage_histories")
 }
 
@@ -586,5 +592,6 @@ model WebsiteSubmission {
 
   @@unique([organizationId, externalId])
   @@index([organizationId, status, receivedAt])
+  @@index([organizationId, leadId])
   @@map("website_submissions")
 }

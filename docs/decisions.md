@@ -102,3 +102,36 @@ is a decision made once and not re-litigated without a new entry.
   oversight — every table still gets its own `organization_id` NOT NULL column +
   single-column FK to `organizations`, just not a composite FK tying it to each
   parent row's organisation.
+- **D14** — Schema/migration amendments made at Phase A approval time (schema was
+  never applied, so the unapplied `20261118201529_init` migration folder was
+  deleted and regenerated as `20261118202744_init` rather than patched):
+  - Added indexes: `LeadStatusHistory`/`DealStageHistory` each gained
+    `(organizationId, <parent>Id, createdAt)` for efficient "history for this
+    record, newest first" queries. `Lead` gained `(organizationId, ownerId)`
+    and `(organizationId, sourceId)`. `WebsiteSubmission` gained
+    `(organizationId, leadId)`.
+  - `DealContact`'s plain `(organizationId)` index was replaced with
+    `(organizationId, contactId)` — more useful for "which deals is this
+    contact on" lookups, and `organizationId` alone was a weak index (low
+    cardinality, every row in the table shares one of a handful of values).
+  - Added uniques: `Pipeline` now has `(organizationId, name)` and
+    `PipelineStage` now additionally has `(organizationId, pipelineId, name)`
+    alongside its existing `(organizationId, pipelineId, position)` — so the
+    seed (and any future pipeline setup) can safely upsert by name, not just
+    by position.
+  - `leads_has_email_or_phone` and `deals_lost_requires_reason` were tightened
+    from "IS NOT NULL" to `NULLIF(btrim(col), '') IS NOT NULL` — an
+    empty-string or whitespace-only value no longer satisfies either CHECK.
+  - Added `users_email_lowercase` (`email = lower(btrim(email))`) — enforces
+    the brief's "emails stored lowercased and trimmed" rule at the database
+    level, not just application convention.
+  - Added not-blank CHECKs on `companies.name`, `contacts.first_name`,
+    `leads.first_name`, `deals.name`, `activities.subject` — required text
+    fields can no longer be empty/whitespace-only strings, closing a gap the
+    original schema left open (NOT NULL alone permits `''`).
+  - **`id` is not the only client-generated column**: `updatedAt` (`@updatedAt`)
+    is also set by Prisma Client on every write, not by a database trigger or
+    `DEFAULT` — confirmed by the generated migration SQL, which has no
+    `DEFAULT` clause on any `updated_at` column (only `created_at` gets
+    `DEFAULT CURRENT_TIMESTAMP`). Any raw-SQL insert/update (including the
+    Phase B constraint tests) must supply both `id` and `updated_at` itself.
