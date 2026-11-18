@@ -10,11 +10,12 @@
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
     "db:logs": "docker compose logs -f postgres",
-    "dev": "pnpm -r --parallel dev",
-    "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
+    "prepare": "pnpm --filter @growspark/shared build",
+    "dev": "pnpm --filter @growspark/shared build && pnpm -r --parallel dev",
+    "build": "pnpm --filter @growspark/shared build && pnpm -r build",
+    "typecheck": "pnpm --filter @growspark/shared build && pnpm -r typecheck",
+    "lint": "pnpm --filter @growspark/shared build && pnpm -r lint",
+    "test": "pnpm --filter @growspark/shared build && pnpm -r test",
     "format": "prettier --write ."
   },
   "devDependencies": {
