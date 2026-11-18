@@ -1,0 +1,16 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Dependency build/postinstall scripts, approved one at a time. Unlisted packages'
+# scripts are blocked. See docs/decisions.md (D10) for why each entry is here.
+allowBuilds:
+  esbuild: true
+
+# pnpm's supply-chain guard (minimumReleaseAge) would otherwise delay installing
+# versions published very recently; these are exact versions we pinned on purpose
+# (see package.json), so we let pnpm use them. Auto-added by `pnpm install`.
+minimumReleaseAgeExclude:
+  - '@vitest/mocker@5.1.1'
+  - '@vitest/spy@5.1.1'
+  - vitest@5.1.1
