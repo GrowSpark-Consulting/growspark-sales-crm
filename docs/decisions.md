@@ -30,6 +30,8 @@ is a decision made once and not re-litigated without a new entry.
   `apps/web` additionally lists `@growspark/shared` in `next.config.ts`'s
   `transpilePackages` for robustness, though Next 16's own docs state Turbopack and
   webpack already auto-transpile workspace packages.
+  *Amended by D12 (2026-11-19): the "manual rebuild" trade-off no longer applies
+  under `pnpm dev`, which now watch-builds `packages/shared` automatically.*
 - **D10** — pnpm 11 removed `onlyBuiltDependencies` in favor of `allowBuilds` (a map of
   `package: true|false`); unlisted packages' install/postinstall scripts are blocked
   by default (confirmed via the pnpm 11 docs, https://pnpm.io/settings/build#allowbuilds,
@@ -44,3 +46,51 @@ is a decision made once and not re-litigated without a new entry.
   two companions (`@vitest/mocker`, `@vitest/spy`) — this is pnpm's supply-chain guard
   (`minimumReleaseAge`, default ~1 day) stepping aside for versions we pinned exactly
   on purpose, not something we configured by hand.
+- **D11** — The `cn`, `radix-ui`, and `class-variance-authority` packages used by
+  shadcn's generated `Button` are genuinely what the installed `shadcn@4.23.0` CLI
+  requires, not a speculative addition. Verified 2026-11-19 by re-running
+  `shadcn add button --view` (a dry run against our real `components.json`) and
+  confirming it independently re-resolves to the same `import { cn } from "cn"` /
+  `import { Slot } from "radix-ui"` — not just trusting the first `add` run.
+  `cn`'s npm history is notable and worth recording: the name was an abandoned 2013
+  joke package ("Chuck Norris jokes", 2 versions, by GitHub user `rumpl`), dormant for
+  13 years, then taken over by the `shadcn-ui` GitHub org in September 2026 (now at
+  `github.com/shadcn-ui/cn`, published via GitHub Actions OIDC trusted publishing,
+  maintainer `shadcn <m@shadcn.com>`, ~24.5M downloads/week — same order of magnitude
+  as the `shadcn` CLI package itself, ~18.9M/week). This pattern (an old dormant name
+  reassigned to an active org) is a legitimate, if unusual-looking, npm practice, and
+  is consistent with — not contradicted by — the CLI's own live behavior. Not switched
+  to a hand-written `lib/utils.ts` + `clsx` + `tailwind-merge`, since that is not what
+  the currently-installed tooling generates (that pattern belongs to an older/legacy
+  static registry endpoint, `ui.shadcn.com/r/styles/new-york/button.json`, which the
+  installed CLI does not actually call).
+- **D12** — Hardened `packages/shared`'s build so a stale/missing `dist` can't silently
+  break dependents:
+  - Dropped `composite`/`references` (TS project references) from
+    `packages/shared/tsconfig.json` / `apps/api/tsconfig.json` and set
+    `incremental: false` on shared's build. Root cause: `composite: true` implies an
+    incremental `.tsbuildinfo` cache, and that cache can go stale relative to the
+    actual filesystem (e.g. `dist` deleted independently of the cache file) — TypeScript
+    then wrongly skips re-emitting because the cache says it's already up to date.
+    Reproduced during verification: deleting `dist` but leaving a pre-existing
+    `tsconfig.tsbuildinfo` caused `pnpm --filter @growspark/shared build` to report
+    success while writing nothing, and `apps/api`'s typecheck then failed with
+    "Cannot find module '@growspark/shared'". Disabling incremental compilation for
+    this small package removes the possibility entirely; the perf cost of a full
+    rebuild is negligible for three small files.
+  - Root `build`, `typecheck`, `lint`, and `test` scripts now all run
+    `pnpm --filter @growspark/shared build` first, unconditionally, before the
+    recursive `pnpm -r <script>` — not relying solely on pnpm's topological ordering
+    of the same script name across packages (which doesn't help `typecheck`/`lint`/
+    `test`, since those scripts don't build shared themselves).
+  - Added a root `"prepare"` script (same build command) as a second safety net that
+    fires automatically after any `pnpm install`.
+  - `packages/shared` gained a `"dev": "tsc -p tsconfig.json --watch
+    --preserveWatchOutput"` script, so the root `pnpm dev` (`pnpm --filter
+    @growspark/shared build && pnpm -r --parallel dev`) builds shared once up front
+    (avoiding a startup race with `apps/api`'s `tsx watch`) and then keeps rebuilding
+    it on every source change. Verified `tsx watch` auto-restarts on the resulting
+    `dist` change — no manual rebuild needed during `pnpm dev`.
+  - Verified end-to-end: deleted `node_modules`, `packages/shared/dist`, and
+    `apps/web/.next` repo-wide, ran `pnpm install --frozen-lockfile`, then `pnpm
+    typecheck && pnpm lint && pnpm test` with no manual steps — all passed.

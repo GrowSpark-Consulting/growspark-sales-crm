@@ -50,10 +50,39 @@ pnpm dev
 | `pnpm test` | Run tests across the workspace |
 | `pnpm format` | Prettier, write mode |
 
+## Troubleshooting
+
+### Port already in use (Windows)
+
+`pnpm dev` needs 3000 (web) and 4000 (api) free; `pnpm db:up` needs 5433. If one is
+taken — often a leftover dev server from a previous session that didn't shut down
+cleanly — find and stop it:
+
+```powershell
+# Find what's listening on a port (replace 3000 with 4000/5433 as needed)
+netstat -ano | findstr :3000
+
+# The last column is the PID. Inspect it before stopping anything, so you don't
+# kill something unrelated that happens to be using the port:
+Get-CimInstance Win32_Process -Filter "ProcessId = <PID>" | Select-Object CommandLine
+
+# If it's really a leftover dev server (next/tsx/tsc from this repo), stop it
+# and its children:
+taskkill /PID <PID> /T /F
+```
+
+`Stop-Process -Id <PID> -Force` works too if you prefer PowerShell idioms, but
+`taskkill /T` is more reliable here because it kills the whole process tree —
+`next dev` / `pnpm -r --parallel dev` spawn several child processes, and killing
+only the top-level one can leave children (e.g. Next's `start-server.js` or a
+Turbopack worker) running and still holding the port.
+
 ## Notes
 
-- `packages/shared` ships a compiled build. After changing its source, run
-  `pnpm --filter @growspark/shared build` (or `pnpm build`) before the change is
-  visible to `apps/web` / `apps/api`. See `docs/decisions.md` (D9).
+- `pnpm dev` also runs `packages/shared` in `tsc --watch` mode, so editing its
+  source rebuilds automatically and `apps/api`'s `tsx watch` picks up the change.
+  Outside of `pnpm dev` (e.g. a one-off `pnpm --filter api typecheck`), the root
+  `typecheck`/`lint`/`test`/`build` scripts all build `packages/shared` first
+  automatically — see `docs/decisions.md` (D9, D12).
 - No database migrations yet — Prisma and schema work are out of scope for this
   package.
