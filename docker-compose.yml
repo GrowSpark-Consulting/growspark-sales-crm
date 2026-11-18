@@ -1,0 +1,25 @@
+name: growspark-sales-crm
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: growspark-sales-crm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-growspark_dev}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-growspark_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-crm_dev}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - growspark-sales-crm-pgdata:/var/lib/postgresql/data
+      - ./docker/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-growspark_dev}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  growspark-sales-crm-pgdata:
+    name: growspark-sales-crm-pgdata
