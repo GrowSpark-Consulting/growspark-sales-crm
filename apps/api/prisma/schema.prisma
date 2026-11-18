@@ -1,0 +1,590 @@
+// Prisma 7 schema. Connection URL lives in ../prisma.config.ts (Prisma 7 moved it
+// out of schema.prisma entirely), not here.
+//
+// Conventions applied throughout (see docs/decisions.md D13+):
+// - UUIDv7 primary keys (@default(uuid(7)) @db.Uuid).
+// - organizationId NOT NULL FK to Organization on every model except Organization
+//   itself; first column of every composite index; included in every unique
+//   constraint except the three explicitly global ones noted inline.
+// - Timestamptz(3) UTC for generic timestamps; history-style tables get createdAt
+//   only (immutable, append-only).
+// - Money: Decimal(14,2). Percentages: Int 0..100 (CHECK added by hand in the
+//   migration SQL, not expressible in Prisma).
+// - onDelete: Restrict on every relation (nothing is ever hard-deleted).
+// - snake_case tables/columns via @@map/@map; PascalCase models, camelCase fields.
+// - Partial indexes and CHECK constraints are not expressible in Prisma schema
+//   language and are appended by hand to the generated migration SQL instead;
+//   each omission below is called out in a comment at the relevant model.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  STAFF
+
+  @@map("role")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  UNQUALIFIED
+  CONVERTED
+
+  @@map("lead_status")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+
+  @@map("priority")
+}
+
+enum StageType {
+  OPEN
+  WON
+  LOST
+
+  @@map("stage_type")
+}
+
+enum DealStatus {
+  OPEN
+  WON
+  LOST
+
+  @@map("deal_status")
+}
+
+enum ActivityType {
+  TASK
+  CALL
+  MEETING
+  NOTE
+
+  @@map("activity_type")
+}
+
+enum ActivityStatus {
+  OPEN
+  DONE
+  CANCELLED
+
+  @@map("activity_status")
+}
+
+enum SubmissionStatus {
+  RECEIVED
+  LEAD_CREATED
+  REJECTED
+
+  @@map("submission_status")
+}
+
+// ---------------------------------------------------------------------------
+// Tenant root
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String
+  timezone  String   @default("Asia/Kolkata")
+  currency  String   @default("INR")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  users               User[]
+  sessions            Session[]
+  apiKeys             ApiKey[]
+  auditEvents         AuditEvent[]
+  leadSources         LeadSource[]
+  leads               Lead[]
+  leadStatusHistories LeadStatusHistory[]
+  leadConversions     LeadConversion[]
+  companies           Company[]
+  contacts            Contact[]
+  pipelines           Pipeline[]
+  pipelineStages      PipelineStage[]
+  deals               Deal[]
+  dealContacts        DealContact[]
+  dealStageHistories  DealStageHistory[]
+  activities          Activity[]
+  websiteSubmissions  WebsiteSubmission[]
+
+  @@map("organizations")
+}
+
+// ---------------------------------------------------------------------------
+// Identity / access
+// ---------------------------------------------------------------------------
+
+model User {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  email          String
+  name           String
+  passwordHash   String    @map("password_hash")
+  role           Role
+  isActive       Boolean   @default(true) @map("is_active")
+  lastLoginAt    DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  sessions           Session[]
+  createdApiKeys     ApiKey[]            @relation("ApiKeyCreatedBy")
+  auditEvents        AuditEvent[]        @relation("AuditEventActor")
+  ownedLeads         Lead[]              @relation("LeadOwner")
+  leadStatusChanges  LeadStatusHistory[] @relation("LeadStatusHistoryChangedBy")
+  convertedLeads     LeadConversion[]    @relation("LeadConversionConvertedBy")
+  ownedCompanies     Company[]           @relation("CompanyOwner")
+  ownedContacts      Contact[]           @relation("ContactOwner")
+  ownedDeals         Deal[]              @relation("DealOwner")
+  dealStageChanges   DealStageHistory[]  @relation("DealStageHistoryChangedBy")
+  assignedActivities Activity[]          @relation("ActivityAssignee")
+  createdActivities  Activity[]          @relation("ActivityCreatedBy")
+
+  @@unique([organizationId, email])
+  @@map("users")
+}
+
+model Session {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  tokenHash      String   @unique @map("token_hash")
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz(3)
+  lastSeenAt     DateTime @map("last_seen_at") @db.Timestamptz(3)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, userId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model ApiKey {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String
+  keyPrefix      String    @map("key_prefix")
+  keyHash        String    @unique @map("key_hash")
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
+  lastUsedAt     DateTime? @map("last_used_at") @db.Timestamptz(3)
+  createdById    String    @map("created_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy    User         @relation("ApiKeyCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@map("api_keys")
+}
+
+model AuditEvent {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  actorId        String?  @map("actor_id") @db.Uuid
+  action         String
+  entityType     String   @map("entity_type")
+  entityId       String?  @map("entity_id") @db.Uuid
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  actor        User?        @relation("AuditEventActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([organizationId, entityType, entityId])
+  @@map("audit_events")
+}
+
+// ---------------------------------------------------------------------------
+// Leads
+// ---------------------------------------------------------------------------
+
+model LeadSource {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  isActive       Boolean  @default(true) @map("is_active")
+  sortOrder      Int      @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  leads        Lead[]
+  deals        Deal[]
+
+  @@unique([organizationId, name])
+  @@map("lead_sources")
+}
+
+model Lead {
+  id                    String     @id @default(uuid(7)) @db.Uuid
+  organizationId        String     @map("organization_id") @db.Uuid
+  firstName             String     @map("first_name")
+  lastName              String?    @map("last_name")
+  email                 String?
+  phone                 String?
+  companyName           String?    @map("company_name")
+  website               String?
+  jobTitle              String?    @map("job_title")
+  industry              String?
+  sourceId              String     @map("source_id") @db.Uuid
+  sourceDetail          String?    @map("source_detail")
+  status                LeadStatus @default(NEW)
+  priority              Priority   @default(MEDIUM)
+  ownerId               String?    @map("owner_id") @db.Uuid
+  requirement           String?
+  estimatedBudget       Decimal?   @map("estimated_budget") @db.Decimal(14, 2)
+  purchaseTimeline      String?    @map("purchase_timeline")
+  nextFollowUpAt        DateTime?  @map("next_follow_up_at") @db.Timestamptz(3)
+  notes                 String?
+  capturedFields        Json?      @map("captured_fields")
+  convertedAt           DateTime?  @map("converted_at") @db.Timestamptz(3)
+  archivedAt            DateTime?  @map("archived_at") @db.Timestamptz(3)
+  emailNormalized       String?    @map("email_normalized")
+  phoneNormalized       String?    @map("phone_normalized")
+  companyNameNormalized String?    @map("company_name_normalized")
+  createdAt             DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  source             LeadSource          @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  owner              User?               @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  statusHistories    LeadStatusHistory[]
+  conversion         LeadConversion?
+  activities         Activity[]
+  websiteSubmissions WebsiteSubmission[]
+
+  // Partial indexes (WHERE clauses) are not expressible in Prisma schema; added
+  // by hand to the migration SQL instead:
+  //   leads_org_status_created_idx   ON (organization_id, status, created_at)
+  //     WHERE archived_at IS NULL
+  //   leads_org_owner_followup_idx   ON (organization_id, owner_id, next_follow_up_at)
+  //     WHERE archived_at IS NULL AND status NOT IN ('CONVERTED','UNQUALIFIED')
+  @@index([organizationId, emailNormalized])
+  @@index([organizationId, phoneNormalized])
+  @@index([organizationId, companyNameNormalized])
+  @@map("leads")
+}
+
+model LeadStatusHistory {
+  id             String      @id @default(uuid(7)) @db.Uuid
+  organizationId String      @map("organization_id") @db.Uuid
+  leadId         String      @map("lead_id") @db.Uuid
+  fromStatus     LeadStatus? @map("from_status")
+  toStatus       LeadStatus  @map("to_status")
+  changedById    String      @map("changed_by_id") @db.Uuid
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  changedBy    User         @relation("LeadStatusHistoryChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@map("lead_status_histories")
+}
+
+model LeadConversion {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  leadId         String   @unique @map("lead_id") @db.Uuid
+  companyId      String   @map("company_id") @db.Uuid
+  contactId      String   @map("contact_id") @db.Uuid
+  dealId         String?  @map("deal_id") @db.Uuid
+  createdCompany Boolean  @map("created_company")
+  createdContact Boolean  @map("created_contact")
+  convertedById  String   @map("converted_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  deal         Deal?        @relation(fields: [dealId], references: [id], onDelete: Restrict)
+  convertedBy  User         @relation("LeadConversionConvertedBy", fields: [convertedById], references: [id], onDelete: Restrict)
+
+  @@map("lead_conversions")
+}
+
+// ---------------------------------------------------------------------------
+// Companies / contacts
+// ---------------------------------------------------------------------------
+
+model Company {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String
+  nameNormalized String    @map("name_normalized")
+  legalName      String?   @map("legal_name")
+  industry       String?
+  website        String?
+  email          String?
+  phone          String?
+  employeeSize   String?   @map("employee_size")
+  annualRevenue  Decimal?  @map("annual_revenue") @db.Decimal(14, 2)
+  addressLine1   String?   @map("address_line1")
+  addressLine2   String?   @map("address_line2")
+  city           String?
+  state          String?
+  postalCode     String?   @map("postal_code")
+  country        String?
+  ownerId        String?   @map("owner_id") @db.Uuid
+  description    String?
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  owner           User?            @relation("CompanyOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  contacts        Contact[]
+  deals           Deal[]
+  leadConversions LeadConversion[]
+  activities      Activity[]
+
+  @@index([organizationId, nameNormalized])
+  @@index([organizationId, archivedAt])
+  @@map("companies")
+}
+
+model Contact {
+  id              String    @id @default(uuid(7)) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  companyId       String?   @map("company_id") @db.Uuid
+  firstName       String    @map("first_name")
+  lastName        String?   @map("last_name")
+  email           String?
+  emailNormalized String?   @map("email_normalized")
+  phone           String?
+  phoneNormalized String?   @map("phone_normalized")
+  jobTitle        String?   @map("job_title")
+  department      String?
+  location        String?
+  lifecycleStatus String    @default("ACTIVE") @map("lifecycle_status")
+  ownerId         String?   @map("owner_id") @db.Uuid
+  notes           String?
+  archivedAt      DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  owner           User?            @relation("ContactOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  dealContacts    DealContact[]
+  leadConversions LeadConversion[]
+  activities      Activity[]
+
+  @@index([organizationId, emailNormalized])
+  @@index([organizationId, phoneNormalized])
+  @@index([organizationId, companyId])
+  @@map("contacts")
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline / deals
+// ---------------------------------------------------------------------------
+
+model Pipeline {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  isDefault      Boolean  @default(false) @map("is_default")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  stages       PipelineStage[]
+  deals        Deal[]
+
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  pipelineId     String    @map("pipeline_id") @db.Uuid
+  name           String
+  position       Int
+  probability    Int
+  type           StageType
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization         Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  pipeline             Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  deals                Deal[]
+  dealStageHistoryFrom DealStageHistory[] @relation("DealStageHistoryFromStage")
+  dealStageHistoryTo   DealStageHistory[] @relation("DealStageHistoryToStage")
+
+  // CHECK (probability BETWEEN 0 AND 100) added by hand to the migration SQL.
+  @@unique([organizationId, pipelineId, position])
+  @@map("pipeline_stages")
+}
+
+model Deal {
+  id                String     @id @default(uuid(7)) @db.Uuid
+  organizationId    String     @map("organization_id") @db.Uuid
+  name              String
+  companyId         String     @map("company_id") @db.Uuid
+  pipelineId        String     @map("pipeline_id") @db.Uuid
+  stageId           String     @map("stage_id") @db.Uuid
+  value             Decimal    @default(0) @db.Decimal(14, 2)
+  currency          String     @default("INR")
+  probability       Int
+  expectedCloseDate DateTime?  @map("expected_close_date") @db.Date
+  ownerId           String?    @map("owner_id") @db.Uuid
+  dealType          String?    @map("deal_type")
+  sourceId          String?    @map("source_id") @db.Uuid
+  status            DealStatus @default(OPEN)
+  closedAt          DateTime?  @map("closed_at") @db.Timestamptz(3)
+  lostReason        String?    @map("lost_reason")
+  lostNote          String?    @map("lost_note")
+  archivedAt        DateTime?  @map("archived_at") @db.Timestamptz(3)
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization    Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company         Company            @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  pipeline        Pipeline           @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  stage           PipelineStage      @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  owner           User?              @relation("DealOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  source          LeadSource?        @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  dealContacts    DealContact[]
+  stageHistories  DealStageHistory[]
+  leadConversions LeadConversion[]
+  activities      Activity[]
+
+  // Partial index (WHERE clause) not expressible in Prisma; added by hand:
+  //   deals_org_stage_idx ON (organization_id, stage_id) WHERE archived_at IS NULL
+  // CHECKs added by hand: probability BETWEEN 0 AND 100; value >= 0;
+  // status/lost_reason/closed_at consistency (see migration SQL header).
+  @@index([organizationId, status, expectedCloseDate])
+  @@index([organizationId, companyId])
+  @@index([organizationId, ownerId])
+  @@map("deals")
+}
+
+model DealContact {
+  organizationId String   @map("organization_id") @db.Uuid
+  dealId         String   @map("deal_id") @db.Uuid
+  contactId      String   @map("contact_id") @db.Uuid
+  isPrimary      Boolean  @default(false) @map("is_primary")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  deal         Deal         @relation(fields: [dealId], references: [id], onDelete: Restrict)
+  contact      Contact      @relation(fields: [contactId], references: [id], onDelete: Restrict)
+
+  @@id([dealId, contactId])
+  @@index([organizationId])
+  @@map("deal_contacts")
+}
+
+model DealStageHistory {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  dealId         String   @map("deal_id") @db.Uuid
+  fromStageId    String?  @map("from_stage_id") @db.Uuid
+  toStageId      String   @map("to_stage_id") @db.Uuid
+  changedById    String   @map("changed_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  deal         Deal           @relation(fields: [dealId], references: [id], onDelete: Restrict)
+  fromStage    PipelineStage? @relation("DealStageHistoryFromStage", fields: [fromStageId], references: [id], onDelete: Restrict)
+  toStage      PipelineStage  @relation("DealStageHistoryToStage", fields: [toStageId], references: [id], onDelete: Restrict)
+  changedBy    User           @relation("DealStageHistoryChangedBy", fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@map("deal_stage_histories")
+}
+
+// ---------------------------------------------------------------------------
+// Activities
+// ---------------------------------------------------------------------------
+
+model Activity {
+  id             String         @id @default(uuid(7)) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  type           ActivityType
+  subject        String
+  description    String?
+  status         ActivityStatus @default(OPEN)
+  priority       Priority       @default(MEDIUM)
+  dueAt          DateTime?      @map("due_at") @db.Timestamptz(3)
+  startAt        DateTime?      @map("start_at") @db.Timestamptz(3)
+  endAt          DateTime?      @map("end_at") @db.Timestamptz(3)
+  reminderAt     DateTime?      @map("reminder_at") @db.Timestamptz(3)
+  completedAt    DateTime?      @map("completed_at") @db.Timestamptz(3)
+  assigneeId     String?        @map("assignee_id") @db.Uuid
+  createdById    String         @map("created_by_id") @db.Uuid
+  leadId         String?        @map("lead_id") @db.Uuid
+  contactId      String?        @map("contact_id") @db.Uuid
+  companyId      String?        @map("company_id") @db.Uuid
+  dealId         String?        @map("deal_id") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  assignee     User?        @relation("ActivityAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  createdBy    User         @relation("ActivityCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: Restrict)
+  contact      Contact?     @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  company      Company?     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  deal         Deal?        @relation(fields: [dealId], references: [id], onDelete: Restrict)
+
+  // Partial index (WHERE clause) not expressible in Prisma; added by hand:
+  //   activities_org_assignee_due_idx ON (organization_id, assignee_id, due_at)
+  //     WHERE status = 'OPEN'
+  // CHECKs added by hand: num_nonnulls(lead_id,contact_id,company_id,deal_id) >= 1;
+  // (status = 'DONE') implies completed_at IS NOT NULL.
+  @@index([organizationId, leadId])
+  @@index([organizationId, contactId])
+  @@index([organizationId, companyId])
+  @@index([organizationId, dealId])
+  @@map("activities")
+}
+
+// ---------------------------------------------------------------------------
+// Website submissions
+// ---------------------------------------------------------------------------
+
+model WebsiteSubmission {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  externalId     String           @map("external_id")
+  formType       String           @map("form_type")
+  receivedAt     DateTime         @default(now()) @map("received_at") @db.Timestamptz(3)
+  submittedAt    DateTime?        @map("submitted_at") @db.Timestamptz(3)
+  sourcePage     String?          @map("source_page")
+  payload        Json
+  status         SubmissionStatus @default(RECEIVED)
+  error          String?
+  leadId         String?          @map("lead_id") @db.Uuid
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lead         Lead?        @relation(fields: [leadId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId, status, receivedAt])
+  @@map("website_submissions")
+}

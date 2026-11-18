@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { healthResponseSchema } from '@growspark/shared';
-import { pool } from '../db.js';
+import { pool } from '../db/pool.js';
 
 export const healthRouter = Router();
 
