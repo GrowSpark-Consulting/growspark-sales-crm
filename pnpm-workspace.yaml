@@ -5,7 +5,9 @@ packages:
 # Dependency build/postinstall scripts, approved one at a time. Unlisted packages'
 # scripts are blocked. See docs/decisions.md (D10) for why each entry is here.
 allowBuilds:
+  '@prisma/engines': true
   esbuild: true
+  prisma: true
 
 # pnpm's supply-chain guard (minimumReleaseAge) would otherwise delay installing
 # versions published very recently; these are exact versions we pinned on purpose
