@@ -2,6 +2,18 @@
 
 Working rules for this repository (Sales & CRM for Grow Spark Consulting).
 
+## Start of every session
+
+Read `docs/PROJECT-STATE.md`, this file, and `docs/decisions.md` before doing
+anything else. Run the read-only environment checks (git status/log, node/
+pnpm/docker versions, port checks). Do not start coding until the user's
+first prompt of the session arrives.
+
+## End of every session
+
+Update `docs/PROJECT-STATE.md`: append a dated entry to its Session Log
+section, and update any other section that reality changed.
+
 ## Stack
 
 pnpm workspaces: `apps/web` (Next.js App Router, TypeScript, Tailwind v4, shadcn/ui),
