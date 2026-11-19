@@ -41,6 +41,9 @@ nothing reviewed by anyone else — correctness over speed.
   (`rm -rf`, `Remove-Item -Recurse`, `git reset --hard`, `git clean`,
   `docker volume rm`, `docker compose down -v`) without asking first.
 - Do not start work outside the current package/step. Never `git push`.
+- Never modify, or run commands in, any repository other than this one. The Grow
+  Spark website repository is off limits; website integration is on hold until
+  the CRM is finished.
 - Before using any Next.js, Prisma, or Tailwind API, check the documentation for the
   **installed** major version — behavior differs from older examples.
 - Commit locally after each logical unit of work with a clear message. Do not push.

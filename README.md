@@ -3,7 +3,8 @@
 Internal sales and CRM tool for Grow Spark Consulting. Admin and Staff users; leads,
 companies, contacts, deals, pipeline, activities, dashboard.
 
-This is package 1.1: scaffolding only. No product features yet.
+Day 1 in progress. The database schema, migrations and seed data exist; the
+application itself has no product features yet — only health endpoints.
 
 ## Stack
 
@@ -21,17 +22,26 @@ This is package 1.1: scaffolding only. No product features yet.
 ## Quick start
 
 ```powershell
-# 1. Install dependencies
+# 1. Install dependencies (also builds packages/shared and runs `prisma generate`
+#    via the root "prepare" script)
 pnpm install
 
-# 2. Copy env files and fill in values (dev-only credentials are fine locally)
+# 2. Copy env files and fill in values (dev-only credentials are fine locally).
+#    apps/api/.env additionally needs SEED_ADMIN_PASSWORD and SEED_STAFF_PASSWORD
+#    filled in by hand — there is no default in code, and `pnpm db:seed` will not
+#    create the two demo users without them.
 copy apps\api\.env.example apps\api\.env
 copy apps\web\.env.example apps\web\.env
 
-# 3. Start Postgres (only Postgres runs in Docker)
+# 3. Start Postgres (only Postgres runs in Docker; it creates both crm_dev and
+#    crm_test inside the one container)
 pnpm db:up
 
-# 4. Run both apps in dev mode
+# 4. Apply migrations and seed demo data (both are idempotent — safe to re-run)
+pnpm db:migrate
+pnpm db:seed
+
+# 5. Run both apps in dev mode
 pnpm dev
 ```
 
@@ -44,10 +54,14 @@ pnpm dev
 | Script | What it does |
 | --- | --- |
 | `pnpm db:up` / `pnpm db:down` / `pnpm db:logs` | Manage the Postgres container |
+| `pnpm db:migrate` | Apply migrations to `crm_dev` (`prisma migrate deploy`) |
+| `pnpm db:seed` | Idempotent seed: organisation, Admin + Staff users, lead sources, pipeline |
+| `pnpm db:reset` | Safety-checked wrapper for `prisma migrate reset` — refuses unless the target host is localhost and the database name ends `_dev`/`_test`; Prisma's own CLI will still ask for fresh human consent before running it |
+| `pnpm db:verify-fresh` | Manual check that `crm_test` migrates cleanly from zero — not run as part of `pnpm test` |
 | `pnpm build` | Build all packages/apps (dependency-ordered) |
-| `pnpm typecheck` | `tsc --noEmit` across the workspace |
+| `pnpm typecheck` | `tsc --noEmit` across the workspace, including `apps/api`'s tests, `prisma/*.ts` and `scripts/` (not just `src/`) |
 | `pnpm lint` | ESLint across the workspace (flat config; `next lint` no longer exists) |
-| `pnpm test` | Run tests across the workspace |
+| `pnpm test` | Run tests across the workspace (`apps/api`'s suite runs against `crm_test`) |
 | `pnpm format` | Prettier, write mode |
 
 ## Troubleshooting
@@ -84,5 +98,10 @@ Turbopack worker) running and still holding the port.
   Outside of `pnpm dev` (e.g. a one-off `pnpm --filter api typecheck`), the root
   `typecheck`/`lint`/`test`/`build` scripts all build `packages/shared` first
   automatically — see `docs/decisions.md` (D9, D12).
-- No database migrations yet — Prisma and schema work are out of scope for this
-  package.
+- The full P0 database schema (18 models) is in one migration,
+  `apps/api/prisma/migrations/20261118202744_init`. See
+  `apps/api/prisma/SCHEMA-SUMMARY.md` for a factual per-model reference
+  (columns, indexes, foreign keys, CHECK constraints) instead of reading
+  `schema.prisma` by hand.
+- The seed (`apps/api/prisma/seed.ts`) refuses to run when `NODE_ENV=production`
+  and is safe to re-run any number of times.
