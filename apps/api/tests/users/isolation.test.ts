@@ -17,6 +17,20 @@ describe('organisation isolation', () => {
     expect(res.status).toBe(404);
   });
 
+  it("GET /api/v1/users/options for one organisation never includes another organisation's users", async () => {
+    const [orgA, orgB] = await createTwoTestTenants();
+    const { token } = await createSession(orgA.organization.id, orgA.adminUser.id);
+    const app = createApp();
+
+    const res = await request(app)
+      .get('/api/v1/users/options')
+      .set('Cookie', sessionCookieHeader(token));
+    expect(res.status).toBe(200);
+    const ids = res.body.data.map((u: { id: string }) => u.id);
+    expect(ids).not.toContain(orgB.adminUser.id);
+    expect(ids).not.toContain(orgB.staffUser.id);
+  });
+
   it("the users list for one organisation never includes another organisation's users", async () => {
     const [orgA, orgB] = await createTwoTestTenants();
     const { token } = await createSession(orgA.organization.id, orgA.adminUser.id);

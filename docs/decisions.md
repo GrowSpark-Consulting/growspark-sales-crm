@@ -765,3 +765,102 @@ read) was itself dated for traceability.
     files and added no new logic needing its own test, only UI
     restructuring/wiring already covered by existing build/typecheck/lint
     gates). No process was started this package; nothing to stop.
+- **D32** — Conflict found before starting 2.3, stopped and asked rather than
+  choosing (per explicit instruction): the 2.3 brief says every lead status
+  change writes `LeadStatusHistory` "(from, to, who, when, optional note)",
+  but the actual, already-migrated `lead_status_histories` table
+  (`schema.prisma` and `SCHEMA-SUMMARY.md` both confirmed) has only `id,
+  organization_id, lead_id, from_status, to_status, changed_by_id,
+  created_at` — no column to hold a note. **Resolved: drop the note
+  entirely.** The lead status-change endpoint (built in package 2.3) takes
+  only `{ status }`; `LeadStatusHistory` keeps recording from/to/who/when
+  exactly as the schema already supports, with no schema change. D29's own
+  wording (the original Day-2-rules approval) never mentioned a note either
+  — only the later roadmap brief did — so this also resolves the discrepancy
+  in D29's favour.
+- **D33** — Package 2.1 (foundations: shared list helper, normalisers,
+  duplicate finder, lookups):
+  - **Normalisers** (`packages/shared/src/normalize.ts`):
+    `normalizeEmail`/`normalizePhone`/`normalizeCompanyName`, pure functions,
+    reusable by both the backend (every leads/companies/contacts write) and
+    later the frontend (live duplicate hints before submit).
+    `normalizeCompanyName` lower-cases, trims, collapses punctuation
+    (`. , ' " & ( ) -`) to spaces, then iteratively strips a trailing
+    legal-entity suffix from a fixed list (private limited, pvt ltd, pte
+    ltd, ltd, llp, llc, pvt, inc, incorporated, corporation, corp, limited,
+    co) — iterative because a name can stack more than one ("Acme Corp
+    Inc" needs two passes). Returns `null` (never `""`) for blank,
+    suffix-only, or missing input, so a normalised column stays genuinely
+    empty rather than holding an empty string the database would then have
+    to special-case.
+  - **`LEAD_STATUSES`/`PRIORITIES`** (`packages/shared/src/lead-statuses.ts`,
+    `priorities.ts`): built as `as const` tuples + `z.enum`, **not** TS
+    `enum`s like `ROLES` — deliberately, because Prisma's own generated
+    `LeadStatus`/`Priority` types are also string-literal unions with
+    identical values, so a tuple-derived literal type is directly
+    assignable to a Prisma field with no bridge cast needed (unlike `ROLES`,
+    which does need `toSharedRole`/`toPrismaRole` — see D25's note on that
+    pattern). `OPEN_LEAD_STATUSES` (everything except `CONVERTED`) is a
+    separate, smaller tuple — D29: `CONVERTED` is reachable only through the
+    Day 3 convert action, never a plain status edit, so the shared schema
+    for that edit should structurally exclude it, not just validate it away
+    at runtime.
+  - **Duplicate finder** (`apps/api/src/lib/duplicates.ts`):
+    `findDuplicateCompanies`/`findDuplicateContacts`/`findDuplicateLeads` —
+    three explicit functions, not one generic one, because each queries a
+    different Prisma model with a different set of normalised columns
+    (Company: name only; Contact: email/phone only; Lead: all three — see
+    D15's "extra normalised columns" note for why). Each takes an
+    `excludeId` (so editing a record doesn't flag itself) and
+    `includeArchived` (default false — a match against an already-archived
+    record isn't a live duplicate to warn about). When a single row matches
+    more than one field, the reported reason prioritises email over phone
+    over company name (the more certain identity signal wins). Shared
+    response shape: `duplicateMatchSchema` (`packages/shared/src/
+    duplicates.ts`) — `{ id, reason }`, deliberately not the `{ error: {...}
+    }` envelope, since D29 is explicit that a duplicate warns and never
+    blocks.
+  - **Shared list-query helper** (`apps/api/src/lib/list-query.ts`):
+    `buildOrderBy(sort, fallback)` — the one line of the Users module's
+    list-query pattern (`query.sort ? {...} : { createdAt: 'desc' }`) that
+    was being hand-written per module, now a single generic helper.
+    Deliberately small: `page`/`pageSize`/`sort` parsing and validation
+    (unknown field -> 422) already live in `packages/shared`'s
+    `pageQuerySchema`/`sortQuerySchema`, and pagination math already lives
+    in `apps/api/src/lib/pagination.ts`'s `toSkipTake`/`buildPaginationMeta`
+    (both from package 1.4) — this package reuses both unchanged rather than
+    replacing them with a new monolithic query builder, per "reuse shared
+    helpers instead of duplicating them." `users.service.ts`'s existing
+    `listUsers` was left as-is (out of this package's scope) rather than
+    retrofitted to use the new helper.
+  - **`GET /api/v1/lead-sources`** (new `lead-sources` module): active
+    sources only, ordered by `sortOrder` then `name` — not a paginated
+    admin list (managing lead sources is P1 per the roadmap). Gated on
+    `leads:read` (both roles already have it).
+  - **`GET /api/v1/users/options`** (added to the existing `users` module,
+    not a new one — it's a `/users` route): id+name of active users for
+    owner pickers. Deliberately gated `auth: 'authenticated'`, not
+    `users:manage` — every role that can own a record (Staff included)
+    needs to populate its own owner dropdown, so this one `/users*` route
+    is intentionally *not* Admin-only. Registered before `GET
+    /api/v1/users/:id` in `users.routes.ts`, since Express matches routes
+    in registration order and `:id` would otherwise capture the literal
+    path segment `options`. This required updating
+    `tests/users/registry-permissions.test.ts`'s "every `/users*` route is
+    403 for Staff" sweep to exclude this one route (now asserted 200 for
+    Staff instead, with its own test) — a necessary consequence of adding
+    the route, not scope creep.
+  - Tests: normaliser unit tests (`tests/shared/normalize.test.ts`,
+    including the "stacked suffix" and "different casing/suffix variants
+    normalise equal" cases); duplicate-finder tests against a real database
+    (`tests/lib/duplicates.test.ts` — match-by-each-field, archived
+    exclusion, `excludeId`, cross-organisation isolation, null-input
+    no-ops); lead-sources list/sort/isolation/auth-required tests
+    (`tests/lead-sources/list.test.ts`); a cross-organisation isolation test
+    for `/users/options` added to the existing `tests/users/isolation.test.ts`.
+    `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+    (149 tests: 124 carried over + 25 new, all `apps/api`; `apps/web`
+    unchanged at 16). One lint fix needed:
+    `normalize.ts`'s character-class regex had an unnecessary escape on
+    `-` (`no-useless-escape`) — removed (a trailing `-` in a character
+    class is already literal, no escape needed).

@@ -24,6 +24,8 @@ export {
   listUsersQuerySchema,
   userResponseSchema,
   usersListResponseSchema,
+  userOptionResponseSchema,
+  userOptionsListResponseSchema,
 } from './users.js';
 export type {
   CreateUserInput,
@@ -31,6 +33,7 @@ export type {
   ResetUserPasswordInput,
   ListUsersQuery,
   UserResponse,
+  UserOptionResponse,
 } from './users.js';
 export {
   listAuditEventsQuerySchema,
@@ -38,3 +41,12 @@ export {
   auditEventsListResponseSchema,
 } from './audit.js';
 export type { ListAuditEventsQuery, AuditEventResponse } from './audit.js';
+export { normalizeEmail, normalizePhone, normalizeCompanyName } from './normalize.js';
+export { LEAD_STATUSES, leadStatusSchema, OPEN_LEAD_STATUSES, openLeadStatusSchema } from './lead-statuses.js';
+export type { LeadStatus, OpenLeadStatus } from './lead-statuses.js';
+export { PRIORITIES, prioritySchema } from './priorities.js';
+export type { Priority } from './priorities.js';
+export { duplicateMatchSchema } from './duplicates.js';
+export type { DuplicateMatch } from './duplicates.js';
+export { leadSourceResponseSchema, leadSourcesListResponseSchema } from './lead-sources.js';
+export type { LeadSourceResponse } from './lead-sources.js';

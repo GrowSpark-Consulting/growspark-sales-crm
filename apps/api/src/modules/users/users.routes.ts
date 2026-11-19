@@ -8,6 +8,7 @@ import {
   listUsersQuerySchema,
   userResponseSchema,
   usersListResponseSchema,
+  userOptionsListResponseSchema,
   type IdParam,
   type CreateUserInput,
   type UpdateUserInput,
@@ -44,6 +45,23 @@ export function registerUsersRoutes(app: Application): void {
       try {
         const user = await usersService.createUser(req.ctx!, req.body as CreateUserInput);
         res.status(201).json({ data: userResponseSchema.parse(user) });
+      } catch (err) {
+        next(err);
+      }
+    },
+  });
+
+  // Registered before /api/v1/users/:id — Express matches routes in
+  // registration order, and "options" would otherwise be captured as :id.
+  defineRoute({
+    app,
+    method: 'get',
+    path: '/api/v1/users/options',
+    auth: 'authenticated',
+    handler: async (req, res, next) => {
+      try {
+        const data = await usersService.listActiveUserOptions(req.ctx!);
+        res.status(200).json(userOptionsListResponseSchema.parse({ data }));
       } catch (err) {
         next(err);
       }

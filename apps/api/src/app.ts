@@ -8,6 +8,7 @@ import { registerHealthRoutes } from './routes/health.js';
 import { registerAuthRoutes } from './modules/auth/auth.routes.js';
 import { registerUsersRoutes } from './modules/users/users.routes.js';
 import { registerAuditRoutes } from './modules/audit/audit.routes.js';
+import { registerLeadSourcesRoutes } from './modules/lead-sources/lead-sources.routes.js';
 import { resetRouteRegistry } from './lib/route-registry.js';
 import { env } from './env.js';
 
@@ -45,6 +46,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
   registerAuthRoutes(app);
   registerUsersRoutes(app);
   registerAuditRoutes(app);
+  registerLeadSourcesRoutes(app);
   options.extraRoutes?.(app);
 
   app.use(errorHandler);

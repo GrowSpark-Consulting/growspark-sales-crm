@@ -293,7 +293,10 @@ apps/api/               Express 5 app (port 4000)
                         createGlobalLoginFloodLimiter factory, D23),
                         route-registry.ts (defineRoute — the one place every
                         route is declared; getRegisteredRoutes for the audit
-                        test), pagination.ts (toSkipTake/buildPaginationMeta)
+                        test), pagination.ts (toSkipTake/buildPaginationMeta),
+                        list-query.ts (buildOrderBy, 2.1, D33),
+                        duplicates.ts (findDuplicateCompanies/Contacts/
+                        Leads, 2.1, D33)
     middleware/          request-id.ts, request-log.ts, error-handler.ts
                         (ApiError + ZodError/body-parser/Prisma mapping),
                         session.ts (attachSessionContext), csrf.ts
@@ -308,11 +311,15 @@ apps/api/               Express 5 app (port 4000)
                         /auth/change-password
       users/              users.service.ts, users.routes.ts — GET/POST
                         /users, GET/PATCH /users/:id, POST
-                        /users/:id/{deactivate,reactivate,reset-password};
-                        last-Admin rule via a raw SELECT...FOR UPDATE
-                        (assertNotLastActiveAdmin)
+                        /users/:id/{deactivate,reactivate,reset-password},
+                        GET /users/options (2.1, D33 — auth:'authenticated',
+                        registered before /users/:id); last-Admin rule via
+                        a raw SELECT...FOR UPDATE (assertNotLastActiveAdmin)
       audit/              audit.service.ts, audit.routes.ts — GET
                         /audit-events
+      lead-sources/       lead-sources.service.ts, lead-sources.routes.ts
+                        (2.1, D33) — GET /lead-sources, active only,
+                        leads:read
     routes/health.ts     GET /health, /health/db, mirrored at /api/v1/* — now
                         registered via defineRoute too (auth: 'public'), so
                         the route-registry audit covers it like every other
@@ -366,6 +373,12 @@ packages/shared/        Zod schemas + enums, consumed as a compiled package
   src/users.ts           create/update/resetPassword/listQuery/response
                         schemas for the users module (1.4)
   src/audit.ts           listAuditEventsQuerySchema, auditEventResponseSchema (1.4)
+  src/normalize.ts       normalizeEmail/normalizePhone/normalizeCompanyName (2.1, D33)
+  src/lead-statuses.ts    LEAD_STATUSES/OPEN_LEAD_STATUSES tuples + z.enum,
+                        not TS enums (2.1, D33)
+  src/priorities.ts      PRIORITIES tuple + z.enum (2.1, D33)
+  src/duplicates.ts      duplicateMatchSchema — { id, reason } (2.1, D33)
+  src/lead-sources.ts    leadSourceResponseSchema + list response (2.1, D33)
   tsconfig.watch.json     incremental build config used only by `dev`/
                         `dev:prepare` (package 1.3b, D24) — tsconfig.json
                         (build/typecheck) stays non-incremental per D12
@@ -566,6 +579,29 @@ not something to investigate.
   && pnpm lint && pnpm test && pnpm build` all pass (140 tests, unchanged —
   UI restructuring/wiring, no new logic needing its own test). Full detail
   in `docs/decisions.md` D31.
+- **Package 2.1 — foundations (list helper, normalisers, duplicate finder,
+  lookups)**: `packages/shared/src/normalize.ts`
+  (normalizeEmail/normalizePhone/normalizeCompanyName); `lead-statuses.ts`/
+  `priorities.ts` (tuple + z.enum, not TS enums — see D33 for why);
+  `duplicates.ts` (shared `duplicateMatchSchema`); `lead-sources.ts`
+  (response schemas). `apps/api/src/lib/duplicates.ts`
+  (findDuplicateCompanies/Contacts/Leads, three explicit functions) and
+  `list-query.ts` (`buildOrderBy`, the one generic helper this package
+  added — `pagination.ts`'s toSkipTake/buildPaginationMeta from 1.4 were
+  reused unchanged). New `lead-sources` module (`GET /api/v1/lead-sources`,
+  active-only, `leads:read`). `GET /api/v1/users/options` added to the
+  existing `users` module (`auth: 'authenticated'`, not `users:manage` —
+  Staff needs it for owner pickers; registered before `/users/:id` for
+  Express route-ordering reasons), which required updating
+  `registry-permissions.test.ts`'s Staff-403 sweep to exclude it. Also
+  recorded, before this package started: a real conflict between the 2.3
+  brief (lead status changes should record an optional note) and the
+  already-migrated schema (`lead_status_histories` has no note column) —
+  stopped and asked per instruction; resolved as "drop the note entirely,"
+  affecting package 2.3, not this one. `pnpm typecheck && pnpm lint && pnpm
+  test && pnpm build` all pass (149 tests: 124 carried over + 25 new, all
+  `apps/api`). Full detail in `docs/decisions.md` D32 (the conflict) and
+  D33 (this package).
 
 ## 8. Database
 
@@ -649,6 +685,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D28 — Package 1.7: `SearchInput` reusable component (magnifier + clear-x, wraps the existing `Input`); global 401 handling lives in `api-client.ts`'s `apiFetch` itself (`onUnauthorized`), not TanStack Query's `QueryCache`/`MutationCache`, because several mutations are plain awaited calls those hooks never see; `SessionExpiryHandler` clears the cache and redirects once, guarded against both a parallel-request burst and `/login`'s own expected 401 on a wrong password; `useMe()` gets `refetchOnWindowFocus: true` as a deliberate one-query exception to the `QueryClient`'s app-wide `false`; `AuthGuard` revalidates `/auth/me` on every route change after first mount; Cache Components' "instant navigation" dev notice fixed with `export const instant = false` on `(protected)/layout.tsx` only (can't be set on `users/page.tsx`, a Client Component — throws if you try)
 - D30 — Notes policy for Day 2: no dedicated notes table added; `leads.notes`/`contacts.notes` stay plain internal remarks text fields, `companies` gets none; confirmed (no schema change) that `activities.activity_type` already includes `NOTE` and its `activities_done_has_completed_at` CHECK already matches the roadmap's Day 4 "notes are created as DONE" plan
 - D31 — Package 2.0: every `page.tsx` under `(protected)/` now carries its own `export const instant = false` (thin Server Component wrapper pattern — `users/page.tsx` now renders a new `UsersPageClient`; Home/Forbidden needed no client split, just the export); `PasswordInput` (Lucide Eye/EyeOff toggle) replaces the plain password `Input` on login, Create user, and Reset password
+- D32 — Conflict found before 2.3: the brief wants an optional note on every lead status change, but `lead_status_histories` has no column for one; stopped and asked; resolved as drop the note entirely, no schema change
+- D33 — Package 2.1: normalisers (`normalize.ts`); `LEAD_STATUSES`/`PRIORITIES` as `as const` tuples + `z.enum` (not TS enums, so no `ROLES`-style bridge cast is needed against Prisma's own literal-union enum types); three explicit duplicate-finder functions (`duplicates.ts`, one per resource — different normalised columns per model); `buildOrderBy` (`list-query.ts`, the one generic helper added, reusing 1.4's pagination helpers unchanged); `GET /api/v1/lead-sources` (new module); `GET /api/v1/users/options` (`auth: 'authenticated'`, Staff-allowed, registered before `/users/:id`)
 
 ## 10. Gotchas and lessons learned
 
@@ -746,8 +784,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run` — 2
   files: `tests/lib/format.test.ts` (12 tests, package 1.6),
   `tests/lib/api-client.test.ts` (4 tests, package 1.7)), and `apps/api`
-  (`vitest run`) — 124 `apps/api` tests + 16 `apps/web` tests, 140 total,
-  all passing as of the last run this session.
+  (`vitest run`) — 149 `apps/api` tests + 16 `apps/web` tests, 165 total,
+  all passing as of the last run this session (package 2.1).
 - `apps/web/vitest.config.mts` only sets a resolve alias (`@` -> the package
   root, mirroring `tsconfig.json`) — no database, no global setup, unlike
   `apps/api`'s config; nothing in `apps/web` touches the database.
@@ -1155,5 +1193,35 @@ log just records that a session happened and what it covered.
   was started this package (no dev server run); nothing to stop. Committed
   locally; nothing pushed. Full detail in `docs/decisions.md` D31 (and D30
   for the separately-recorded notes policy decided at the same time, ahead
-  of package 2.3). Next: package 2.1 (shared list helper, normalisers,
-  duplicate finder, lookups).
+  of package 2.3).
+- **2026-11-19 (same session, continued) — package 2.1, backend
+  foundations.** Before starting, found and reported a real conflict
+  between the 2.3 brief (lead status changes should record an optional
+  note) and the already-migrated `lead_status_histories` table (no note
+  column) — stopped and asked rather than choosing, per instruction;
+  resolved as "drop the note entirely," recorded as `docs/decisions.md`
+  D32. Then built: normalisers (`packages/shared/src/normalize.ts` —
+  normalizeEmail/normalizePhone/normalizeCompanyName, with iterative
+  legal-suffix stripping for company names); `LEAD_STATUSES`/
+  `OPEN_LEAD_STATUSES`/`PRIORITIES` as `as const` tuples + `z.enum` (not TS
+  enums, so no `ROLES`-style bridge cast is needed); the duplicate finder
+  (`apps/api/src/lib/duplicates.ts` — three explicit functions, one per
+  resource, since Company/Contact/Lead each have a different set of
+  normalised columns); `buildOrderBy` (`apps/api/src/lib/list-query.ts`,
+  the one genuinely new generic helper — pagination.ts's
+  toSkipTake/buildPaginationMeta from package 1.4 were reused unchanged,
+  not replaced); a new `lead-sources` module (`GET /api/v1/lead-sources`,
+  active-only, `leads:read`); `GET /api/v1/users/options` added to the
+  existing `users` module (`auth: 'authenticated'` so Staff can populate
+  owner pickers too, registered before `/users/:id` for Express
+  route-ordering reasons). Adding `/users/options` required updating
+  `tests/users/registry-permissions.test.ts`'s "every `/users*` route is
+  403 for Staff" sweep to carve out this one exception (with its own
+  200-for-Staff test) — a necessary consequence, not scope creep. One lint
+  fix needed: `normalize.ts`'s character-class regex had an unnecessary
+  escape on a trailing `-` (`no-useless-escape`), removed. `pnpm typecheck
+  && pnpm lint && pnpm test && pnpm build` all pass clean (149 tests: 124
+  carried over + 25 new, all `apps/api`; `apps/web` unchanged at 16). No
+  process was started this package; nothing to stop. Committed locally;
+  nothing pushed. Full detail in `docs/decisions.md` D32–D33. Next: package
+  2.2 (Companies and Contacts API).

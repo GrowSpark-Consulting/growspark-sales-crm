@@ -4,6 +4,7 @@ import type {
   UpdateUserInput,
   ListUsersQuery,
   UserResponse,
+  UserOptionResponse,
 } from '@growspark/shared';
 import { prisma } from '../../db/prisma.js';
 import { ApiError } from '../../middleware/error-handler.js';
@@ -82,6 +83,21 @@ export async function createUser(ctx: RequestContext, input: CreateUserInput): P
   });
 
   return toUserResponse(created);
+}
+
+/**
+ * id+name of active users for owner pickers (leads/companies/contacts/deals
+ * forms). Deliberately not `users:manage`-gated like the rest of this
+ * module — every role that can own a record needs to be able to populate
+ * its own owner dropdown, including Staff.
+ */
+export async function listActiveUserOptions(ctx: RequestContext): Promise<UserOptionResponse[]> {
+  const rows = await prisma.user.findMany({
+    where: { ...scoped(ctx), isActive: true },
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true },
+  });
+  return rows;
 }
 
 export async function getUser(ctx: RequestContext, id: string): Promise<UserResponse> {

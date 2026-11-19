@@ -57,3 +57,14 @@ export const usersListResponseSchema = z.object({
   data: z.array(userResponseSchema),
   meta: paginationMetaSchema,
 });
+
+/** GET /users/options — active users' id+name for owner pickers; any signed-in role may call it. */
+export const userOptionResponseSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+export type UserOptionResponse = z.infer<typeof userOptionResponseSchema>;
+
+export const userOptionsListResponseSchema = z.object({
+  data: z.array(userOptionResponseSchema),
+});
