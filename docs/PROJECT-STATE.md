@@ -15,12 +15,17 @@ independently verifiable from this repo. The user's plan is **7 days**: Days
 §13 for what's known about Day 1's remaining packages and §14 for what isn't
 known about Days 2–5).
 
-**Current status (mid 2026-11-19 session, continued)**: Day 1, packages 1.1,
-1.1b, 1.2, 1.2c, 1.3, 1.3b, and 1.4 are complete and committed locally.
-Server-side session auth, the full permission system, and user management
-with the last-Admin rule and audit log all exist and are tested end to end.
-Package 1.5 (web shell, login page, Users page) is in progress in this same
-session. Nothing has been pushed to the remote this session.
+**Current status (end of 2026-11-19 session)**: **Day 1 is functionally
+complete.** Packages 1.1 through 1.5 are all built, tested, and committed
+locally (not yet pushed). The full sales-journey-adjacent foundation exists:
+server-side session auth, the full permission map, user management with the
+last-Admin rule and audit log, and a working browser UI (login, role-aware
+navigation, a Users page with create/edit/deactivate/reactivate/reset-
+password, a 403 page, a 404 page) all exist and are wired together — login
+through the real browser-facing proxy on :3000 was verified with curl (no
+browser available in this environment), and a full manual click-through
+script (`docs/MANUAL-TEST-DAY1.md`) is ready for the user to run in a real
+browser, which this session could not do itself.
 
 ## 2. Hard constraints
 
@@ -128,10 +133,48 @@ via `Start-Process "shell:AppsFolder\Docker.DockerForWindows.Settings"` (the
 ## 5. Repository map
 
 ```
-apps/web/              Next.js 16 App Router app (port 3000)
-  app/                  layout.tsx, page.tsx (client component, TanStack Query
-                        health check via /api/* proxy), providers.tsx, globals.css
-  components/ui/        shadcn Button (only component added)
+apps/web/              Next.js 16 App Router app (port 3000) — package 1.5
+  app/
+    layout.tsx            root layout — just Providers now
+    providers.tsx         QueryClientProvider + next-themes ThemeProvider
+                        (forcedTheme="light", no toggle UI — only present
+                        for shadcn's Sonner, which calls useTheme()) + Toaster
+    not-found.tsx         404 page (Next's own file convention)
+    login/page.tsx         public; wraps LoginForm in <Suspense> (needed for
+                        useSearchParams) with a real skeleton fallback, not
+                        null — see D26
+    (protected)/           route group, no URL segment; EVERY authenticated
+                        page lives here behind one layout
+      layout.tsx            AuthGuard (client-side nav convenience only,
+                        never the real security control — D26) + AppShell
+      page.tsx              Home — plain welcome placeholder
+      forbidden/page.tsx     403 page
+      users/page.tsx         the Users page (see below)
+  components/
+    auth-guard.tsx          useMe()-driven redirect: unauth'd -> /login?
+                        next=..., shows a Skeleton while loading
+    app-shell.tsx           sidebar (role-aware: Users link Admin-only) +
+                        top-right user menu + logout
+    login-form.tsx          React Hook Form + loginSchema (shared), inline
+                        field errors, generic failure banner
+    ui/                    shadcn: button (1.1), input, label, form, table,
+                        dialog, dropdown-menu, badge, sonner, skeleton,
+                        select, alert (all package 1.5)
+    users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
+                        reset-password-dialog.tsx, confirm-action-dialog.tsx
+                        (generic, used for both deactivate and reactivate)
+  hooks/
+    use-me.ts              useMe() — GET /auth/me via TanStack Query,
+                        retry:false (so a 401 settles fast, not after retries)
+    use-users.ts            useUsersList(params) — server-side page/pageSize/
+                        q/role/isActive, placeholderData keeps the old page
+                        visible while a new one loads
+  lib/
+    api-client.ts           ApiError + apiGet/apiPost/apiPatch, same-origin
+                        credentials
+    handle-form-error.ts    the one place that decides: 422 -> field errors,
+                        409/401/403 -> inline banner, 500/network -> toast
+                        with request id (D26)
   next.config.ts         proxies /api/:path* to API_INTERNAL_URL; transpiles
                         @growspark/shared
 
@@ -275,6 +318,10 @@ packages pin exact versions, no `^`/`~` ranges, per `CLAUDE.md`).
 | apps/web | `tailwindcss` | 4.3.5 | |
 | apps/web | `shadcn` (CLI, dev) | 4.23.0 | |
 | apps/web | `cn`, `radix-ui`, `class-variance-authority` | 0.5.2, 1.8.1, 0.7.1 | What the installed shadcn CLI actually generates now — verified live, not assumed; see `decisions.md` D11 |
+| apps/web | `@tanstack/react-query` | 5.108.0 | |
+| apps/web | `react-hook-form`, `@hookform/resolvers` | 7.92.0, 7.0.7 | Package 1.5. CLI-added with `^` ranges, re-pinned exact (D26) |
+| apps/web | `sonner`, `next-themes` | 2.0.8, 0.4.6 | Package 1.5, same re-pin story. `next-themes` only exists for Sonner's `useTheme()` call — no theme toggle built (D26) |
+| apps/web | `lucide-react` | 1.76.0 | Package 1.5 — the shadcn CLI referenced it in 4 components but didn't actually install it (D26) |
 | packages/shared | `zod` | 4.6.7 | |
 
 ## 7. What has been built, package by package
@@ -332,12 +379,29 @@ session has ever run `git push`, including this one).
   sessions, one audit row per mutation with before/after metadata and no
   secrets, cross-organisation 404s. 123 tests (124 after the D25 follow-up
   fix below). `docs/decisions.md` D25.
-- **Package 1.4 follow-up (same review cycle, not yet its own commit at the
-  time of writing)**: fixed a real gap D25 flagged on review —
-  `user.role_changed`'s audit metadata only carried `oldRole`/`newRole` when
-  a `PATCH` changed both `name` and `role` in one request; it now also
-  carries `oldName`/`newName`. One new test added (124 tests total). Will be
-  committed as part of (or just before) package 1.5.
+- **Package 1.4 follow-up** (`18510fb`): fixed a real gap flagged on review
+  — `user.role_changed`'s audit metadata only carried `oldRole`/`newRole`
+  when a `PATCH` changed both `name` and `role` in one request; it now also
+  carries `oldName`/`newName`. One new test added (124 tests total). This
+  commit also brought this file current through 1.2c–1.4 (it had been
+  stale since the 1.1/1.2 session).
+- **Package 1.5 — web shell, login, Users page**: Next.js UI for everything
+  1.3/1.4 built. `AuthGuard` (client-side nav only, never the security
+  control — D26) + role-aware `AppShell` (sidebar, user menu, logout);
+  `/login` (React Hook Form + the shared Zod schema, inline errors, generic
+  failure message); `/` (Home placeholder); `/users` (server-paginated
+  table, search/role/status filters, create/edit/deactivate/reactivate/
+  reset-password dialogs, 409 `LAST_ADMIN` and field errors shown inline,
+  unexpected errors as a toast with the request id); `/forbidden` (403);
+  `not-found.tsx` (404). 10 shadcn components added
+  (input/label/form/table/dialog/dropdown-menu/badge/sonner/skeleton/
+  select/alert). Verified: `pnpm build` clean, all 5 routes render; full
+  login→me→users-list→logout cycle proven with curl through the :3000 proxy
+  (no browser in this environment); `docs/MANUAL-TEST-DAY1.md` written for
+  the user to run the parts only a browser can show. See `docs/decisions.md`
+  D26 for what was non-obvious (the missing `lucide-react` dependency, the
+  `Suspense fallback={null}` blank-flash finding, the deliberate absence of
+  any `proxy.ts`).
 
 ## 8. Database
 
@@ -416,6 +480,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D23 — Package 1.3b: replaced the per-IP login limiter with a global flood ceiling (`createGlobalLoginFloodLimiter`, default 50/15min); both limiters now use `skipSuccessfulRequests`; real per-IP limiting deferred to a deployment decision
 - D24 — Package 1.3b: root cause and fix for the `pnpm dev` startup race — `pnpm -r --parallel`'s own scheduler breaks `tsx watch`; replaced with `scripts/dev.mjs` (independent `pnpm --filter` children, no new dependency)
 - D25 — Package 1.4: last-Admin `SELECT ... FOR UPDATE` locking pattern; the `isActive` boolean query-param gotcha (`z.coerce.boolean()` is wrong — `Boolean("false")` is `true`); the `sort=<field>:asc|desc` convention; one audit row per `PATCH`, with before/after for every changed field (fixed after review to include `oldName`/`newName`, not just the role pair)
+- D26 — Package 1.5: no `proxy.ts` (Next 16 renamed `middleware`, recommends against relying on it for security either way); `lucide-react` missing from the shadcn CLI's own output; `next-themes` is Sonner's dependency, not a separate choice; a `Suspense fallback={null}` is a real blank flash under Cache Components, not a no-op; the error-display split (422 inline on the field, 409/401/403 as a dialog banner, 500/network as a toast with the request id)
 
 ## 10. Gotchas and lessons learned
 
@@ -474,6 +539,24 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - **Prisma's query builder has no row-locking API** — the last-Admin rule
   uses a raw `tx.$queryRaw` with `SELECT ... FOR UPDATE`, casting to the
   Postgres enum by its mapped name (`'ADMIN'::role`, not `'ADMIN'::"Role"`) — D25.
+- **The shadcn CLI can write a component's imports without actually
+  installing the import's package.** `dialog`/`dropdown-menu`/`select`/
+  `sonner` all import from `lucide-react`; the CLI never added it as a
+  dependency. Surfaced immediately by `tsc`, not silently — but check
+  `node_modules/<pkg>` exists after any future `shadcn add`, don't assume
+  the CLI's dependency step actually ran for everything it should have.
+- **A `<Suspense fallback={null}>` is not equivalent to "nothing changes
+  while loading"** — with `cacheComponents: true`, the fallback genuinely
+  replaces that subtree in the *prerendered* HTML. `null` means the real
+  content (here, the entire login form) is simply absent from the page
+  until client-side hydration completes, which a `curl` of the page makes
+  obvious immediately (no form markup at all) but a fast browser might hide
+  well enough to go unnoticed. Give it a real fallback shaped like the
+  content (D26).
+- **Next.js route groups `(name)` share a URL with whatever's outside
+  them** — `app/(protected)/page.tsx` and a pre-existing `app/page.tsx`
+  both resolve to `/`; the old one has to be deleted, not just left
+  alongside, or the build fails on a route conflict.
 
 ## 11. Testing
 
@@ -548,18 +631,29 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   check-then-write — see `assertNotLastActiveAdmin` in
   `users.service.ts` for the pattern, and its concurrency test for how to
   prove it.
+- **Frontend (package 1.5 conventions):** every authenticated page goes
+  inside the `app/(protected)/` route group, behind its one `AuthGuard` +
+  `AppShell` layout — never a standalone auth check re-implemented per
+  page. A mutation's error handling always goes through
+  `handleApiFormError` (`apps/web/lib/handle-form-error.ts`), not a
+  bespoke try/catch per dialog, so the 422-inline / 409-banner /
+  500-toast-with-request-id split stays consistent everywhere. Client
+  components that read `useSearchParams()` need a real `<Suspense>`
+  fallback (not `null`) — see the gotcha above.
 
 ## 13. What's next
 
-- **1.3, 1.3b, 1.4 are done** (see §7). 1.3's permission map and D20/D21
-  (now D23) were explicit approval gates; both were approved, with D25's
-  audit-metadata gap fixed on review before 1.5 started.
-- **1.5 — Web shell (in progress this session)**: Next.js shell, login page,
-  auth guard, Users page, `docs/MANUAL-TEST-DAY1.md` for the user to
-  click-through in a real browser (this environment has no browser).
-- Beyond 1.5: the user's planning roadmap continues into Day 2 (companies,
+- **Day 1 (packages 1.1–1.5) is done** (see §7). Every explicit approval
+  gate (1.3's permission map, D20/D21→D23) was approved; D25's
+  audit-metadata gap was fixed on review before 1.5 started.
+- **Not yet done, and not part of Day 1's scope**: the actual browser
+  click-through in `docs/MANUAL-TEST-DAY1.md` — this environment has no
+  browser, so that still needs the user to run it before Day 1 is truly
+  *verified*, not just built and automatically tested.
+- Beyond Day 1: the user's planning roadmap continues into Day 2 (companies,
   contacts, leads) — not detailed in this repo yet; don't invent content for
-  it.
+  it. Day 6/7 (testing, stabilisation, demo) are explicitly out of scope
+  until the build days are done.
 
 ## 14. Open questions and unverified items
 
@@ -576,6 +670,12 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - The exact plan for Days 2–5 beyond what's already built — the user told me
   the 7-day shape (build/test/stabilise) but not full detail for every
   package; don't invent content for them.
+- **`docs/MANUAL-TEST-DAY1.md` has not actually been run by anyone yet** —
+  written this session, but this environment has no browser to execute it
+  against. Everything in it is believed correct from the curl-based
+  verification and the automated test suite, but a real click-through may
+  still surface something (e.g. a layout issue, a focus/accessibility
+  detail) that neither of those would catch.
 
 ## 15. Session log
 
@@ -603,4 +703,27 @@ log just records that a session happened and what it covered.
   fix; `pnpm dev` ran cleanly 5 more times in a row from a cold state (ports
   checked free before each, both services answering within 10–32s each
   time, ports confirmed free after each `taskkill .../T /F`). Working tree
-  clean after each commit. Next: package 1.5 (web shell, login, Users page).
+  clean after each commit.
+- **2026-11-19 (continued, same day) — package 1.5, Day 1 complete.** Web
+  shell, login page, role-aware navigation, 403/404 pages, and a full Users
+  page (create/edit/deactivate/reactivate/reset-password, server-side
+  pagination/search/filters) built on top of 1.3/1.4's API. 10 shadcn
+  components added; `lucide-react` had to be added separately (the CLI
+  referenced it without installing it); `next-themes`/`react-hook-form`/
+  `@hookform/resolvers`/`sonner` re-pinned to exact versions after the CLI
+  added them with `^` ranges. Found and fixed one real bug via this
+  session's own curl verification (not assumed): `/login`'s `Suspense`
+  fallback was `null`, so the entire form was missing from the prerendered
+  HTML until hydration — replaced with a skeleton matching the form's
+  shape. `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass
+  from a clean state (124 tests, unchanged from 1.4 — this package added no
+  new `apps/api` code). Verified end-to-end through the real :3000 proxy
+  with curl: login → me → users list → logout, each returning exactly what
+  it should. Wrote `docs/MANUAL-TEST-DAY1.md` for the user to run in an
+  actual browser, which this session could not do itself — that run is
+  still outstanding (see §14). This file (`PROJECT-STATE.md`) was updated
+  fully for status/repository-map/stack/decisions-index/gotchas/what's-next
+  per the explicit "end of Day 1" instruction, not just appended to.
+  Day 1 (packages 1.1 through 1.5) is now complete and committed locally;
+  nothing has been pushed. Next: Day 2 (companies, contacts, leads) —
+  not yet detailed in this repo.

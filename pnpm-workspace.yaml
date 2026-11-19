@@ -17,3 +17,4 @@ minimumReleaseAgeExclude:
   - '@vitest/spy@5.1.1'
   - vitest@5.1.1
   - express-rate-limit@8.7.5
+  - lucide-react@1.76.0

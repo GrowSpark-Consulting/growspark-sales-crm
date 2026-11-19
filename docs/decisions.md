@@ -424,3 +424,57 @@ is a decision made once and not re-litigated without a new entry.
   - `createTestTenant()`/`createTwoTestTenants()` (built in package 1.2c,
     ahead of needing them) turned out to be exactly what this package's
     last-Admin and isolation tests needed, unchanged.
+- **D26** — Package 1.5 (web shell, login, Users page):
+  - **No `proxy.ts`/`middleware.ts` was written, deliberately.** Next 16
+    renamed `middleware` to `proxy` (confirmed in the installed version's
+    own docs,
+    `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`)
+    and explicitly recommends against relying on it. Per the brief, the API
+    is the only real access control; `AuthGuard`
+    (`apps/web/components/auth-guard.tsx`) is pure client-side navigation
+    convenience built on `useMe()` — an attacker bypassing it entirely still
+    hits a 401/403 at the API on every request, same as always.
+  - **`lucide-react` was missing.** The shadcn CLI's `add` for
+    `dialog`/`dropdown-menu`/`select`/`sonner` wrote files that import icons
+    from it, but did not actually add it as a dependency — the first
+    `next typegen`/`tsc` run surfaced `Cannot find module 'lucide-react'`.
+    Added and pinned exactly (`1.76.0`, current npm "latest" at the time).
+    `next-themes` (`0.4.6`) was pulled in correctly by the CLI for
+    `sonner`'s `useTheme()` call — not a separate "UI library" choice, just
+    that component's own dependency; wired with a fixed `forcedTheme="light"`
+    (no toggle UI in this package) so Sonner renders correctly.
+  - `@hookform/resolvers`, `next-themes`, `react-hook-form`, `sonner` were
+    all added by the shadcn CLI with `^` ranges — re-pinned to the exact
+    versions pnpm had already resolved (`7.0.7`/`0.4.6`/`7.92.0`/`2.0.8`),
+    per this repo's no-range convention. `@hookform/resolvers/zod`'s peer
+    range (`zod: "^3.25.0 || ^4.0.0"`) covers the project's `zod@4.6.7`.
+  - **A `Suspense` fallback of `null` is a real blank flash, not a no-op** —
+    found during this package's own curl verification (not assumed): with
+    `cacheComponents: true`, `/login`'s form (behind a `Suspense` boundary
+    because it reads `useSearchParams()` for the `next` redirect target) was
+    entirely absent from the prerendered HTML shell when its fallback was
+    `null` — curl showed a page with only the heading, no form markup at
+    all, until client-side hydration ran. Fixed with a real skeleton
+    fallback matching the form's shape (confirmed via curl: 5
+    `animate-pulse` elements now appear in the static shell).
+  - **Route group `(protected)`** holds every authenticated page
+    (`/`, `/users`, `/forbidden`) behind one shared `layout.tsx`
+    (`AuthGuard` + `AppShell`); `/login` and the root `not-found.tsx` sit
+    outside it, unauthenticated. The route group requires removing the
+    original `app/page.tsx` (the 1.1-era health-check Home page) — it would
+    otherwise collide with `app/(protected)/page.tsx` at the same `/` URL.
+  - Server-side pagination/filtering for the Users table reuses the exact
+    query shape package 1.4's API already expects (`page`, `pageSize`, `q`,
+    `role`, `isActive`) — no new list-helper abstraction introduced on the
+    frontend; TanStack Query's `placeholderData: (prev) => prev` keeps the
+    table showing the previous page while a new one loads, instead of
+    flashing empty.
+  - API errors are deliberately split two ways, per the brief: a 422's
+    field-level details go onto the form inline (`form.setError`); 409
+    `LAST_ADMIN`/`CONFLICT`/401/403 render as an inline banner in the
+    dialog (the user caused these, context is visible right there); 500
+    `INTERNAL` (or an unrecognised code) and a plain network failure report
+    as a toast carrying the request id instead — there's no specific field
+    or known cause to point at for those. One shared helper,
+    `handleApiFormError` (`apps/web/lib/handle-form-error.ts`), implements
+    this split once rather than duplicating it across four dialogs.
