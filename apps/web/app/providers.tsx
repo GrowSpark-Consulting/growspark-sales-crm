@@ -20,10 +20,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* No theme toggle in this package — a fixed light theme, per the
-          brief's black/white/greyscale styling. Only present so shadcn's
-          Sonner (which calls useTheme()) renders correctly. */}
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} forcedTheme="light">
+      {/* data-theme, not the "class" default — matches the Grow Spark
+          design system (docs/design-system/README.md §2: "Set the theme on
+          the root element: <html data-theme="light"> or data-theme="dark">")
+          and globals.css's [data-theme="dark"] token overrides. Light/Dark/
+          System is offered in the user menu (app-shell.tsx); next-themes
+          persists the choice (localStorage) and resolves "system" via
+          prefers-color-scheme on its own. */}
+      <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
         {children}
         <Toaster />
       </ThemeProvider>

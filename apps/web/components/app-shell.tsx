@@ -4,6 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useTheme } from "next-themes";
+import { Home, Users as UsersIcon, Sun, Moon, Monitor, LogOut } from "lucide-react";
+import { cn } from "cn";
 import { useMe, ME_QUERY_KEY } from "@/hooks/use-me";
 import { apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -12,21 +15,54 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-function NavLink({ href, active, children }: { href: string; active: boolean; children: React.ReactNode }) {
+// docs/design-system/README.md §5: only 3 routes exist today, so a flat
+// lookup is fine. Revisit (derive from the route tree) once more pages land.
+const PAGE_TITLES: Record<string, string> = {
+  "/": "Home",
+  "/users": "Users",
+  "/forbidden": "Forbidden",
+};
+
+function pageTitle(pathname: string): string {
+  return PAGE_TITLES[pathname] ?? "Grow Spark CRM";
+}
+
+function NavItem({
+  href,
+  active,
+  icon: Icon,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}) {
   return (
     <Link
       href={href}
-      className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-        active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-      }`}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex h-(--control-md) items-center gap-3 rounded-md px-2 text-sm text-sidebar-foreground",
+        active ? "bg-sidebar-active font-medium" : "hover:bg-sidebar-active"
+      )}
     >
+      <Icon className="size-(--icon-md) opacity-85" />
       {children}
     </Link>
   );
+}
+
+function initials(name: string | undefined): string {
+  if (!name) return "";
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "")).toUpperCase();
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -35,6 +71,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { theme, setTheme } = useTheme();
 
   const isAdmin = me?.user.role === "ADMIN";
 
@@ -56,37 +93,63 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-svh">
-      <aside className="flex w-56 shrink-0 flex-col gap-1 border-r p-4">
-        <div className="mb-4 px-3 text-sm font-semibold">Grow Spark CRM</div>
+      <aside className="flex w-(--sidebar-width) shrink-0 flex-col bg-sidebar px-3 py-4">
+        <div className="mb-5 flex items-center gap-2 px-2 text-[15px] font-semibold text-sidebar-foreground">
+          <span className="grid size-7 shrink-0 place-items-center rounded-md bg-product-sales text-[13px] font-semibold text-surface">
+            S
+          </span>
+          Sales &amp; CRM
+        </div>
         <nav className="flex flex-col gap-1">
-          <NavLink href="/" active={pathname === "/"}>
+          <NavItem href="/" active={pathname === "/"} icon={Home}>
             Home
-          </NavLink>
+          </NavItem>
           {isAdmin && (
-            <NavLink href="/users" active={pathname.startsWith("/users")}>
+            <NavItem href="/users" active={pathname.startsWith("/users")} icon={UsersIcon}>
               Users
-            </NavLink>
+            </NavItem>
           )}
         </nav>
       </aside>
       <div className="flex flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-end border-b px-4">
+        <header className="flex h-(--topbar-height) shrink-0 items-center justify-between border-b border-line bg-surface px-6">
+          <h1 className="h1">{pageTitle(pathname)}</h1>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="gap-2">
-                {me ? `${me.user.name} (${me.user.role})` : ""}
+              <Button variant="ghost" className="gap-2 px-2">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-sunken text-xs font-semibold text-ink">
+                  {initials(me?.user.name)}
+                </span>
+                <span className="hidden text-sm font-medium sm:inline">{me?.user.name}</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel className="font-normal text-muted-foreground">
-                {me?.user.email}
-              </DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="font-normal text-ink-muted">{me?.user.email}</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={handleLogout}>Log out</DropdownMenuItem>
+              <DropdownMenuLabel>Theme</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={theme} onValueChange={setTheme}>
+                <DropdownMenuRadioItem value="light">
+                  <Sun className="size-4" />
+                  Light
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="dark">
+                  <Moon className="size-4" />
+                  Dark
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="system">
+                  <Monitor className="size-4" />
+                  System
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onSelect={handleLogout}>
+                <LogOut className="size-4" />
+                Log out
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 bg-background p-6">{children}</main>
       </div>
     </div>
   );

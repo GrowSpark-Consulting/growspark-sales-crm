@@ -37,16 +37,18 @@ and flag it rather than ticking it.
       **not** say anything that reveals whether the email exists
 - [ ] Clear the password field, enter the correct Admin password. Submit.
       You should land on `/` (the Home page), not stay on `/login`
-- [ ] The Home page shows a plain "Welcome to Grow Spark Sales & CRM"
-      message — no dashboard yet, that's expected (it comes in a later
-      package)
+- [ ] The top bar's title reads "Home" and the page body shows "The
+      dashboard will appear here in a later package." — no dashboard yet,
+      that's expected (it comes in a later package)
 
 ## 3. Navigation and shell (as Admin)
 
-- [ ] The sidebar shows **both** "Home" and "Users" links
-- [ ] The top-right corner shows your name and role (e.g. "Demo Admin
-      (ADMIN)"). Clicking it opens a menu showing your email and a "Log
-      out" item
+- [ ] The sidebar is a dark rail with the clay "S" chip and "Sales & CRM"
+      at the top, and shows **both** "Home" and "Users" links
+- [ ] The top bar is 56px tall, holds the current page's title on the left
+      (it changes to "Users" when you click into Users), and your name/
+      avatar on the right. Clicking your name opens a menu showing your
+      email, a Light/Dark/System theme section, and a "Log out" item
 - [ ] Click "Users" in the sidebar. You land on `/users` and see a table
       with at least the two seeded users (Demo Admin, Demo Staff)
 
@@ -159,9 +161,40 @@ API mid-request), check:
 - [ ] It includes something you could hand to the person investigating (a
       "Request ID: ..." line) rather than just a bare "error" message
 
+## 12. Design system (package 1.6) — theme, fonts, console
+
+- [ ] Open the user menu and switch the theme to **Dark**. The whole app
+      (sidebar, top bar, cards, inputs, badges) repaints to the dark
+      palette immediately, with no flash of unstyled content. The sidebar
+      stays visually dark in **both** themes (it's the one fixed-dark
+      surface), everything else lightens/darkens
+- [ ] Switch to **Light**, then to **System** — matches your OS theme.
+      Reload the page after picking Dark or Light: the choice survives the
+      reload (no flash back to the other theme before it settles)
+- [ ] In both Light and Dark, confirm nothing is pure white or pure
+      black — surfaces look like warm off-white / warm charcoal, not
+      stark `#fff`/`#000`
+- [ ] Headings and body text visibly use Inter; any ID/code-like text uses
+      a monospace font (JetBrains Mono) — check via the browser's "Inspect"
+      on a heading if unsure
+- [ ] Tab through the login form and the Users page with the keyboard only
+      (no mouse). Every focused control (inputs, buttons, links, menu
+      items) shows a clearly visible outline — never an invisible focus
+- [ ] On the Users page, the "Active"/"Inactive" badges each show a small
+      coloured dot **and** the word — cover the dot with a finger/thumb on
+      screen and confirm the word alone still tells you the status
+- [ ] Open the browser's DevTools console on `/login`, then reload the
+      page. No red errors — in particular, no React hydration-mismatch
+      warning about `<html>` (this was the bug reported before 1.6)
+- [ ] Log in, then open the console again on `/` (Home). Same check — no
+      red errors, no hydration warnings
+- [ ] If your OS/browser has "reduce motion" turned on, repeat the theme
+      switch above — it should apply with no animation (or a near-instant
+      one), not the normal transition
+
 ---
 
-If everything above checked out, Day 1 (packages 1.1 through 1.5) is
+If everything above checked out, Day 1 (packages 1.1 through 1.6) is
 functionally complete end to end: auth, permissions, user management, the
-last-Admin rule, and audit logging all work through a real browser, not
-just the automated test suite.
+last-Admin rule, audit logging, and the Grow Spark design system all work
+through a real browser, not just the automated test suite.

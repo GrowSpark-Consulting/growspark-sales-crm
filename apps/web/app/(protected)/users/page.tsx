@@ -77,8 +77,7 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Users</h1>
+      <div className="flex justify-end">
         <CreateUserDialog />
       </div>
 
@@ -162,7 +161,7 @@ export default function UsersPage() {
               <TableCell>{user.email}</TableCell>
               <TableCell>{user.role}</TableCell>
               <TableCell>
-                <Badge variant={user.isActive ? "default" : "secondary"}>
+                <Badge variant={user.isActive ? "success" : "default"}>
                   {user.isActive ? "Active" : "Inactive"}
                 </Badge>
               </TableCell>

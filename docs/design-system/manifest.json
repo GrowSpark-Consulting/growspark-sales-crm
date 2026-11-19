@@ -1,0 +1,61 @@
+{
+  "manifestVersion": 3,
+  "name": "Grow Spark Workspace — Design System",
+  "namespace": "GrowSpark",
+  "files": [
+    "components/Alert/README.md",
+    "components/Badge/README.md",
+    "components/Button/README.md",
+    "components/Field/README.md",
+    "components/Sidebar/README.md",
+    "components/StatCard/README.md",
+    "components/Table/README.md",
+    "components/Tabs/README.md",
+    "components/bundle.css",
+    "tokens.css"
+  ],
+  "libraries": [],
+  "components": [
+    {
+      "name": "Alert",
+      "group": "Feedback",
+      "summary": "An inline message inside a page or form that explains something the user needs to know or fix."
+    },
+    {
+      "name": "Badge",
+      "group": "Status",
+      "summary": "A short status label (one or two words) with a dot, used in tables, cards and record headers."
+    },
+    {
+      "name": "Button",
+      "group": "Actions",
+      "summary": "Buttons trigger an action; use one primary button per screen region, for the thing that region is for."
+    },
+    {
+      "name": "Field",
+      "group": "Forms",
+      "summary": "A text input with its label above, optional helper text below, and an error state."
+    },
+    {
+      "name": "Sidebar",
+      "group": "Navigation",
+      "summary": "The left navigation rail shared by all three products — the one deep, dark block that makes them feel like a family."
+    },
+    {
+      "name": "StatCard",
+      "group": "Data display",
+      "summary": "A KPI tile for dashboards: label, big number, and one line of context."
+    },
+    {
+      "name": "Table",
+      "group": "Data display",
+      "summary": "The main way records are shown in all three products: leads, tasks, employees."
+    },
+    {
+      "name": "Tabs",
+      "group": "Navigation",
+      "summary": "Switch between views of the same record (lead, project, employee) without leaving the page."
+    }
+  ],
+  "assetGroups": []
+}

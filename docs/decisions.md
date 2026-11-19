@@ -478,3 +478,107 @@ is a decision made once and not re-litigated without a new entry.
     or known cause to point at for those. One shared helper,
     `handleApiFormError` (`apps/web/lib/handle-form-error.ts`), implements
     this split once rather than duplicating it across four dialogs.
+- **D27** — Package 1.6 (Grow Spark design system applied to `apps/web`):
+  - Source of truth was `docs/design-system/` (README.md, tokens.css,
+    `components/*/README.md`, `components/bundle.css`) — all present, none
+    missing, so nothing was worked around.
+  - **Theming switched from `attribute="class"`/`forcedTheme="light"`
+    (D26) to `attribute="data-theme"`, `defaultTheme="system"`,
+    `enableSystem`** — matches the design system's own documented
+    convention (`<html data-theme="light|dark">`) instead of inventing a
+    parallel one. The Light/Dark/System toggle lives in the user menu
+    (`DropdownMenuRadioGroup`), per the brief.
+  - **`apps/web/app/design-tokens.css` is a verbatim copy of
+    `docs/design-system/tokens.css`**, imported once from `globals.css`.
+    Nothing in app code may declare a new hex value — every colour,
+    radius, shadow, size and font flows from this file through Tailwind
+    v4's `@theme inline` block in `globals.css`, which maps every shadcn
+    semantic variable (`--color-background`, `--color-primary`,
+    `--color-destructive`, `--color-sidebar`, etc.) to a GS token.
+  - **shadcn's structural `accent` and GS's brand `accent` (clay) are not
+    the same thing and are not merged.** shadcn/Radix use `--color-accent`
+    internally as a generic hover/highlight fill for menu and select
+    items; GS's `accent` is "brand moments only... not for buttons" and
+    must stay rare. Mapping GS's clay onto shadcn's accent would have
+    painted every dropdown/select hover state clay. Resolution: shadcn's
+    `--color-accent`/`--color-accent-foreground` now point at GS's own
+    `surface-hover`/`ink` (its documented neutral hover fill); GS's actual
+    brand clay gets distinct `--color-brand-accent*` names, used only at
+    deliberate call sites (sidebar product chip, the `accent` Badge tone).
+    `accent` is never used for a Button variant.
+  - **`@custom-variant dark` now targets `[data-theme="dark"]`, not
+    `.dark`.** Several shadcn-generated components ship baked-in
+    `dark:*` utilities (e.g. `button`/`input`/`select`/`badge`). Removing
+    the custom-variant override entirely (rather than repointing it) would
+    have let those utilities fall back to Tailwind's default
+    `prefers-color-scheme` media query, fighting the app's own
+    `data-theme` toggle whenever the OS theme and the in-app choice
+    disagree.
+  - **Modal/drawer scrim is `bg-ink/40`, not `bg-black/50`.** README §4
+    ("Elevation") specifies the scrim as "`ink` at 40% opacity" literally;
+    `components/ui/dialog.tsx`'s overlay was the one remaining hard-coded
+    `black` in the app and is fixed to match.
+  - **Button variants remapped, not renamed**, so every existing call site
+    (`variant="outline"`, `"secondary"`, `"ghost"`, `"destructive"`) kept
+    working with no call-site changes: `outline`/`secondary` both render
+    the Button README's one "Secondary (default)" bordered style (the
+    spec has no third bordered variant); `destructive` is now an **outline**
+    recipe (`bg-surface border-danger text-danger`, hover `bg-danger-soft`)
+    instead of `bg-destructive text-white` — the old recipe's `text-white`
+    was a literal, non-token colour and violated "never hard-code hex/pure
+    white or black" on its own. Sizes use the design system's named
+    control tokens directly (`h-(--control-sm|md|lg)`) rather than
+    Tailwind's numeric scale, since GS's sizes are explicitly named tokens
+    the scale only coincidentally lines up with.
+  - **Badge's variant set was replaced**, not extended: shadcn's
+    `default/secondary/destructive/outline/ghost/link` don't match how the
+    Badge README actually uses colour (status tones: `success`/`warning`/
+    `danger`/`info`/`accent`, always dot + word, never colour alone). The
+    one existing call site (`users/page.tsx`'s Active/Inactive badge) was
+    updated to `success`/`default` accordingly.
+  - **Alert kept the `destructive` variant name** (all five existing call
+    sites use it) but it now renders the Alert README's danger tone
+    (`bg-danger-soft`, icon `text-danger`) instead of a flat destructive
+    fill; `role` is `"alert"` for `destructive`, `"status"` otherwise, per
+    the README.
+  - **AppShell's page title is a flat pathname → title lookup**
+    (`PAGE_TITLES` in `apps/web/components/app-shell.tsx`), not derived
+    from the route tree — there are only 3 protected routes today. Revisit
+    once more pages land; flagged in-code as a known limitation, not
+    hidden.
+  - Removed the per-page `<h1>` from `/`, `/users` and `/forbidden` — the
+    design system's layout puts the page title in the 56px top bar, not
+    in page content, so keeping both would have shown it twice.
+  - **`vitest@5.1.1` added to `apps/web`** (same pinned version already in
+    `apps/api`) so the new INR/date/time formatters
+    (`apps/web/lib/format.ts`) could ship with real unit tests instead of
+    the placeholder `echo` test script — confirmed with the user before
+    adding, per this file's no-dependency-without-asking rule. Config is
+    `apps/web/vitest.config.mts` (`.mts`, not `.ts` — Vite's native config
+    loader otherwise warns about ESM syntax loaded as CommonJS in a
+    package with no `"type": "module"`), with one alias (`@` → the web
+    package root) mirroring `tsconfig.json`'s existing path alias so tests
+    import the same way app code does.
+  - **INR formatting**: `formatINR` uses `Intl.NumberFormat("en-IN")` for
+    Indian digit grouping only (no `style: "currency"`) and prepends
+    `"₹ "` itself, since `Intl`'s own currency formatting in `en-IN` does
+    not reliably produce the specific "₹ " + grouped-digits shape the
+    brief asked for. `formatINRCompact` switches to `L`/`Cr` suffixes at
+    exactly one lakh (1,00,000) and one crore (1,00,00,000), falling back
+    to the full grouped form below one lakh (nothing to compact yet).
+    Dates use `Intl.DateTimeFormat("en-GB", { day, month: "short", year })`
+    (→ "19 Nov 2026"); times use `Intl.DateTimeFormat("en-US", { hour,
+    minute: "2-digit", hour12: true })` (→ "2:30 PM") — `en-US` specifically
+    for reliably upper-cased `AM`/`PM`.
+  - Login's `Input`/`Button` use `control-lg` (44px) via explicit
+    `className` overrides (`h-(--control-lg)`), not a new component size
+    baked into every input — the brief scopes 44px to login/mobile
+    specifically, every other control stays `control-md` (36px).
+  - Console-clean on `/login` and `/` after the hydration fix
+    (`suppressHydrationWarning` on `<html>`, added per this package) was
+    verified via `curl` against the running dev server — the SSR payload
+    confirms `suppressHydrationWarning: true` is actually reaching
+    `<html>` and no server-side exception markers are present — not via a
+    live browser console, since no browser-automation tool is available in
+    this environment. The full visual/console check is in
+    `docs/MANUAL-TEST-DAY1.md` §12 for the user to confirm directly.

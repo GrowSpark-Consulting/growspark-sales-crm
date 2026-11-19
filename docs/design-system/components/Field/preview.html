@@ -1,0 +1,12 @@
+<!-- @dsCard group="Forms" height=200 -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Field — preview</title></head>
+<body>
+<div class="gs-demo" style="align-items:flex-start">
+  <label class="gs-field"><span class="gs-label">Company name</span><input class="gs-input" placeholder="e.g. Chelliah Enterprises"><span class="gs-help">As registered on GST.</span></label>
+  <label class="gs-field"><span class="gs-label">Work email</span><input class="gs-input" value="ananya@growspark"><span class="gs-help">Enter a valid email address.</span></label>
+</div>
+<script>document.querySelectorAll('.gs-field')[1].classList.add('gs-field-error');document.querySelectorAll('.gs-input')[1].setAttribute('aria-invalid','true');</script>
+</body>
+</html>

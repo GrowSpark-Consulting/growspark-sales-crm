@@ -1,0 +1,193 @@
+/* Grow Spark Workspace — Design System — generated from tokens.json */
+:root, [data-theme="light"] {
+  --bg: #f5f2ec; /* App canvas behind panels and cards. Warm off-white (not pure white) to cut glare during long sessions; warm charcoal (not pure black) in dark. */
+  --surface: #fcfaf6; /* Cards, panels, modals, table body, inputs. The main working surface. */
+  --surface-sunken: #eeeae2; /* Table header rows, read-only fields, code blocks, the track behind progress bars. */
+  --surface-hover: #f0ece5; /* Hover fill for table rows, list items and quiet buttons. */
+  --sidebar: #26231f; /* Left navigation rail in all three products. The one deep 'black' block of the brand. */
+  --sidebar-active: #3a3630; /* Selected nav item background inside the sidebar. */
+  --on-sidebar: #ece6db; /* Nav labels and icons on sidebar (12.6:1 light, 14.4:1 dark). */
+  --on-sidebar-muted: #a69d8f; /* Section headings and counts on sidebar (5.8:1 / 5.7:1). */
+  --line: #e3ddd3; /* Hairline dividers, card borders, table row separators. Decorative only, never the only edge of a control. */
+  --line-strong: #8e867a; /* Borders of inputs, checkboxes, selects (3.4:1 / 3.3:1 on surface, meets the 3:1 control rule). */
+  --ink: #211e1a; /* Primary text on bg, surface and surface-sunken (≥13.8:1). Warm near-black, never #000. */
+  --ink-muted: #5e574d; /* Secondary text, helper text, table meta, placeholders (≥5.9:1 on bg, surface, sunken). */
+  --primary: #4a5a36; /* Moss green. Primary buttons, active tab underline, links, selected checkbox, progress fill. Text-safe on surface (7.2:1 / 7.8:1). */
+  --primary-hover: #3d4b2c; /* Hover/pressed state of primary fills. */
+  --on-primary: #fbfaf6; /* Text and icons on a primary fill (7.2:1 / 8.2:1). */
+  --primary-soft: #e5e9da; /* Selected row, active filter chip, current nav in light content areas. primary text on it is 6.1:1. */
+  --accent: #9a5034; /* Clay / terracotta — the 'spark'. Brand moments only: logo chip, onboarding highlights, 'New' badges, one key KPI. Not for buttons. */
+  --accent-soft: #f3e3d8; /* Background for accent badges and highlight banners; accent text on it is 4.7:1 / 5.2:1. */
+  --success: #3d6b48; /* Won deals, completed tasks, approved leave, 'Active' employees. Always paired with a label or icon. */
+  --success-soft: #e1ecdf; /* Background for success badges and alerts. */
+  --warning: #855f12; /* Ochre. Due soon, pending approval, probation, at-risk projects. */
+  --warning-soft: #f4ead2; /* Background for warning badges and alerts. */
+  --danger: #a13a2c; /* Brick. Overdue, lost deal, rejected, destructive buttons, field errors. */
+  --danger-soft: #f5e0db; /* Background for danger badges, error alerts and invalid-field fill. */
+  --info: #3b5e71; /* Dusty slate blue. Neutral system notices, 'In review', informational links in alerts. */
+  --info-soft: #dfe9ee; /* Background for info badges and alerts. */
+  --focus-ring: #9a5034; /* Keyboard focus outline: 2px solid with 2px offset. Clay so it never blends with moss primary (5.3:1 on bg). */
+  --data-1: #4a5a36; /* Chart series 1 (moss). */
+  --data-2: #9a5034; /* Chart series 2 (clay). */
+  --data-3: #3b5e71; /* Chart series 3 (slate). */
+  --data-4: #b08a3e; /* Chart series 4 (ochre). 3.1:1 in light — use for fills/bars, not thin lines. */
+  --data-5: #7a5c7a; /* Chart series 5 (heather). */
+  --data-6: #7e9468; /* Chart series 6 (sage). Use fills, not 1px lines, in light theme. */
+  --product-sales: #9a5034; /* Product marker for Sales & CRM — only on the product logo chip in the sidebar header. */
+  --product-projects: #4a5a36; /* Product marker for Project Management — logo chip only. */
+  --product-people: #3b5e71; /* Product marker for HR & People — logo chip only. */
+  --shadow-sm: 0 1px 2px rgba(33,30,26,0.06); /* Cards resting on bg. Pair with a line border. */
+  --shadow-md: 0 4px 16px rgba(33,30,26,0.10); /* Dropdowns, popovers, toasts. */
+  --shadow-lg: 0 12px 32px rgba(33,30,26,0.16); /* Modals and side drawers only. */
+}
+[data-theme="dark"] {
+  --bg: #1a1917;
+  --surface: #22201d;
+  --surface-sunken: #151412;
+  --surface-hover: #2a2824;
+  --sidebar: #121110;
+  --sidebar-active: #26231f;
+  --on-sidebar: #e6e0d5;
+  --on-sidebar-muted: #958c7f;
+  --line: #35322d;
+  --line-strong: #77705f;
+  --ink: #ece7de;
+  --ink-muted: #aba397;
+  --primary: #a9b98f;
+  --primary-hover: #bac8a2;
+  --on-primary: #1a1d14;
+  --primary-soft: #2c3224;
+  --accent: #da8e6b;
+  --accent-soft: #3b2a22;
+  --success: #8ec29b;
+  --success-soft: #21302a;
+  --warning: #d8af5e;
+  --warning-soft: #3a3020;
+  --danger: #e68d7f;
+  --danger-soft: #3d2420;
+  --info: #8fb4c8;
+  --info-soft: #1f2d35;
+  --focus-ring: #da8e6b;
+  --data-1: #a9b98f;
+  --data-2: #da8e6b;
+  --data-3: #8fb4c8;
+  --data-4: #d8af5e;
+  --data-5: #c3a0c3;
+  --data-6: #7fa391;
+  --product-sales: #da8e6b;
+  --product-projects: #a9b98f;
+  --product-people: #8fb4c8;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 6px 20px rgba(0,0,0,0.5);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,0.6);
+}
+:root {
+  --space-1: 4px; /* Icon-to-label gap, badge padding. */
+  --space-2: 8px; /* Gap between related controls, button icon gap. */
+  --space-3: 12px; /* Table cell vertical padding, field gap inside a group. */
+  --space-4: 16px; /* Card padding (compact), gap between form fields. */
+  --space-5: 20px; /* Modal padding, gap between cards. */
+  --space-6: 24px; /* Card padding (default), page side padding. */
+  --space-8: 32px; /* Gap between page sections. */
+  --space-10: 40px; /* Empty-state padding. */
+  --space-12: 48px; /* Top/bottom breathing room on large pages. */
+  --radius-sm: 4px; /* Badges, checkboxes, tags, tooltips. */
+  --radius-md: 6px; /* Buttons, inputs, selects, nav items. */
+  --radius-lg: 10px; /* Cards, modals, dropdown menus, popovers. */
+  --radius-full: 999px; /* Avatars, toggles, progress bars, pill filters. */
+  --control-sm: 30px; /* Height of small buttons/inputs in dense toolbars and table rows. */
+  --control-md: 36px; /* Default height of buttons, inputs, selects. */
+  --control-lg: 44px; /* Login screen and primary mobile actions. */
+  --row-height: 44px; /* Default table row height (comfortable). Compact mode 36px. */
+  --topbar-height: 56px; /* App top bar holding page title, search and user menu. */
+  --sidebar-width: 240px; /* Expanded sidebar. Collapsed rail is 64px. */
+  --content-max: 1440px; /* Max width of the main content area on very wide monitors. */
+  --icon-md: 18px; /* Default icon size in buttons, nav and tables (Lucide icons, 1.75 stroke). */
+  --z-sticky: 10; /* Sticky table headers, top bar. */
+  --z-dropdown: 100; /* Menus, popovers, select lists. */
+  --z-drawer: 200; /* Side drawers (record detail panels). */
+  --z-modal: 300; /* Modal dialogs and their scrim. */
+  --z-toast: 400; /* Toast notifications. */
+  --font-sans: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, "Courier New", monospace;
+  --text-display: 600 28px/36px var(--font-sans); /* One per page at most: dashboard welcome or big KPI number. */
+  --text-h1: 600 22px/30px var(--font-sans); /* Page title in the top bar of every screen. */
+  --text-h2: 600 18px/26px var(--font-sans); /* Section and card titles. */
+  --text-h3: 600 15px/22px var(--font-sans); /* Sub-sections inside cards, modal titles, form group titles. */
+  --text-body: 400 14px/22px var(--font-sans); /* Default UI and paragraph text. Never go below 14px for reading text. */
+  --text-body-strong: 500 14px/22px var(--font-sans); /* Names in tables, emphasised values. */
+  --text-label: 500 13px/18px var(--font-sans); /* Form labels, button text (sm), tab labels, table headers. */
+  --text-small: 400 13px/20px var(--font-sans); /* Helper text, timestamps, table meta. */
+  --text-caption: 500 12px/16px var(--font-sans); /* Badges and sidebar section headings only. Smallest size allowed. */
+  --text-mono: 400 13px/20px var(--font-mono); /* IDs, invoice numbers, codes. For money and counts in tables use body with tabular numbers instead. */
+}
+.display {
+  font-family: var(--font-sans);
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.h1 {
+  font-family: var(--font-sans);
+  font-size: 22px;
+  line-height: 30px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.h2 {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.h3 {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.body-strong {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.label {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.small {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.caption {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+  letter-spacing: 0;
+}

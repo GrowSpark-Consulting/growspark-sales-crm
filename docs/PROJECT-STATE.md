@@ -16,16 +16,19 @@ independently verifiable from this repo. The user's plan is **7 days**: Days
 known about Days 2–5).
 
 **Current status (end of 2026-11-19 session)**: **Day 1 is functionally
-complete.** Packages 1.1 through 1.5 are all built, tested, and committed
+complete.** Packages 1.1 through 1.6 are all built, tested, and committed
 locally (not yet pushed). The full sales-journey-adjacent foundation exists:
 server-side session auth, the full permission map, user management with the
 last-Admin rule and audit log, and a working browser UI (login, role-aware
 navigation, a Users page with create/edit/deactivate/reactivate/reset-
-password, a 403 page, a 404 page) all exist and are wired together — login
+password, a 403 page, a 404 page) all exist and are wired together, now
+restyled end to end with the Grow Spark Workspace design system (tokens,
+fonts, Light/Dark/System theming, a rebuilt sidebar/top-bar shell) — login
 through the real browser-facing proxy on :3000 was verified with curl (no
 browser available in this environment), and a full manual click-through
-script (`docs/MANUAL-TEST-DAY1.md`) is ready for the user to run in a real
-browser, which this session could not do itself.
+script (`docs/MANUAL-TEST-DAY1.md`, now including a design-system section)
+is ready for the user to run in a real browser, which this session could not
+do itself.
 
 ## 2. Hard constraints
 
@@ -133,33 +136,56 @@ via `Start-Process "shell:AppsFolder\Docker.DockerForWindows.Settings"` (the
 ## 5. Repository map
 
 ```
-apps/web/              Next.js 16 App Router app (port 3000) — package 1.5
+apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
+                        restyled with the Grow Spark design system in 1.6
   app/
-    layout.tsx            root layout — just Providers now
+    layout.tsx            root layout — next/font (Inter + JetBrains Mono,
+                        400/500/600 only), suppressHydrationWarning on
+                        <html> (next-themes sets data-theme/style on it
+                        after mount — D27)
+    globals.css           imports design-tokens.css once; @theme inline
+                        maps every shadcn semantic colour to a GS token;
+                        global :focus-visible outline rule; reduced-motion
+                        reset (D27)
+    design-tokens.css     verbatim copy of docs/design-system/tokens.css —
+                        edit the source and re-copy, never this file
+                        directly (D27)
     providers.tsx         QueryClientProvider + next-themes ThemeProvider
-                        (forcedTheme="light", no toggle UI — only present
-                        for shadcn's Sonner, which calls useTheme()) + Toaster
+                        (attribute="data-theme", defaultTheme="system",
+                        enableSystem — the toggle lives in AppShell's user
+                        menu, D27)
     not-found.tsx         404 page (Next's own file convention)
     login/page.tsx         public; wraps LoginForm in <Suspense> (needed for
                         useSearchParams) with a real skeleton fallback, not
-                        null — see D26
+                        null (D26); control-lg (44px) inputs/button (D27)
     (protected)/           route group, no URL segment; EVERY authenticated
                         page lives here behind one layout
       layout.tsx            AuthGuard (client-side nav convenience only,
                         never the real security control — D26) + AppShell
-      page.tsx              Home — plain welcome placeholder
-      forbidden/page.tsx     403 page
+      page.tsx              Home — plain placeholder; no own <h1> (the top
+                        bar carries the page title — D27)
+      forbidden/page.tsx     403 page; same, no own <h1>
       users/page.tsx         the Users page (see below)
   components/
     auth-guard.tsx          useMe()-driven redirect: unauth'd -> /login?
                         next=..., shows a Skeleton while loading
-    app-shell.tsx           sidebar (role-aware: Users link Admin-only) +
-                        top-right user menu + logout
+    app-shell.tsx           rebuilt per the design system (D27): 240px dark
+                        sidebar with the Sales product chip, 56px top bar
+                        showing the current page's title (a flat pathname
+                        lookup, PAGE_TITLES — fine for 3 routes, revisit
+                        later), user menu with Light/Dark/System
+                        (DropdownMenuRadioGroup) + logout
     login-form.tsx          React Hook Form + loginSchema (shared), inline
                         field errors, generic failure banner
-    ui/                    shadcn: button (1.1), input, label, form, table,
+    ui/                    shadcn: button, input, label, form, table,
                         dialog, dropdown-menu, badge, sonner, skeleton,
-                        select, alert (all package 1.5)
+                        select, alert (1.5), tabs (1.6, added from the
+                        already-installed radix-ui package, no new
+                        dependency) — button/input/label/badge/alert/table/
+                        tabs restyled per their design-system READMEs in
+                        1.6 (D27); dialog's overlay fixed from `bg-black/50`
+                        to `bg-ink/40` (the one other hard-coded colour
+                        found)
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx, confirm-action-dialog.tsx
                         (generic, used for both deactivate and reactivate)
@@ -175,6 +201,13 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5
     handle-form-error.ts    the one place that decides: 422 -> field errors,
                         409/401/403 -> inline banner, 500/network -> toast
                         with request id (D26)
+    format.ts               formatINR/formatINRCompact/formatDate/formatTime
+                        — Indian grouping + L/Cr compaction, "19 Nov 2026",
+                        "2:30 PM" (D27)
+  tests/lib/format.test.ts  12 unit tests for lib/format.ts (D27)
+  vitest.config.mts       `.mts` (not `.ts` — avoids a Vite native-loader
+                        ESM/CJS warning); one alias (`@` -> package root)
+                        mirroring tsconfig.json (D27)
   next.config.ts         proxies /api/:path* to API_INTERNAL_URL; transpiles
                         @growspark/shared
 
@@ -293,8 +326,15 @@ docker-compose.yml       postgres:17-alpine only; project name
 docker/init-db.sh        creates crm_test (crm_dev comes from POSTGRES_DB)
 
 docs/
-  decisions.md           D1–D25 (see §9)
+  decisions.md           D1–D27 (see §9)
   PROJECT-STATE.md        this file
+  design-system/          the Grow Spark Workspace design system handed to
+                        this session (README.md, tokens.css, tokens.json,
+                        manifest.json, api/, components/*/README.md +
+                        preview.html, components/bundle.css) — source of
+                        truth for package 1.6, read-only reference, not
+                        copied wholesale into apps/web (only tokens.css is
+                        copied verbatim, into apps/web/app/design-tokens.css)
 ```
 
 ## 6. Stack and exact pinned versions
@@ -322,6 +362,7 @@ packages pin exact versions, no `^`/`~` ranges, per `CLAUDE.md`).
 | apps/web | `react-hook-form`, `@hookform/resolvers` | 7.92.0, 7.0.7 | Package 1.5. CLI-added with `^` ranges, re-pinned exact (D26) |
 | apps/web | `sonner`, `next-themes` | 2.0.8, 0.4.6 | Package 1.5, same re-pin story. `next-themes` only exists for Sonner's `useTheme()` call — no theme toggle built (D26) |
 | apps/web | `lucide-react` | 1.76.0 | Package 1.5 — the shadcn CLI referenced it in 4 components but didn't actually install it (D26) |
+| apps/web | `vitest` | 5.1.1 | Package 1.6 — added (with explicit sign-off) so `lib/format.ts` could ship with real unit tests; same pinned version as `apps/api` (D27) |
 | packages/shared | `zod` | 4.6.7 | |
 
 ## 7. What has been built, package by package
@@ -402,6 +443,28 @@ session has ever run `git push`, including this one).
   D26 for what was non-obvious (the missing `lucide-react` dependency, the
   `Suspense fallback={null}` blank-flash finding, the deliberate absence of
   any `proxy.ts`).
+- **Package 1.6 — Grow Spark design system applied to `apps/web`**: tokens
+  loaded once (`design-tokens.css`, verbatim from `docs/design-system/`)
+  and mapped through Tailwind v4's `@theme inline` to every shadcn semantic
+  colour; theming switched to `data-theme` with a Light/Dark/System toggle
+  in the (rebuilt) user menu; Inter + JetBrains Mono via `next/font`
+  (400/500/600 only); `AppShell` rebuilt as a 240px dark sidebar (Sales
+  product chip) + 56px top bar carrying the page title; Button/Field
+  (Input/Label)/Badge/Alert/Table restyled and Tabs added, all matching
+  their component READMEs; shared INR/date/time formatters
+  (`lib/format.ts`) with 12 unit tests (new `vitest` devDependency,
+  approved before adding); the one other hard-coded colour found
+  (`dialog.tsx`'s `bg-black/50` scrim) fixed to the README's documented
+  `bg-ink/40`; duplicate per-page `<h1>`s removed now that the top bar
+  carries the title; the pasted hydration-mismatch error fixed with
+  `suppressHydrationWarning` on `<html>`. `pnpm typecheck && pnpm lint &&
+  pnpm test && pnpm build` all pass (136 tests total: 124 `apps/api` +
+  12 new `apps/web`). Console-clean on `/login` and `/` was checked via
+  `curl` against the SSR payload (confirms `suppressHydrationWarning`
+  reaches `<html>`, no server exception markers) — not a live browser
+  console, which this environment cannot run; added as an explicit manual
+  check in `docs/MANUAL-TEST-DAY1.md` §12 instead. Full detail in
+  `docs/decisions.md` D27.
 
 ## 8. Database
 
@@ -481,6 +544,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D24 — Package 1.3b: root cause and fix for the `pnpm dev` startup race — `pnpm -r --parallel`'s own scheduler breaks `tsx watch`; replaced with `scripts/dev.mjs` (independent `pnpm --filter` children, no new dependency)
 - D25 — Package 1.4: last-Admin `SELECT ... FOR UPDATE` locking pattern; the `isActive` boolean query-param gotcha (`z.coerce.boolean()` is wrong — `Boolean("false")` is `true`); the `sort=<field>:asc|desc` convention; one audit row per `PATCH`, with before/after for every changed field (fixed after review to include `oldName`/`newName`, not just the role pair)
 - D26 — Package 1.5: no `proxy.ts` (Next 16 renamed `middleware`, recommends against relying on it for security either way); `lucide-react` missing from the shadcn CLI's own output; `next-themes` is Sonner's dependency, not a separate choice; a `Suspense fallback={null}` is a real blank flash under Cache Components, not a no-op; the error-display split (422 inline on the field, 409/401/403 as a dialog banner, 500/network as a toast with the request id)
+- D27 — Package 1.6: design system tokens mapped through Tailwind v4's `@theme inline`; theming switched to `attribute="data-theme"` with the toggle in the user menu; shadcn's structural `accent` repointed to `surface-hover`/`ink` so GS's brand clay accent (its own `--color-brand-accent*` names) stays rare, not merged into generic hover states; `@custom-variant dark` now targets `[data-theme="dark"]`, not `.dark`, so shadcn's baked-in `dark:*` utilities follow the app's own toggle instead of the OS media query; Button/Badge/Alert variants remapped (not renamed) onto the component READMEs, including fixing `destructive`'s old literal `text-white`; the dialog scrim fixed to the README's documented `bg-ink/40`; `vitest@5.1.1` added to `apps/web` (approved first) for `lib/format.ts`'s unit tests; INR/date/time formatting choices (`Intl.NumberFormat("en-IN")` for grouping, not `style: "currency"`; L/Cr thresholds at exactly 1 lakh/1 crore; `en-US` for reliably upper-cased AM/PM)
 
 ## 10. Gotchas and lessons learned
 
@@ -561,9 +625,13 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 ## 11. Testing
 
 - `pnpm test` (root) runs `packages/shared` (no tests yet — its schemas are
-  exercised via `apps/api/tests/shared/`), `apps/web` (no tests yet), and
-  `apps/api` (`vitest run`) — 33+ test files, 124 tests, all passing as of
-  the last run this session (package 1.4 + the D25 follow-up).
+  exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run`, package
+  1.6 — 1 file, `tests/lib/format.test.ts`, 12 tests), and `apps/api`
+  (`vitest run`) — 124 `apps/api` tests + 12 `apps/web` tests, 136 total,
+  all passing as of the last run this session.
+- `apps/web/vitest.config.mts` only sets a resolve alias (`@` -> the package
+  root, mirroring `tsconfig.json`) — no database, no global setup, unlike
+  `apps/api`'s config; nothing in `apps/web` touches the database.
 - `apps/api/tests/schema/helpers.ts` provides `createTestOrganization`,
   `createTestUser`/`LeadSource`/`Company`/`Contact`/`Pipeline`/`Deal`,
   `cleanupOrganization` (deletes a test org's rows in FK-safe,
@@ -594,8 +662,9 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   — it drops and recreates `crm_test` from zero, and Prisma's own CLI refuses
   to run that without fresh human consent each time anyway. Run it yourself
   before a release: `pnpm db:verify-fresh`.
-- **Known gaps**: no tests in `apps/web` yet (no components beyond
-  scaffolding). Test files aren't type-checked by plain `tsc -p
+- **Known gaps**: `apps/web`'s test coverage is still just the package 1.6
+  formatters (`lib/format.ts`) — no component/integration tests yet for
+  anything else in the app. Test files aren't type-checked by plain `tsc -p
   tsconfig.json` but now are by the wider `tsconfig.check.json` (package
   1.2c) wired into `pnpm typecheck`.
 
@@ -643,13 +712,15 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 
 ## 13. What's next
 
-- **Day 1 (packages 1.1–1.5) is done** (see §7). Every explicit approval
+- **Day 1 (packages 1.1–1.6) is done** (see §7). Every explicit approval
   gate (1.3's permission map, D20/D21→D23) was approved; D25's
-  audit-metadata gap was fixed on review before 1.5 started.
+  audit-metadata gap was fixed on review before 1.5 started; adding
+  `vitest` to `apps/web` in 1.6 was confirmed with the user before doing it.
 - **Not yet done, and not part of Day 1's scope**: the actual browser
-  click-through in `docs/MANUAL-TEST-DAY1.md` — this environment has no
-  browser, so that still needs the user to run it before Day 1 is truly
-  *verified*, not just built and automatically tested.
+  click-through in `docs/MANUAL-TEST-DAY1.md` (now including the package
+  1.6 design-system section, §12) — this environment has no browser, so
+  that still needs the user to run it before Day 1 is truly *verified*, not
+  just built and automatically tested.
 - Beyond Day 1: the user's planning roadmap continues into Day 2 (companies,
   contacts, leads) — not detailed in this repo yet; don't invent content for
   it. Day 6/7 (testing, stabilisation, demo) are explicitly out of scope
@@ -676,6 +747,14 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   verification and the automated test suite, but a real click-through may
   still surface something (e.g. a layout issue, a focus/accessibility
   detail) that neither of those would catch.
+- **Package 1.6's console-clean check is unverified in a real browser** —
+  same root cause as above (no browser-automation tool in this
+  environment). The `suppressHydrationWarning` fix is the standard,
+  documented fix for the exact pasted error (next-themes writing
+  `class`/`style`/`data-theme` onto `<html>` after mount) and the SSR
+  payload confirms the prop is reaching `<html>`, but neither proves the
+  browser console is actually silent — that's §12 of
+  `docs/MANUAL-TEST-DAY1.md`, still outstanding.
 
 ## 15. Session log
 
@@ -727,3 +806,34 @@ log just records that a session happened and what it covered.
   Day 1 (packages 1.1 through 1.5) is now complete and committed locally;
   nothing has been pushed. Next: Day 2 (companies, contacts, leads) —
   not yet detailed in this repo.
+- **2026-11-19 (continued, same day) — package 1.6, design system applied.**
+  Loaded `docs/design-system/` (README, tokens.css, component READMEs,
+  bundle.css — all present) and applied it to `apps/web`: tokens wired
+  through Tailwind v4's `@theme inline`; theming switched from the 1.5
+  `forcedTheme="light"` placeholder to `data-theme` with a real
+  Light/Dark/System toggle in a rebuilt user menu; Inter + JetBrains Mono
+  via `next/font`; `AppShell` rebuilt (240px dark sidebar with the Sales
+  product chip, 56px top bar carrying the page title); Button, Field
+  (Input/Label), Badge, Alert, Table restyled and Tabs added, each matching
+  its component README; shared `formatINR`/`formatINRCompact`/`formatDate`/
+  `formatTime` helpers added with 12 unit tests, which needed `vitest`
+  adding to `apps/web` as a devDependency — asked the user first per
+  `CLAUDE.md`, approved, pinned to the same `5.1.1` already in `apps/api`.
+  Fixed the hydration-mismatch error pasted at the start of this package
+  (`suppressHydrationWarning` on `<html>` in `layout.tsx`) and the one other
+  hard-coded colour found outside the token file (`dialog.tsx`'s
+  `bg-black/50` scrim, now `bg-ink/40` per the README's own spec). Removed
+  the duplicate per-page `<h1>`s now that the top bar owns the title.
+  `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+  (136 tests: 124 `apps/api` + 12 new `apps/web`). Verified via `curl`
+  against the already-running dev server that `/login` and `/` still
+  return 200 and that `suppressHydrationWarning: true` actually reaches
+  `<html>` in the SSR payload; a live browser console check was not
+  possible in this environment (no browser-automation tool available) and
+  is now an explicit manual item in `docs/MANUAL-TEST-DAY1.md` §12, which
+  also gained checks for theme switching, no-pure-white/black, fonts,
+  visible focus rings, and the badge dot-plus-word rule. Two ports (3000,
+  4000) were already occupied at session start by node processes that
+  predate this session (the user's own long-running `pnpm dev`, consistent
+  with the pasted error having come from a live dev session) — left
+  running rather than killed, since this session did not start them.

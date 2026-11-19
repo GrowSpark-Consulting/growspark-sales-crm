@@ -1,123 +1,167 @@
 @import "tailwindcss";
 @import "shadcn/tailwind.css";
+@import "./design-tokens.css";
 
-@custom-variant dark (&:is(.dark *));
+/* Several shadcn-generated components (button/input/select/badge/...) ship
+   their own dark: utility classes out of the box. Tailwind v4's dark:
+   variant defaults to prefers-color-scheme media query unless overridden —
+   that would fight our own data-theme attribute toggle (a user's OS could
+   be dark while they've chosen Light in the app, or vice versa). Point it
+   at the attribute next-themes sets instead, matching providers.tsx's
+   attribute="data-theme". */
+@custom-variant dark (&:is([data-theme="dark"] *));
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-}
+/* Grow Spark Workspace design system — tokens.css above is the single
+   source of truth for every colour, size and font. Nothing below this line
+   may introduce a hex value or a value not derived from a token: see
+   docs/design-system/README.md and docs/decisions.md D27. */
 
+/* next/font (layout.tsx) generates --font-inter / --font-jetbrains-mono on
+   <html>; splice them in ahead of tokens.css's own documented fallback
+   stack, rather than inventing a new font-stack token. */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --font-sans: var(--font-inter), "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, Consolas, "Courier New", monospace;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+/* Tailwind v4 theme — maps every utility class Tailwind generates to a GS
+   token. "inline" means Tailwind emits `var(--token)` directly rather than
+   inlining a resolved value, so switching [data-theme] on <html> (see
+   providers.tsx) repaints everything with no JS and no re-render. */
+@theme inline {
+  /* Canvas / surfaces */
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--ink);
+
+  /* Primary (moss) */
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--on-primary);
+
+  /* Secondary / muted — GS has no literal "secondary" token; surface-sunken
+     (table headers, read-only fields) is its documented quiet-fill use. */
+  --color-secondary: var(--surface-sunken);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--surface-sunken);
+  --color-muted-foreground: var(--ink-muted);
+
+  /* shadcn's "accent" is a STRUCTURAL token (generic neutral hover/highlight
+     fill for menu items, select items, etc.) — not the same thing as GS's
+     brand accent (clay, brand moments only, never a generic interactive
+     state). Mapping shadcn's --accent to GS's clay would paint every
+     dropdown/select hover state clay, which the design system explicitly
+     forbids ("accent never appears on buttons", "colour fills stay under
+     ~10% of a screen"). So: shadcn's structural accent -> surface-hover
+     (GS's own documented hover-fill token); GS's brand accent gets its own
+     distinct name below, used only at the few deliberate call sites (the
+     sidebar product chip, "New"/accent badges). See docs/decisions.md D27.
+     This "structural accent" is only kept because a few shadcn/radix
+     internals reference it — never reach for bg-accent in new app code. */
+  --color-accent: var(--surface-hover);
+  --color-accent-foreground: var(--ink);
+
+  /* GS's actual brand accent (clay) — distinct name, intentionally rare use. */
+  --color-brand-accent: var(--accent);
+  --color-brand-accent-foreground: var(--surface);
+  --color-brand-accent-soft: var(--accent-soft);
+  --color-brand-accent-soft-foreground: var(--accent);
+
+  --color-destructive: var(--danger);
+  --color-destructive-foreground: var(--surface);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+
+  --color-border: var(--line);
+  --color-input: var(--line-strong);
+  --color-ring: var(--focus-ring);
+
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-hover: var(--surface-hover);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+
+  --color-chart-1: var(--data-1);
+  --color-chart-2: var(--data-2);
+  --color-chart-3: var(--data-3);
+  --color-chart-4: var(--data-4);
+  --color-chart-5: var(--data-5);
+  --color-chart-6: var(--data-6);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--on-sidebar);
+  --color-sidebar-muted: var(--on-sidebar-muted);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-primary: var(--sidebar-active);
+  --color-sidebar-primary-foreground: var(--on-sidebar);
+  --color-sidebar-accent: var(--sidebar-active);
+  --color-sidebar-accent-foreground: var(--on-sidebar);
+  --color-sidebar-border: var(--line);
+  --color-sidebar-ring: var(--focus-ring);
+
+  --color-product-sales: var(--product-sales);
+  --color-product-projects: var(--product-projects);
+  --color-product-people: var(--product-people);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-full: var(--radius-full);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   body {
     @apply bg-background text-foreground;
+    font: var(--text-body);
+  }
+
+  /* §8 eye-comfort checklist: "Visible focus ring on every interactive
+     element (focus-ring, 2px, 2px offset)." One rule, everywhere — not a
+     per-component Tailwind ring utility, so nothing can drift from this. */
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+/* Tabular figures for money/counts in tables and KPIs — docs/design-system/README.md §3. */
+.gs-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* §7 Motion: respect prefers-reduced-motion everywhere, not just on
+   shadcn's own .shimmer utility (which already handles itself). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

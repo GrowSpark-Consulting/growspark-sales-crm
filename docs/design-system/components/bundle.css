@@ -1,0 +1,105 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Grow Spark Workspace — component styles. Every value comes from tokens.css variables. */
+
+body { margin: 0; font-family: var(--font-sans); font-size: 14px; line-height: 22px; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+.gs-num { font-variant-numeric: tabular-nums; }
+.gs-demo { padding: var(--space-4); display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.gs-demo-col { padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-4); }
+
+/* Focus — one rule for every interactive element */
+.gs-btn:focus-visible, .gs-input:focus-visible, .gs-tab:focus-visible, .gs-nav-item:focus-visible {
+  outline: 2px solid var(--focus-ring); outline-offset: 2px;
+}
+
+/* Button */
+.gs-btn { display: inline-flex; align-items: center; gap: var(--space-2); height: var(--control-md); padding: 0 var(--space-4);
+  font: inherit; font-size: 14px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid var(--line-strong);
+  background: var(--surface); color: var(--ink); cursor: pointer; transition: background-color 120ms ease, border-color 120ms ease; }
+.gs-btn:hover { background: var(--surface-hover); }
+.gs-btn-primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.gs-btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+.gs-btn-ghost { border-color: transparent; background: transparent; color: var(--ink); }
+.gs-btn-ghost:hover { background: var(--surface-hover); }
+.gs-btn-danger { background: var(--surface); border-color: var(--danger); color: var(--danger); }
+.gs-btn-danger:hover { background: var(--danger-soft); }
+.gs-btn-sm { height: var(--control-sm); padding: 0 var(--space-3); font-size: 13px; }
+.gs-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.gs-btn svg { width: var(--icon-md); height: var(--icon-md); }
+
+/* Field */
+.gs-field { display: flex; flex-direction: column; gap: 6px; min-width: 240px; }
+.gs-label { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ink); }
+.gs-help { font-size: 13px; line-height: 20px; color: var(--ink-muted); }
+.gs-input { height: var(--control-md); padding: 0 var(--space-3); font: inherit; font-size: 14px; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius-md); }
+.gs-input::placeholder { color: var(--ink-muted); }
+.gs-input:hover { border-color: var(--ink-muted); }
+.gs-input:focus-visible { border-color: var(--primary); }
+.gs-field-error .gs-input { border-color: var(--danger); background: var(--danger-soft); }
+.gs-field-error .gs-help { color: var(--danger); }
+
+/* Badge */
+.gs-badge { display: inline-flex; align-items: center; gap: var(--space-1); height: 22px; padding: 0 var(--space-2);
+  font-size: 12px; line-height: 16px; font-weight: 500; border-radius: var(--radius-sm); background: var(--surface-sunken); color: var(--ink-muted); }
+.gs-badge::before { content: ""; width: 6px; height: 6px; border-radius: var(--radius-full); background: currentColor; }
+.gs-badge-success { background: var(--success-soft); color: var(--success); }
+.gs-badge-warning { background: var(--warning-soft); color: var(--warning); }
+.gs-badge-danger  { background: var(--danger-soft);  color: var(--danger); }
+.gs-badge-info    { background: var(--info-soft);    color: var(--info); }
+.gs-badge-accent  { background: var(--accent-soft);  color: var(--accent); }
+
+/* Card */
+.gs-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--space-5); min-width: 200px; flex: 1; }
+.gs-stat-label { font-size: 13px; line-height: 20px; color: var(--ink-muted); }
+.gs-stat-value { font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; margin-top: var(--space-1); }
+.gs-stat-delta { font-size: 13px; line-height: 20px; margin-top: var(--space-1); color: var(--ink-muted); }
+.gs-stat-delta b { font-weight: 500; color: var(--success); }
+.gs-stat-delta b.down { color: var(--danger); }
+
+/* Table */
+.gs-table-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; margin: var(--space-4); }
+.gs-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.gs-table th { text-align: left; font-size: 13px; line-height: 18px; font-weight: 500; color: var(--ink-muted); background: var(--surface-sunken);
+  padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--line); }
+.gs-table td { height: var(--row-height); padding: 0 var(--space-4); border-bottom: 1px solid var(--line); color: var(--ink); }
+.gs-table tr:last-child td { border-bottom: 0; }
+.gs-table tbody tr:hover td { background: var(--surface-hover); }
+.gs-table tr.is-selected td { background: var(--primary-soft); }
+.gs-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.gs-table .meta { color: var(--ink-muted); font-size: 13px; }
+
+/* Avatar */
+.gs-avatar { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-full);
+  background: var(--surface-sunken); color: var(--ink); font-size: 12px; font-weight: 600; flex: none; }
+.gs-person { display: flex; align-items: center; gap: var(--space-2); }
+
+/* Tabs */
+.gs-tabs { display: flex; gap: var(--space-6); border-bottom: 1px solid var(--line); padding: 0 var(--space-4); }
+.gs-tab { appearance: none; background: none; border: 0; font: inherit; font-size: 14px; font-weight: 500; color: var(--ink-muted);
+  padding: var(--space-3) 0; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.gs-tab:hover { color: var(--ink); }
+.gs-tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--primary); }
+.gs-tab .count { margin-left: 6px; font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+
+/* Alert */
+.gs-alert { display: flex; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); font-size: 14px; line-height: 22px; color: var(--ink); }
+.gs-alert svg { width: var(--icon-md); height: var(--icon-md); flex: none; margin-top: 2px; }
+.gs-alert strong { font-weight: 600; }
+.gs-alert-info    { background: var(--info-soft); }    .gs-alert-info svg    { color: var(--info); }
+.gs-alert-success { background: var(--success-soft); } .gs-alert-success svg { color: var(--success); }
+.gs-alert-warning { background: var(--warning-soft); } .gs-alert-warning svg { color: var(--warning); }
+.gs-alert-danger  { background: var(--danger-soft); }  .gs-alert-danger svg  { color: var(--danger); }
+
+/* Sidebar */
+.gs-sidebar { width: var(--sidebar-width); background: var(--sidebar); color: var(--on-sidebar); padding: var(--space-4) var(--space-3); box-sizing: border-box; min-height: 100%; }
+.gs-sidebar-brand { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-2) var(--space-5); font-weight: 600; font-size: 15px; }
+.gs-chip { width: 28px; height: 28px; border-radius: var(--radius-md); display: grid; place-items: center; font-size: 13px; font-weight: 600; color: var(--surface); }
+.gs-chip-sales { background: var(--product-sales); } .gs-chip-projects { background: var(--product-projects); } .gs-chip-people { background: var(--product-people); }
+.gs-nav-heading { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--on-sidebar-muted); padding: var(--space-4) var(--space-2) var(--space-2); }
+.gs-nav-item { display: flex; align-items: center; gap: var(--space-3); height: var(--control-md); padding: 0 var(--space-2); border-radius: var(--radius-md);
+  color: var(--on-sidebar); text-decoration: none; font-size: 14px; }
+.gs-nav-item svg { width: var(--icon-md); height: var(--icon-md); opacity: .85; }
+.gs-nav-item:hover { background: var(--sidebar-active); }
+.gs-nav-item[aria-current="page"] { background: var(--sidebar-active); font-weight: 500; }
+.gs-nav-item .count { margin-left: auto; font-size: 12px; color: var(--on-sidebar-muted); font-variant-numeric: tabular-nums; }
