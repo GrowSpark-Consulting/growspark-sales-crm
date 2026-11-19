@@ -206,9 +206,12 @@ export async function updateCompany(
 
 export async function archiveCompany(ctx: RequestContext, id: string): Promise<CompanyResponse> {
   const archived = await prisma.$transaction(async (tx) => {
-    const existing = await tx.company.findFirst({ where: { id, ...scoped(ctx), archivedAt: null } });
+    const existing = await tx.company.findFirst({ where: { id, ...scoped(ctx) } });
     if (!existing) {
       throw new ApiError(404, 'NOT_FOUND', 'Company not found');
+    }
+    if (existing.archivedAt) {
+      throw new ApiError(409, 'ALREADY_ARCHIVED', 'This company is already archived.');
     }
     const company = await tx.company.update({ where: { id: existing.id }, data: { archivedAt: new Date() } });
     await writeAudit(tx, ctx, { action: 'company.archived', entityType: 'company', entityId: company.id });
@@ -219,11 +222,12 @@ export async function archiveCompany(ctx: RequestContext, id: string): Promise<C
 
 export async function restoreCompany(ctx: RequestContext, id: string): Promise<CompanyResponse> {
   const restored = await prisma.$transaction(async (tx) => {
-    const existing = await tx.company.findFirst({
-      where: { id, ...scoped(ctx), archivedAt: { not: null } },
-    });
+    const existing = await tx.company.findFirst({ where: { id, ...scoped(ctx) } });
     if (!existing) {
       throw new ApiError(404, 'NOT_FOUND', 'Company not found');
+    }
+    if (!existing.archivedAt) {
+      throw new ApiError(409, 'NOT_ARCHIVED', 'This company is not archived.');
     }
     const company = await tx.company.update({ where: { id: existing.id }, data: { archivedAt: null } });
     await writeAudit(tx, ctx, { action: 'company.restored', entityType: 'company', entityId: company.id });

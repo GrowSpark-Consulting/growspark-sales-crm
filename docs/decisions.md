@@ -1021,3 +1021,60 @@ read) was itself dated for traceability.
     list/duplicate-detection leakage. `pnpm typecheck && pnpm lint && pnpm
     test && pnpm build` all pass clean (215 tests: 187 carried over + 28
     new, all `apps/api`; `apps/web` unchanged at 16).
+- **D36** — Package 2.3b (small backend fixes, own commit, before Day 2's UI
+  packages):
+  - **Archive/restore on a record already in that state is now 409, not
+    404.** `archiveCompany`/`restoreCompany` (and the Contact and Lead
+    equivalents) now fetch the row scoped by organisation only (no
+    `archivedAt` filter in the lookup itself), then check its actual state:
+    missing or cross-organisation still 404 `NOT_FOUND` (existence is never
+    leaked, unchanged); found but already in the requested state is 409
+    `ALREADY_ARCHIVED` (archiving an archived record) or `NOT_ARCHIVED`
+    (restoring an active one) — a real, named conflict with a clear
+    message, not folded into "not found." The one pre-existing test that
+    asserted 404 for a double-archive (`tests/companies/crud.test.ts`) was
+    updated to 409; equivalent tests were added for Contacts and Leads, and
+    a new "missing id still 404, not 409" test guards the boundary between
+    the two codes.
+  - **Answered (read-only, no schema change): can `activities` hold a
+    `NOTE` type for Day 4?** Yes — re-confirmed from `SCHEMA-SUMMARY.md`'s
+    enum table and `schema.prisma`: `activity_type` already includes
+    `NOTE` alongside `TASK`/`CALL`/`MEETING`, and the
+    `activities_done_has_completed_at` CHECK
+    (`status <> 'DONE' OR completed_at IS NOT NULL`) already matches the
+    roadmap's own Day 4 plan ("notes are created as DONE" — a note would be
+    inserted with `status: 'DONE'` and `completedAt` set at creation,
+    satisfying the CHECK immediately). This is the same finding D30 already
+    recorded before package 2.1; re-verified now because this package's
+    brief asked for it again directly. Still nothing to build — Activities
+    is a Day 4 module.
+  - **Contact's `lifecycleStatus` stays free text and will not appear in
+    the Day 2 UI.** Checked the PRD directly (13.1's Contact row names
+    "lifecycle status" as a field but, like the roadmap, never enumerates
+    its values anywhere in the document) — per the user's explicit rule
+    ("if the PRD lists values, make it a fixed set; otherwise leave it and
+    do NOT show it in the UI"), it is left as-is in the schema/API
+    (already free text, defaulting `'ACTIVE'`, D34) and package 2.5's
+    Contact list/form/detail screens will not surface it. Revisit if a
+    later phase defines real values.
+  - **New approved dependency, `apps/web` only**: `jsdom@31.0.1`,
+    `@testing-library/react@16.3.3`, `@testing-library/dom@10.4.2` (a true
+    peer requirement of `@testing-library/react`, pinned explicitly rather
+    than left to resolve transitively) — all exact-pinned devDependencies,
+    for package 2.4's component tests. `@testing-library/user-event` and
+    `@testing-library/jest-dom` were deliberately **not** added — neither
+    is strictly required for `@testing-library/react` to function (tests
+    use `fireEvent`, already re-exported by `@testing-library/react`
+    itself, and plain assertions instead of jest-dom's convenience
+    matchers), and the approval was scoped to "jsdom and
+    @testing-library/react (and its required companions)" specifically.
+    `apps/web/vitest.config.mts` sets `test.environment: "jsdom"`
+    globally (not per-file) — the two existing pure-logic test files
+    (`format.test.ts`, `api-client.test.ts`) pay a small, measured jsdom
+    setup cost (`apps/web` test duration rose from under 1s to ~9s, almost
+    entirely "environment" time) but need no code change, and a single
+    global config is simpler than per-file environment overrides for a
+    test suite this size.
+  - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+    (219 `apps/api` tests: 215 carried over + 4 new; `apps/web` unchanged
+    at 16, now running under jsdom).

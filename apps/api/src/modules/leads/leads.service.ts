@@ -316,9 +316,12 @@ export async function updateLeadStatus(
 
 export async function archiveLead(ctx: RequestContext, id: string): Promise<LeadResponse> {
   const archived = await prisma.$transaction(async (tx) => {
-    const existing = await tx.lead.findFirst({ where: { id, ...scoped(ctx), archivedAt: null } });
+    const existing = await tx.lead.findFirst({ where: { id, ...scoped(ctx) } });
     if (!existing) {
       throw new ApiError(404, 'NOT_FOUND', 'Lead not found');
+    }
+    if (existing.archivedAt) {
+      throw new ApiError(409, 'ALREADY_ARCHIVED', 'This lead is already archived.');
     }
     const lead = await tx.lead.update({ where: { id: existing.id }, data: { archivedAt: new Date() } });
     await writeAudit(tx, ctx, { action: 'lead.archived', entityType: 'lead', entityId: lead.id });
@@ -329,9 +332,12 @@ export async function archiveLead(ctx: RequestContext, id: string): Promise<Lead
 
 export async function restoreLead(ctx: RequestContext, id: string): Promise<LeadResponse> {
   const restored = await prisma.$transaction(async (tx) => {
-    const existing = await tx.lead.findFirst({ where: { id, ...scoped(ctx), archivedAt: { not: null } } });
+    const existing = await tx.lead.findFirst({ where: { id, ...scoped(ctx) } });
     if (!existing) {
       throw new ApiError(404, 'NOT_FOUND', 'Lead not found');
+    }
+    if (!existing.archivedAt) {
+      throw new ApiError(409, 'NOT_ARCHIVED', 'This lead is not archived.');
     }
     const lead = await tx.lead.update({ where: { id: existing.id }, data: { archivedAt: null } });
     await writeAudit(tx, ctx, { action: 'lead.restored', entityType: 'lead', entityId: lead.id });

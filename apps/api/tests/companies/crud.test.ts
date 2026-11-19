@@ -140,7 +140,7 @@ describe('Companies CRUD', () => {
     expect(res.status).toBe(404);
   });
 
-  it('archiving an already-archived company returns 404', async () => {
+  it('archiving an already-archived company returns 409 ALREADY_ARCHIVED', async () => {
     const tenant = await createTestTenant();
     const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
     const app = createApp();
@@ -151,6 +151,31 @@ describe('Companies CRUD', () => {
     await api.post(`/api/v1/companies/${companyId}/archive`);
 
     const res = await api.post(`/api/v1/companies/${companyId}/archive`);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('ALREADY_ARCHIVED');
+  });
+
+  it('restoring a company that is not archived returns 409 NOT_ARCHIVED', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+
+    const createRes = await api.post('/api/v1/companies', { name: 'Not Archived Co' });
+    const companyId = createRes.body.data.id as string;
+
+    const res = await api.post(`/api/v1/companies/${companyId}/restore`);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('NOT_ARCHIVED');
+  });
+
+  it('a missing company id still returns 404 on archive, not 409', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+
+    const res = await api.post('/api/v1/companies/00000000-0000-7000-8000-000000000000/archive');
     expect(res.status).toBe(404);
   });
 });

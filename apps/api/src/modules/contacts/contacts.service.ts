@@ -219,9 +219,12 @@ export async function updateContact(
 
 export async function archiveContact(ctx: RequestContext, id: string): Promise<ContactResponse> {
   const archived = await prisma.$transaction(async (tx) => {
-    const existing = await tx.contact.findFirst({ where: { id, ...scoped(ctx), archivedAt: null } });
+    const existing = await tx.contact.findFirst({ where: { id, ...scoped(ctx) } });
     if (!existing) {
       throw new ApiError(404, 'NOT_FOUND', 'Contact not found');
+    }
+    if (existing.archivedAt) {
+      throw new ApiError(409, 'ALREADY_ARCHIVED', 'This contact is already archived.');
     }
     const contact = await tx.contact.update({ where: { id: existing.id }, data: { archivedAt: new Date() } });
     await writeAudit(tx, ctx, { action: 'contact.archived', entityType: 'contact', entityId: contact.id });
@@ -232,11 +235,12 @@ export async function archiveContact(ctx: RequestContext, id: string): Promise<C
 
 export async function restoreContact(ctx: RequestContext, id: string): Promise<ContactResponse> {
   const restored = await prisma.$transaction(async (tx) => {
-    const existing = await tx.contact.findFirst({
-      where: { id, ...scoped(ctx), archivedAt: { not: null } },
-    });
+    const existing = await tx.contact.findFirst({ where: { id, ...scoped(ctx) } });
     if (!existing) {
       throw new ApiError(404, 'NOT_FOUND', 'Contact not found');
+    }
+    if (!existing.archivedAt) {
+      throw new ApiError(409, 'NOT_ARCHIVED', 'This contact is not archived.');
     }
     const contact = await tx.contact.update({ where: { id: existing.id }, data: { archivedAt: null } });
     await writeAudit(tx, ctx, { action: 'contact.restored', entityType: 'contact', entityId: contact.id });

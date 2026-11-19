@@ -470,6 +470,7 @@ packages pin exact versions, no `^`/`~` ranges, per `CLAUDE.md`).
 | apps/web | `sonner`, `next-themes` | 2.0.8, 0.4.6 | Package 1.5, same re-pin story. `next-themes` only exists for Sonner's `useTheme()` call — no theme toggle built (D26) |
 | apps/web | `lucide-react` | 1.76.0 | Package 1.5 — the shadcn CLI referenced it in 4 components but didn't actually install it (D26) |
 | apps/web | `vitest` | 5.1.1 | Package 1.6 — added (with explicit sign-off) so `lib/format.ts` could ship with real unit tests; same pinned version as `apps/api` (D27) |
+| apps/web | `jsdom`, `@testing-library/react`, `@testing-library/dom` | 31.0.1, 16.3.3, 10.4.2 | Package 2.3b — added for component tests (2.4); `vitest.config.mts` sets `environment: "jsdom"` globally (D36) |
 | packages/shared | `zod` | 4.6.7 | |
 
 ## 7. What has been built, package by package
@@ -659,6 +660,17 @@ not something to investigate.
   UI ahead of Day 4's richer timeline). `pnpm typecheck && pnpm lint &&
   pnpm test && pnpm build` all pass (215 tests: 187 carried over + 28 new,
   all `apps/api`). Full detail in `docs/decisions.md` D35.
+- **Package 2.3b — small backend fixes**: archive/restore on a record
+  already in that state now returns 409 (`ALREADY_ARCHIVED`/
+  `NOT_ARCHIVED`), not 404, across Companies/Contacts/Leads; missing or
+  cross-organisation stays 404. Re-confirmed (read-only) that `activities`
+  can hold a `NOTE` type for Day 4, no schema change. Contact
+  `lifecycleStatus` stays free text and will be hidden from the Day 2 UI
+  (PRD never enumerates its values). Added `jsdom`/`@testing-library/react`/
+  `@testing-library/dom` to `apps/web` for 2.4's component tests. `pnpm
+  typecheck && pnpm lint && pnpm test && pnpm build` all pass (219
+  `apps/api` tests: 215 carried over + 4 new). Full detail in
+  `docs/decisions.md` D36.
 
 ## 8. Database
 
@@ -746,6 +758,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D33 — Package 2.1: normalisers (`normalize.ts`); `LEAD_STATUSES`/`PRIORITIES` as `as const` tuples + `z.enum` (not TS enums, so no `ROLES`-style bridge cast is needed against Prisma's own literal-union enum types); three explicit duplicate-finder functions (`duplicates.ts`, one per resource — different normalised columns per model); `buildOrderBy` (`list-query.ts`, the one generic helper added, reusing 1.4's pagination helpers unchanged); `GET /api/v1/lead-sources` (new module); `GET /api/v1/users/options` (`auth: 'authenticated'`, Staff-allowed, registered before `/users/:id`)
 - D34 — Package 2.2: `{ data, duplicates }` create/update envelope; `archived` tri-state via `booleanQueryParam`; archive/restore of a record already in that state is 404, not a no-op; blank string clears a text field to null on PATCH, `null` detaches a relation field (`companyId`/`ownerId` schemas changed to `.nullable().optional()` so this is expressible); `blankToNull` typed `(string) => string | null` only, never `string | undefined` in, because of an `exactOptionalPropertyTypes` conflict with Prisma's generated update types; `assertOwnerInOrg`/`assertCompanyInOrg` close the real (not just theoretical) same-organisation FK gap from D13; `lifecycleStatus` stays free text (brief never enumerates it), defaults `'ACTIVE'`
 - D35 — Package 2.3: status change is its own `POST /leads/:id/status` (no note, D32); `CONVERTED` as a target excluded by the `OpenLeadStatus` type, as a current state refused with 409; `requirement`/`capturedFields` silently stripped by `PATCH`, not rejected, so they stay read-only; clearing both email and phone on update is a service-level 422, not a DB `P2039`-to-500; `GET /leads/duplicates` (standalone check, brief-requested) and `GET /leads/:id/status-history` (not requested, added anyway — cheap, useful ahead of Day 4); `z.iso.datetime()` verified to require a trailing `Z`, matching every other UTC timestamp in the app
+- D36 — Package 2.3b: archive/restore on a record already in that state is 409 (`ALREADY_ARCHIVED`/`NOT_ARCHIVED`), missing/cross-org stays 404; re-confirmed `activities` can hold `NOTE` for Day 4 (no schema change); Contact `lifecycleStatus` stays free text and hidden from the UI (PRD never enumerates values); added `jsdom`/`@testing-library/react`/`@testing-library/dom` to `apps/web`, `vitest.config.mts` set to `environment: "jsdom"` globally
 
 ## 10. Gotchas and lessons learned
 
@@ -843,8 +856,9 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run` — 2
   files: `tests/lib/format.test.ts` (12 tests, package 1.6),
   `tests/lib/api-client.test.ts` (4 tests, package 1.7)), and `apps/api`
-  (`vitest run`) — 215 `apps/api` tests + 16 `apps/web` tests, 231 total,
-  all passing as of the last run this session (package 2.3).
+  (`vitest run`) — 219 `apps/api` tests + 16 `apps/web` tests, 235 total,
+  all passing as of the last run this session (package 2.3b). `apps/web`
+  now runs under a jsdom environment (D36), ready for component tests.
 - `apps/web/vitest.config.mts` only sets a resolve alias (`@` -> the package
   root, mirroring `tsconfig.json`) — no database, no global setup, unlike
   `apps/api`'s config; nothing in `apps/web` touches the database.
@@ -1354,7 +1368,29 @@ log just records that a session happened and what it covered.
   `apps/web` unchanged at 16). No process was started this package;
   nothing to stop. Committed locally; nothing pushed. Full detail in
   `docs/decisions.md` D35.
-  **Day 2 backend (packages 2.1–2.3) is now complete.** Next: packages
-  2.4–2.6 (the corresponding frontend UI) — not yet detailed in this repo,
-  per `docs/NEXT-SESSION-START.md`'s existing caveat; confirm scope with
-  the user before building ahead of it.
+  **Day 2 backend (packages 2.1–2.3) is now complete.**
+- **2026-11-19 (new session) — package 2.3b, small backend fixes.** Before
+  the Day 2 UI packages: (1) archive/restore on a record already in that
+  state now returns 409 (`ALREADY_ARCHIVED` archiving an archived record,
+  `NOT_ARCHIVED` restoring an active one) instead of 404, across
+  Companies/Contacts/Leads — the lookup in each service function dropped
+  its `archivedAt` filter so it can distinguish "doesn't exist" (still 404)
+  from "exists but already in that state" (now 409); one pre-existing test
+  updated, new tests added for all three resources plus a "missing id
+  stays 404" boundary check. (2) Re-confirmed, read-only, that `activities`
+  can hold a `NOTE` type for Day 4 (`activity_type` already includes
+  `NOTE`; the `activities_done_has_completed_at` CHECK already matches the
+  roadmap's "notes created as DONE" plan) — same finding as D30, asked for
+  again directly this package. (3) Checked the PRD directly for Contact
+  `lifecycleStatus` values: never enumerated, so it stays free text in the
+  API and will not appear in package 2.5's UI. (4) Added the pre-approved
+  `jsdom`/`@testing-library/react`/`@testing-library/dom` devDependencies
+  to `apps/web` and set `vitest.config.mts`'s `test.environment` to
+  `"jsdom"` globally, ahead of package 2.4's component tests. `pnpm
+  typecheck && pnpm lint && pnpm test && pnpm build` all pass clean (219
+  `apps/api` tests: 215 carried over + 4 new; `apps/web` unchanged at 16,
+  now running under jsdom — duration rose from under 1s to ~9s, almost
+  entirely jsdom setup, no code change needed). No process was started
+  this package; nothing to stop. Committed locally; nothing pushed. Full
+  detail in `docs/decisions.md` D36. Next: package 2.4 (shared UI building
+  blocks).

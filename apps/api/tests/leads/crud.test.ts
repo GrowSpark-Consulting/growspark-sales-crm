@@ -229,6 +229,29 @@ describe('Leads CRUD', () => {
     expect(excludedRes.body.data).toEqual([]);
   });
 
+  it('archiving an already-archived lead returns 409 ALREADY_ARCHIVED; restoring a non-archived one returns 409 NOT_ARCHIVED', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+
+    const createRes = await api.post('/api/v1/leads', {
+      firstName: 'Double Archive',
+      email: 'double-archive@example.com',
+      sourceId: tenant.leadSource.id,
+    });
+    const leadId = createRes.body.data.id as string;
+
+    const notArchivedRes = await api.post(`/api/v1/leads/${leadId}/restore`);
+    expect(notArchivedRes.status).toBe(409);
+    expect(notArchivedRes.body.error.code).toBe('NOT_ARCHIVED');
+
+    await api.post(`/api/v1/leads/${leadId}/archive`);
+    const alreadyArchivedRes = await api.post(`/api/v1/leads/${leadId}/archive`);
+    expect(alreadyArchivedRes.status).toBe(409);
+    expect(alreadyArchivedRes.body.error.code).toBe('ALREADY_ARCHIVED');
+  });
+
   it('GET /api/v1/leads/:id returns 404 for an id that does not exist', async () => {
     const tenant = await createTestTenant();
     const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
