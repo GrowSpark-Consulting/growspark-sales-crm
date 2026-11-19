@@ -897,6 +897,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D37 — Package 2.4: `DataTable`/`RecordLayout`/`OwnerSelect`/`CompanySelect`/`useListUrlState` built; `DataTable` wired into a real Companies list page; row-opens-record via a real `Link` in the first column, not row click handling; `OwnerSelect` kept to form use, list-page owner filter is a separate plain `Select` (different semantics: "no filter" vs "owner = nobody"); `CompanySelect` hand-built (no Combobox primitive installed); two `useEffect`s in `CompanySelect` rewritten as render-time state adjustments to satisfy `react-hooks/set-state-in-effect`; `ConfirmActionDialog` moved to `components/ui/`; added `apps/web/tests/setup.ts` for RTL's `afterEach(cleanup)` (not automatic without vitest `globals: true`)
 - D38 — Package 2.5: real PRD/schema conflict on Contact's "alternate phone"/"preferred communication method" (not in the schema) — stopped, asked, dropped both; Companies use full create/edit pages, Contacts use a Dialog (different field counts and reuse contexts); both forms validate against the *create* schema even in edit mode, submitting the full field set as PATCH; `z.coerce.number()`'s `unknown` input type (Zod v4) broke a plain `useForm<CreateCompanyInput>` — fixed with a form-local schema overriding just that one field to a non-coercing validator; duplicate hint on company-name blur reuses the plain list `q` search (no dedicated endpoint, unlike Leads); new `Textarea` and `stripEmptyOptionalFields` (blank optional fields must become `null`/omitted, not a literal `""`)
 - D39 — Package 2.6: `leadCreatableFields` exported from `packages/shared` so a form-local schema override could be rebuilt without `.extend()` (`createLeadSchema` is a `ZodEffects`, not a plain `ZodObject`); create and edit use two genuinely different form-local schemas (unlike Company/Contact's one-schema-for-both, D38) because `requirement` is create-only and never editable; duplicate warning calls the real `GET /leads/duplicates` endpoint (unlike Company's blur-hint approximation); status-change buttons omit the current status and the whole section disappears once `CONVERTED` (D29 — no convert action exists yet); new `lib/datetime-local.ts` bridges the native `datetime-local` input and ISO instants; a Zod `.refine()` options object needed its `path` cast away from `as const` (`readonly ["email"]` vs. Zod's mutable `PropertyKey[]`)
+- **D40–D44 — approved 2026-11-20, package 2.7 scope, NOT YET BUILT** (full detail in `decisions.md`, after D39): D40 — minimal HubSpot-style required fields (Company: name only; Contact/Lead: name + email-or-phone; Lead also needs a source, default to a "Manual" source rather than forcing a choice; priority defaults Medium; forms mark required fields with `*`, drop every `(optional)` suffix; Company form gets a collapsed "More details" section). D41 — phone fields become a country-code select (default +91) + number, `+91` = exactly 10 digits starting 6–9, other codes 7–15 digits, stored as E.164 in the existing columns (no schema change), duplicate matching across formats, display formatted — strict validation for manual entry only, the future website-intake path must stay lenient and never reject. D42 — new-record forms must always open empty (found persisting old values in browser testing; probable cause is Cache Components state retention — not yet confirmed). D43 — Contacts get the same email-or-phone requirement Leads already have. D44 — lead History rows must show who made the change; the lead form's email-or-phone hint must only show while the rule is actually unmet.
 
 ## 10. Gotchas and lessons learned
 
@@ -1147,26 +1148,37 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `vitest` to `apps/web` in 1.6 was confirmed with the user before doing it;
   1.7's Cache Components fix was confirmed with the user (the earlier
   decision it referenced wasn't recoverable from this repo's history, so
-  it was asked again rather than guessed).
-- **Not yet done, and not part of Day 1's scope**: the actual browser
-  click-through in `docs/MANUAL-TEST-DAY1.md` (now including the package
-  1.6 design-system section §12/§15 and the 1.7 search/session-expiry
-  sections §13/§14) — this environment has no browser, so that still needs
-  the user to run it before Day 1 is truly *verified*, not just built and
-  automatically tested.
-- Beyond Day 1: the user's planning roadmap continues into Day 2 (companies,
-  contacts, leads). **A fresh session should start from
-  `docs/NEXT-SESSION-START.md`**, not this section — it has the actual Day 2
-  package order (2.0 leftovers, then 2.1–2.3 backend, then 2.4–2.6 UI) and
-  the open items. Four Day 2 rules were approved on 2026-11-19 (end of this
-  Day 1 handover session) but **nothing against them is built yet**: lead
-  status transitions (any open status to any other; `CONVERTED` only via
-  the Day 3 convert action; every change writes `LeadStatusHistory`), lead
-  creation requires a name plus an email or a phone, duplicate detection
-  (exact normalised email/phone/company name) warns only and still saves,
-  and Staff may create/edit/archive companies/contacts/leads — see
-  `docs/decisions.md` D29. Day 6/7 (testing, stabilisation, demo) are
-  explicitly out of scope until the build days are done.
+  it was asked again rather than guessed). `docs/MANUAL-TEST-DAY1.md` still
+  has no recorded browser run in this repo (see §14) — not confirmed either
+  way, not assumed done.
+- **Day 2 (packages 2.0–2.6) is done** (see §7 and `docs/DAY-2-SUMMARY.md`
+  for the plain-language version). All four Day 2 rules approved on
+  2026-11-19 (D29) are now actually built: lead status transitions, the
+  name-plus-email-or-phone rule (Leads only, so far — see D43 below),
+  warn-only duplicate detection, and Staff standing equal to Admin on
+  Companies/Contacts/Leads. The user ran `docs/MANUAL-TEST-DAY2.md` in a
+  real browser on **2026-11-20** and confirmed all five named acceptance
+  items passed.
+- **That same browser pass surfaced five approved-but-not-yet-built
+  refinements — D40 through D44** (`docs/decisions.md`, after D39):
+  trimming every form down to the PRD's actual minimum required fields
+  (D40); structured, validated phone input with E.164 storage, strict for
+  manual entry only and explicitly **not** for a future website-intake path
+  (D41); new-record forms opening with stale values instead of blank,
+  probably a Cache Components state-retention issue, not yet root-caused
+  (D42); Contacts getting the same email-or-phone requirement Leads already
+  have (D43); and two small Leads UI fixes — showing who made each status
+  change, and only showing the email-or-phone hint while it's actually
+  unmet (D44). **A fresh session should start from
+  `docs/NEXT-SESSION-START.md`**, which has these as package 2.7, the next
+  work item, in that exact order — do not start Day 3 before 2.7 is done
+  and re-verified.
+- **Day 3** (lead conversion, deals, pipeline) comes after package 2.7.
+  Exact scope beyond "lead conversion first, as its own transaction" is not
+  yet detailed in this repo — confirm with the user before building ahead
+  of it, same rule as every other package boundary. Day 6/7 (testing,
+  stabilisation, demo) remain explicitly out of scope until the build days
+  are done.
 
 ## 14. Open questions and unverified items
 
@@ -1195,16 +1207,32 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   payload confirms the prop is reaching `<html>`, but neither proves the
   browser console is actually silent — that's §15 of
   `docs/MANUAL-TEST-DAY1.md`, still outstanding.
-- **A full list of open items from package 1.7 and this handover session
-  lives in `docs/NEXT-SESSION-START.md` ("Open items")** — not duplicated
-  here to avoid the two files drifting apart. In short: the Cache
-  Components notice still appears on `/users` (the `(protected)/layout.tsx`
-  fix wasn't enough on its own); no password-visibility toggle anywhere;
-  the Users search value isn't in the URL; `SearchInput`/
-  `SessionExpiryHandler` have no component tests; and whether route-change
-  revalidation actually produces a fast redirect in a real browser (versus
-  needing a refresh) was reasoned through from the code but not watched
-  happen — see that file for the full, individually-verified list.
+- **CORRECTED 2026-11-20 — the paragraph below was stale.** It described
+  package 1.7's end-of-Day-1 open items as still current; two of them
+  (the Cache Components notice on `/users`, and the missing
+  password-visibility toggle) were actually resolved back in package 2.0
+  and had already been marked resolved in `docs/NEXT-SESSION-START.md`
+  itself — this summary paragraph just never caught up. Corrected summary,
+  still current as of Day 2's end: the Users search value isn't in the URL
+  (unlike Leads/Companies/Contacts, which all use `useListUrlState`, D37);
+  `SearchInput`/`SessionExpiryHandler` have no component tests; and
+  whether route-change revalidation produces a fast redirect or needs a
+  refresh on a deactivated session was reasoned through from the code but
+  never watched happen in a real browser — still unresolved, see
+  `docs/NEXT-SESSION-START.md` item (e) for the full detail.
+- **New from Day 2**: no component tests exist yet for the Companies,
+  Contacts, or Leads screens built in 2.4–2.6 (only `DataTable`,
+  `SearchInput`, and `OwnerSelect` — the shared building blocks — have
+  them, D37); this was a deliberate scope choice for Day 2 (manual
+  coverage via `MANUAL-TEST-DAY2.md` instead), not an oversight, but add
+  key-flow tests for these screens on Day 6 per the roadmap. The
+  company-name duplicate hint (2.5, D38) reuses the plain `?q=` list
+  search rather than a dedicated endpoint, so it may miss a genuine
+  duplicate that doesn't share a contiguous substring with the typed name
+  (a real, accepted limitation, not a bug). The Day 4 hosted-staging plan
+  (Render + Supabase, a separate `sales` schema, a first-admin command) is
+  still just a plan — nothing built toward it — and the website-forwarding
+  patch remains explicitly **not approved**.
 
 ## 15. Session log
 
@@ -1666,3 +1694,26 @@ log just records that a session happened and what it covered.
   the 2.3b–2.6 scope for this session — a single combined report was
   given after this package, and no Day 3 work (lead conversion, deals,
   pipeline) was started, per explicit instruction.
+- **2026-11-20 (new session) — Day 2 handover, docs only, no code
+  changes.** The user ran `docs/MANUAL-TEST-DAY2.md` in a real browser and
+  confirmed all five named acceptance items passed, and separately
+  approved five refinements found during that same pass as package 2.7's
+  scope (`docs/decisions.md` D40–D44 — minimal required fields, structured
+  phone input, new-forms-must-open-empty, Contacts needing email-or-phone,
+  two small Leads UI fixes) — **none of D40–D44 is built**, this session
+  only recorded them. Wrote `docs/DAY-2-SUMMARY.md` (package-by-package
+  recap, endpoints/screens added, bug list, how-to-run, mirroring
+  `DAY-1-SUMMARY.md`'s structure). Updated this file's §9 (added D40–D44),
+  §13 (Day 2 marked done, 2.7 named as the next work), and §14 — found and
+  corrected a real stale statement: the open-items summary here still
+  described two package-1.7 items (the `/users` Cache Components notice,
+  no password-visibility toggle) as outstanding, when `docs/
+  NEXT-SESSION-START.md` had already marked both resolved back in package
+  2.0; this file's copy just never caught up. Rewrote
+  `docs/NEXT-SESSION-START.md` for the next session: Day 2 complete,
+  package 2.7 (D40–D44) as the immediate next work, then Day 3 (lead
+  conversion first, as its own transaction, then deals/pipeline).
+  Re-verified `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+  after all doc edits — all pass, 249 tests unchanged (docs-only, no
+  source files touched). No process was started this session; nothing to
+  stop. One commit, docs only; nothing pushed.

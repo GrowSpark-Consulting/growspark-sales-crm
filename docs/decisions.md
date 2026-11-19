@@ -1350,3 +1350,63 @@ read) was itself dated for traceability.
     `MANUAL-TEST-DAY2.md` instead of new automated tests). New routes
     confirmed in the build output: `/leads`, `/leads/new`, `/leads/[id]`,
     `/leads/[id]/edit`.
+
+**D40–D44 were approved on 2026-11-20, after the user's own manual browser
+pass through `docs/MANUAL-TEST-DAY2.md` (all five named acceptance items
+passed — see `docs/DAY-2-SUMMARY.md`), as package 2.7's scope. They are
+recorded here as decisions, but nothing against them is built yet — do not
+treat their presence in this file as evidence the behaviour exists.**
+
+- **D40** — Required fields, HubSpot-style minimal (approved, not yet
+  built): Company needs only a name. Contact needs a first name plus an
+  email or a phone. Lead needs a first name plus an email or a phone, plus
+  a source (which should be preselected to a "Manual" source rather than
+  forcing an explicit choice — implies a seeded/default lead source named
+  "Manual" needs to exist, or the UI needs to treat the first/only source
+  as that default; confirm which when building 2.7). Lead priority
+  defaults to Medium. Every other field on all three forms becomes
+  genuinely optional. Forms mark required fields with `*` and drop the
+  `(optional)` suffix entirely (current forms suffix every optional field
+  instead — flip the convention). The Company form additionally gets a
+  "More details" collapsed section so the core fields (name, plus whatever
+  else is judged core) are the only ones shown by default.
+- **D41** — Phone rules (approved, not yet built): a country-code select
+  (default `+91`) paired with a plain number field, not one free-text
+  field. `+91` requires exactly 10 digits starting with 6–9; any other
+  country code requires 7–15 digits. Stored as canonical E.164 in the
+  existing `phone` column and the existing normalised column (no schema
+  change — `normalize.ts`'s `normalizePhone` is the place this logic
+  belongs, reused by Company/Contact/Lead alike). Duplicate detection must
+  match across formats (i.e. match on the normalised E.164 form, not the
+  raw display string — already true architecturally today, just needs the
+  new parsing to feed into it correctly). Displayed back to the user
+  formatted, not as a raw E.164 string. This strict validation is for
+  **manual CRM data entry only** — the not-yet-built website-intake path
+  (Day 3+/later) must use a lenient parse and must never reject an
+  enquiry over a phone format; do not share one validator between the two
+  paths without a mode flag.
+- **D42** — New-record forms must always open empty (approved, not yet
+  built; root cause not yet confirmed). The user's browser testing on
+  2026-11-20 found old field values persisting into a freshly-opened
+  create form. The likely cause is Next.js 16's Cache Components feature
+  retaining client component state across a client-side navigation to a
+  route that looks unchanged (e.g. `/leads/new` visited twice in a row, or
+  reached after visiting `/leads/[id]/edit`) — but this is a probable
+  diagnosis, not yet verified against the actual code; confirm before
+  fixing (likely candidates: a stale `key` on the form's route segment, or
+  a `defaultValues` that isn't being reset on mount).
+- **D43** — Contacts require an email or a phone (approved, not yet
+  built): the same rule Leads already enforce (D29) is added to Contacts,
+  which currently accept neither. `createContactSchema`/the contact form's
+  `.refine()` need the same shape as the lead form's
+  `emailOrPhoneRefine` (2.6, D39).
+- **D44** — Two small Leads UI fixes (approved, not yet built): (1) each
+  row on a lead's History tab should show who made that status change
+  (the actor), not just the from/to statuses and a timestamp — needs
+  checking whether `LeadStatusHistory` already records a `changedByUserId`
+  or equivalent (it should, given every other audited table in this
+  schema records an actor) and surfacing it in
+  `useLeadStatusHistory`/the History tab's render; (2) the lead form's
+  "provide an email or a phone number" hint should only be visible while
+  that rule is actually unmet, not pinned under the Email field
+  permanently regardless of whether one has since been filled in.

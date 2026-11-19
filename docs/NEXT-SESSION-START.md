@@ -2,8 +2,8 @@
 
 Read this file **first**, before touching any code. It tells you what this
 project is, the rules that don't change, what to read next and in what
-order, the Day 2 plan as far as it's known, and the specific items left
-open at the end of Day 1.
+order, where the build actually stands, and the specific work queued up
+next.
 
 ## The project, in brief
 
@@ -14,7 +14,7 @@ open at the end of Day 1.
   people (stated by the user; not independently verifiable from this repo
   alone).
 - The build is a **7-day plan**: Days 1–5 build, Day 6 testing, Day 7
-  stabilise and demo. Day 1 (packages 1.1–1.7) is done.
+  stabilise and demo. **Day 1 and Day 2 are both done** (see below).
 - A **staging deployment is planned for around Day 4** — see "Day 4" below.
 - Single developer, nothing reviewed by anyone else: correctness over
   speed, and every package stops for review before the next one starts.
@@ -49,6 +49,16 @@ open at the end of Day 1.
 - **Ask before adding any dependency**, running a destructive command
   (`migrate reset`, `git reset --hard`, deleting a Docker volume), or doing
   anything outside the current package's stated scope.
+- **The PRD is the literal source of truth** for field lists, labels, and
+  screen content. Where it's silent, prefer the HubSpot-style convention
+  already used for Leads/Companies/Contacts (clean list, a record page with
+  a key-fields strip, tabs) and note the choice in `decisions.md`. Don't
+  invent features the PRD doesn't list.
+- **If the PRD, the roadmap, and the actual database schema disagree on
+  anything, stop and ask** rather than choosing unilaterally — this has
+  happened more than once already (D32, D38) and both times the user
+  answered directly.
+- **Any change to the role-permission table needs explicit approval.**
 - Prisma's own CLI will refuse certain destructive commands against this
   project unless a human gives fresh, in-the-moment consent — that's
   Prisma's built-in safety check, not something to script around.
@@ -65,61 +75,107 @@ open at the end of Day 1.
    detailed reference; skim its table of contents (the `##` headings) and
    come back to specific sections as needed rather than reading linearly
    every time.
-4. **`docs/decisions.md`** — every approved decision, D1 through D29,
-   append-only, numbered (D3/D5 don't exist — never assigned), each with
-   the reasoning behind it. Don't re-litigate something already decided
-   here without a new entry.
+4. **`docs/decisions.md`** — every approved decision, D1 through D44 (D3
+   and D5 don't exist — never assigned), append-only, each with the
+   reasoning behind it. Don't re-litigate something already decided here
+   without a new entry. **D40–D44 are approved but not yet built** — read
+   them carefully, they are this session's starting work.
 5. **`apps/api/prisma/SCHEMA-SUMMARY.md`** — the factual per-model
    column/index/FK/CHECK reference for the database. Read this instead of
    `schema.prisma` itself when you just need to know what a table looks
    like.
 
-Only after those five should you start reading application code for the
+Also worth a skim before starting: **`docs/DAY-1-SUMMARY.md`** and
+**`docs/DAY-2-SUMMARY.md`** — plain-language look-backs at what was built
+and how it was verified each day. Not required reading like the five
+files above, but faster than re-deriving the same picture from
+`PROJECT-STATE.md`'s session log.
+
+Only after those should you start reading application code for the
 specific package you're about to work on.
 
-## The Day 2 plan, as far as it's known
+## Where the build actually stands
 
-**Packages 2.0 through 2.3 are done** (see `PROJECT-STATE.md` §7 for full
-detail, `decisions.md` D30–D35). **2.4–2.6 (the frontend UI for leads/
-companies/contacts) have not been started and are not detailed in this
-repo** — confirm exact scope with the user before building ahead of it;
-do not invent package content beyond what's written here.
+- **Day 1 (packages 1.1–1.7) is done.** Auth, sessions, permissions, the
+  Users module, and the whole app shell/design system are built and
+  automatically verified. `docs/MANUAL-TEST-DAY1.md` exists but this repo
+  has no record of anyone having actually run it — don't assume it has or
+  hasn't been; ask if it matters for what you're about to do.
+- **Day 2 (packages 2.0–2.6) is done.** Companies, Contacts, and Leads
+  each have a full backend (CRUD, archive/restore, duplicate detection)
+  and a full UI (list with server-side search/filter/sort/paging, create/
+  edit, detail with tabs, archive/restore). 249 automated tests pass
+  (219 `apps/api` + 30 `apps/web`). The user ran
+  `docs/MANUAL-TEST-DAY2.md` in a real browser on **2026-11-20** and
+  confirmed all five named acceptance items passed.
+- **Five refinements were approved the same day, as package 2.7's scope,
+  but nothing against them is built yet** — see immediately below.
 
-- **2.0 — Day 1 leftovers — done.** Every protected `page.tsx` is now a
-  thin Server Component wrapper carrying its own `export const instant =
-  false` (the standing convention for every future page, see
-  `PROJECT-STATE.md` §12); `PasswordInput` (show/hide) replaced the three
-  bare password `Input`s.
-- **2.1 — backend foundations — done.** Normalisers
-  (`packages/shared/src/normalize.ts`), the duplicate finder
-  (`apps/api/src/lib/duplicates.ts`), `buildOrderBy`
-  (`apps/api/src/lib/list-query.ts`), `GET /api/v1/lead-sources`, `GET
-  /api/v1/users/options`.
-- **2.2 — Companies and Contacts API — done.** Full CRUD + archive/restore
-  for both, `apps/api/src/modules/companies/` and `modules/contacts/`.
-- **2.3 — Leads API — done.** Full CRUD + archive/restore,
-  `POST /leads/:id/status` (the D29 status workflow, no note field — see
-  D32), `GET /leads/duplicates`, `GET /leads/:id/status-history`.
-  `apps/api/src/modules/leads/`.
-- **2.4–2.6 — UI.** The corresponding frontend work for 2.1–2.3's
-  Companies/Contacts/Leads APIs. Exact scope not detailed yet — ask.
-- **Four rules were approved on 2026-11-19 for this work, and are now
-  implemented** (full detail in `decisions.md` D29 — read the real entry,
-  not just this summary):
-  - Lead status: any open status → any other open status directly;
-    `CONVERTED` only through the (Day 3) convert action; every change
-    writes a `LeadStatusHistory` row (no note — D32).
-  - Lead creation requires a name, plus an email or a phone (not
-    necessarily both).
-  - Duplicates (exact normalised email, phone, or company name match)
-    **warn only** — the record still saves.
-  - Staff may create, edit, and archive companies, contacts, and leads
-    (same standing as Admin for these three resources only).
+## The next work, in order
+
+### 1. Package 2.7 — implement D40 through D44 (`docs/decisions.md`)
+
+Read the full D40–D44 entries before starting; this is a summary, not a
+replacement for them.
+
+- **D40 — minimal required fields.** Company needs only a name. Contact
+  needs a first name plus an email or a phone. Lead needs a first name
+  plus an email or a phone, plus a source (preselect a "Manual" source
+  rather than forcing a choice — check whether a source actually named
+  "Manual" exists in the seed data; if not, that's a question for the
+  user, not something to invent). Lead priority defaults to Medium.
+  Everything else becomes genuinely optional. Forms mark required fields
+  with `*` and drop the `(optional)` suffix everywhere (the current
+  convention is the opposite — flip it consistently across all three
+  forms). Company's create/edit form additionally needs a collapsed
+  "More details" section for the non-core fields.
+- **D41 — structured phone input.** Country-code select (default `+91`)
+  plus a plain number field, replacing the current single free-text phone
+  field on Company/Contact/Lead forms. `+91` = exactly 10 digits starting
+  6–9; other codes = 7–15 digits. Store as E.164 in the existing `phone`
+  and normalised columns — no schema change. Duplicate matching must
+  still work across formats. Display formatted, not as raw E.164.
+  **Important**: this strict validation is for manual CRM entry only — if
+  anything shared with a future website-intake path is touched, it must
+  stay lenient and never reject an enquiry; don't let one validator serve
+  both without a mode flag.
+- **D42 — new-record forms must open empty.** Found during browser
+  testing: a fresh create form can show a previous session's leftover
+  values. Probable cause (not yet confirmed) is Next.js 16 Cache
+  Components retaining client state across a navigation that looks
+  unchanged. Confirm the actual mechanism before fixing it — don't paper
+  over it with a workaround that doesn't address the root cause.
+- **D43 — Contacts require an email or a phone.** Same rule Leads already
+  enforce (D29); add it to `createContactSchema` and the contact form's
+  validation, same shape as the lead form's `emailOrPhoneRefine` (2.6,
+  D39).
+- **D44 — two small Leads UI fixes.** Lead History rows must show who made
+  each change (check first whether `LeadStatusHistory` already records an
+  actor column — it should, given every other audited table here does;
+  if it doesn't, that's a schema question, stop and ask). The lead form's
+  "provide an email or a phone number" hint must only show while the rule
+  is actually unmet, not permanently once one has been filled in.
+
+After building, update `docs/MANUAL-TEST-DAY2.md` wherever these changes
+affect its steps (required-field markers, the phone input's new shape,
+the "forms open empty" behaviour, Contacts' new validation, the History
+tab's actor column). Run the full verification
+(`pnpm typecheck && pnpm lint && pnpm test && pnpm build`), commit, and
+update `PROJECT-STATE.md`/`decisions.md` same as every other package.
+
+### 2. Day 3 — lead conversion, deals, pipeline
+
+Starts only after 2.7 is done, verified, and reported. Build the
+**conversion transaction first** (turning a Lead into a Company/Contact/
+Deal, the one genuinely multi-table write in this phase — needs a
+transaction with the audit row inside it, per the standing rule), then
+deals and the pipeline around it. Exact scope beyond that ordering isn't
+detailed in this repo yet — confirm with the user before building ahead of
+what's written here, same as every other package boundary.
 
 ## Day 4: staging deployment (as currently planned)
 
-Not yet started, and not part of Day 1 or Day 2's scope — recorded here so
-it isn't lost. As currently planned (per the user, 2026-11-19):
+Not yet started. As currently planned (per the user, 2026-11-19):
 
 - Hosted staging around **Day 4**: the API and web app on **Render**, the
   database on **Supabase**, using a **separate `sales` schema** (not the
@@ -134,76 +190,40 @@ it isn't lost. As currently planned (per the user, 2026-11-19):
   a fresh, explicit approval naming the exact file list, per the hard
   rules above.
 
-## Open items (verified against the code on 2026-11-19, end of Day 1)
+## Open items
 
-Each of these was re-checked against the actual current code before being
-written down below, not carried over on assumption.
+A fuller, individually-verified version of some of these lives in
+`docs/PROJECT-STATE.md` §14 — this is the short list to act on.
 
-**(a) RESOLVED in package 2.0.** `users/page.tsx` is now a thin Server
-Component wrapper (`export const instant = false`) rendering
-`components/users/users-page-client.tsx`'s `UsersPageClient`, exactly the
-planned fix below. Every other protected `page.tsx` follows the same
-convention (`PROJECT-STATE.md` §12, `decisions.md` D31). Original note,
-kept for context: the Cache Components "instant navigation" dev notice
-kept appearing on `/users` even after package 1.7's layout-level fix,
-because `users/page.tsx` was a Client Component and Next.js throws if
-`instant` is exported from one.
-
-**(b) RESOLVED in package 2.0.** `PasswordInput`
-(`apps/web/components/ui/password-input.tsx`, Lucide Eye/EyeOff toggle)
-now wraps every password field (`login-form.tsx`, `create-user-dialog.tsx`,
-`reset-password-dialog.tsx`). See `decisions.md` D31.
-
-**(c) The Users search value lives in component state, not the URL.**
-Confirmed by grep: `apps/web/app/(protected)/users/page.tsx` uses
-`useState` for `q`/`page`/`role`/`status`, no `useSearchParams`. Refreshing
-the Users page loses any active search/filter/page. Noted (not silently
-fixed) back in package 1.7, still accurate.
-
-**(d) No component-level tests for `SearchInput` or
-`SessionExpiryHandler`.** Confirmed: `apps/web/package.json` has no
-`jsdom` or `@testing-library/react`. The existing `apps/web` tests
-(`lib/format.test.ts`, `lib/api-client.test.ts`) are pure-logic only, no
-DOM needed. Adding component tests needs both dependencies — ask before
-adding, same as `vitest` itself was asked about in package 1.6.
-
-**(e) Does route-change revalidation actually produce a fast redirect, or
-only on refresh? — Not reconciled; needs an actual browser test.** The
-user reports that a deactivated user's already-open page only redirects to
-`/login` after a manual refresh, reacting slowly otherwise, even though
-the server already rejects their requests immediately. Code-level tracing
-of the implemented mechanism:
-- `AuthGuard` (`apps/web/components/auth-guard.tsx`) invalidates the
-  `me` query on every `pathname` change after first mount.
-- Separately, `apps/web/lib/api-client.ts`'s `apiFetch` calls a registered
-  `onUnauthorized` listener on **any** 401 from **any** call, and
-  `SessionExpiryHandler` (mounted in `providers.tsx`) uses that to clear
-  the whole query cache and `router.replace` to `/login?next=...`,
-  independent of `AuthGuard`'s own state.
-- Reading `@tanstack/query-core`'s own reducer
-  (`node_modules/.pnpm/@tanstack+query-core@5.108.0/.../query.js`,
-  the `"error"` dispatch case) confirms a failed background refetch sets
-  `status: "error"` unconditionally — it does not silently keep the query
-  looking "successful" just because older data exists — so `AuthGuard`'s
-  `isError` check should see it.
-- On paper, both paths should fire promptly on the next navigation, not
-  require a refresh. **This has not been watched happen in an actual
-  browser** (no browser-automation tool is available in this environment)
-  — the user's own observation contradicts that static reading, and the
-  discrepancy is unresolved. Next session: open DevTools' Network tab,
-  deactivate a signed-in user from a second window, click a sidebar link
-  in the first, and watch whether `/auth/me` actually re-fires and what it
-  returns — don't trust either the code-reading or the prior report
-  blindly.
-
-**(f) Day 4 staging plan** — see the dedicated section above. Recorded as
-information, not a code-verifiable item.
-
-**(g) The design-system `.zip` in `docs/design-system/` is intentionally
-untracked.** Confirmed: `git status` still shows
-`docs/design-system/Grow Spark Workspace — Design System.zip` as untracked
-after every commit since package 1.6. Its contents were extracted
-alongside it and *those* extracted files are committed and are the actual
-source of truth; the zip itself is redundant and was deliberately left out
-to avoid committing a binary alongside its own unpacked contents. No
-action needed unless the user asks for it to be removed from disk too.
+- **Package 2.7 (D40–D44 above) is the immediate next work** — not an
+  "open item" in the loose sense, a named, approved, unbuilt package.
+- **No browser-automation tool exists in this environment.** Every manual
+  browser check (console errors, hydration warnings, light/dark theme,
+  focus order, and anything in `MANUAL-TEST-DAY1.md`/`MANUAL-TEST-DAY2.md`)
+  needs the user to actually run it; don't claim to have verified any of
+  that yourself.
+- **The Users page's search value lives in component state, not the URL**
+  (unlike Leads/Companies/Contacts, which all use `useListUrlState`) —
+  refreshing `/users` loses any active search/filter/page. Not fixed, not
+  blocking, just inconsistent with the newer pages.
+- **No component tests exist yet for the Companies/Contacts/Leads screens**
+  built in 2.4–2.6 (only the shared building blocks — `DataTable`,
+  `SearchInput`, `OwnerSelect` — have them). Deliberate Day 2 scope choice
+  (manual coverage instead); add key-flow tests for these screens on
+  Day 6, per the roadmap, not before unless asked.
+- **The company-name duplicate hint (package 2.5) reuses the plain `?q=`
+  list search**, not a dedicated endpoint like Leads has — it can miss a
+  genuine duplicate that doesn't share a contiguous substring with the
+  typed name. Accepted limitation, not a bug to silently fix.
+- **Whether a deactivated user's already-open page redirects promptly, or
+  only after a manual refresh, has never been watched happen in a real
+  browser** — reasoned through from the code (`AuthGuard` + the global 401
+  handler should both catch it promptly) but the user's own earlier report
+  contradicted that reading, and it was never reconciled. Worth settling
+  with an actual browser test if you're touching anything nearby.
+- **Day 4 staging plan** — see the dedicated section above. Recorded as
+  information, not a code-verifiable item.
+- **The design-system `.zip` in `docs/design-system/` is intentionally
+  untracked.** Its contents were extracted and *those* files are what's
+  committed and used; the zip itself is redundant. No action needed unless
+  the user asks for it to be removed from disk too.
