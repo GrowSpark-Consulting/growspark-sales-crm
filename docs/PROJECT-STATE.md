@@ -15,12 +15,12 @@ independently verifiable from this repo. The user's plan is **7 days**: Days
 §13 for what's known about Day 1's remaining packages and §14 for what isn't
 known about Days 2–5).
 
-**Current status (end of 2026-11-19 session)**: Day 1, packages 1.1
-(scaffold), 1.1b (hardening), and 1.2 (Prisma schema/migration/seed/tests) are
-complete and committed locally. No product features, no auth, no API
-endpoints beyond `/health` exist yet. Nothing has been pushed to the remote
-this session (see §7 for the exact git state, which has one unresolved detail
-worth your attention).
+**Current status (mid 2026-11-19 session, continued)**: Day 1, packages 1.1,
+1.1b, 1.2, 1.2c, 1.3, 1.3b, and 1.4 are complete and committed locally.
+Server-side session auth, the full permission system, and user management
+with the last-Admin rule and audit log all exist and are tested end to end.
+Package 1.5 (web shell, login page, Users page) is in progress in this same
+session. Nothing has been pushed to the remote this session.
 
 ## 2. Hard constraints
 
@@ -28,10 +28,8 @@ worth your attention).
   for. Website integration is **on hold** until this CRM is finished. When
   resumed, it must be purely additive: it must never affect the existing
   website's workflow, Supabase, SMTP, HubSpot, validation, spam protection, or
-  visitor behaviour. **This rule was given to me directly in chat at the start
-  of package 1.1 but is not currently written into `CLAUDE.md` or
-  `docs/decisions.md`** — I'm recording it here so it isn't lost, but whoever
-  reads this should consider adding it to `CLAUDE.md` properly.
+  visitor behaviour. **Now written into `CLAUDE.md`** (added in package
+  1.2c) — no longer only in chat history and this file.
 - **(b) Never push.** Commit locally only, always. No session has run
   `git push`.
 - **(c) Never cut**: the essential sales journey, authentication, backend
@@ -90,12 +88,29 @@ copy apps\web\.env.example apps\web\.env
 pnpm db:up                                       # starts Postgres only
 pnpm db:migrate                                  # applies migrations to DATABASE_URL (crm_dev)
 pnpm db:seed                                     # idempotent — safe to re-run
-pnpm dev                                         # web:3000, api:4000, shared tsc --watch
+pnpm dev                                         # web:3000, api:4000, shared watch
 ```
 
 `apps/api/.env.example` also needs `SEED_ADMIN_PASSWORD` /
 `SEED_STAFF_PASSWORD` filled in (dev-only values are fine) before `db:seed`
 will run — the seed has no password default in code.
+
+**`pnpm dev` no longer runs `pnpm -r --parallel dev` internally** (package
+1.3b, D24) — it runs `node scripts/dev.mjs`, which spawns `packages/shared`,
+`apps/api`, and `apps/web`'s own `dev` scripts as three independent `pnpm
+--filter <pkg> run dev` processes. `pnpm -r --parallel dev` itself was found
+to hang `apps/api`'s `tsx watch` with zero output, unrelated to any specific
+package or timing — do not revert to it. Verified 5 clean cold-state runs in
+both package 1.3b and again in this session (re-verification after the
+review gate): ports 3000/4000 free before each, both answering within
+10–32s each time, ports free after each `taskkill /PID <top-level pnpm dev
+PID> /T /F`.
+
+**Docker Desktop is not always already running** at session start on this
+machine — `docker info` can fail with a plain connection error. Launch it
+via `Start-Process "shell:AppsFolder\Docker.DockerForWindows.Settings"` (the
+`.exe` is not at the path you'd expect; found via `Get-StartApps`), then poll
+`docker info` until it succeeds (took ~5s once, in this session).
 
 ### Troubleshooting
 
@@ -122,15 +137,55 @@ apps/web/              Next.js 16 App Router app (port 3000)
 
 apps/api/               Express 5 app (port 4000)
   src/
-    app.ts              Express app factory (testable without listening)
+    app.ts              createApp({ extraRoutes? }) — Express app factory
+                        (testable without listening); mounts helmet,
+                        requestId, requestLog, enforceOriginAndContentType,
+                        express.json(), then every module's routes, then
+                        errorHandler last
     index.ts            entry point — calls app.ts, listens
-    env.ts              Zod-validated env config, fails fast
-    logger.ts            pino logger
+    env.ts              Zod-validated env config: DATABASE_URL,
+                        ALLOWED_ORIGINS, TRUST_PROXY, SESSION_TTL_DAYS, PORT,
+                        NODE_ENV
+    logger.ts            pino logger; silent when NODE_ENV=test (D22)
     db/pool.ts           raw pg Pool, used only by the /health/db check
     db/prisma.ts         PrismaClient singleton, built with @prisma/adapter-pg
-    middleware/          request-id.ts, error-handler.ts
-    routes/health.ts     GET /health, /health/db, mirrored at /api/v1/*
-    types/express.d.ts   Request.id / Request.log augmentation
+    lib/                 context.ts (RequestContext, toSharedRole/
+                        toPrismaRole), scoped.ts, password.ts (argon2id +
+                        dummy-hash timing defence, D17), cookies.ts (cookie@2
+                        stringifySetCookie/parseCookie, D16), session.ts
+                        (create/find/touch/delete, sliding 7-day expiry),
+                        audit.ts (writeAudit, tx-scoped), prisma-errors.ts
+                        (PRISMA_ERROR codes + isKnownRequestError — single
+                        source, also used by tests/schema/helpers.ts),
+                        rate-limit.ts (loginEmailRateLimiter,
+                        createGlobalLoginFloodLimiter factory, D23),
+                        route-registry.ts (defineRoute — the one place every
+                        route is declared; getRegisteredRoutes for the audit
+                        test), pagination.ts (toSkipTake/buildPaginationMeta)
+    middleware/          request-id.ts, request-log.ts, error-handler.ts
+                        (ApiError + ZodError/body-parser/Prisma mapping),
+                        session.ts (attachSessionContext), csrf.ts
+                        (enforceOriginAndContentType — Origin allow-list +
+                        JSON-only-when-body-present, D20), validate.ts
+                        (validateRequest — body/params overwrite req.*,
+                        query goes to req.validatedQuery since Express 5's
+                        req.query has no setter, D19)
+    modules/
+      auth/               auth.service.ts, auth.routes.ts — POST
+                        /auth/login,/logout, GET /auth/me, POST
+                        /auth/change-password
+      users/              users.service.ts, users.routes.ts — GET/POST
+                        /users, GET/PATCH /users/:id, POST
+                        /users/:id/{deactivate,reactivate,reset-password};
+                        last-Admin rule via a raw SELECT...FOR UPDATE
+                        (assertNotLastActiveAdmin)
+      audit/              audit.service.ts, audit.routes.ts — GET
+                        /audit-events
+    routes/health.ts     GET /health, /health/db, mirrored at /api/v1/* — now
+                        registered via defineRoute too (auth: 'public'), so
+                        the route-registry audit covers it like every other
+                        route
+    types/express.d.ts   Request.id/.log/.ctx/.validatedQuery augmentation
   prisma/
     schema.prisma         full P0 data model (18 models, 8 enums)
     prisma.config.ts      (actually at apps/api/prisma.config.ts, not under prisma/)
@@ -146,23 +201,56 @@ apps/api/               Express 5 app (port 4000)
                         name ends _dev/_test)
     db-verify-fresh.ts    manual, human-run check that crm_test migrates
                         cleanly from zero — NOT part of `pnpm test`
+  tsconfig.check.json     widened typecheck (tests/, prisma/*.ts, scripts/,
+                        not just src/) — wired into the `typecheck` script
+                        (package 1.2c)
   tests/
     health.test.ts, health-db.test.ts   pre-existing health-check tests
     schema/               11 files proving the DATABASE itself rejects bad
                         data (not application-level validation) — helpers.ts
-                        has the shared setup/cleanup/assertion helpers
+                        re-exports PG_ERROR/isKnownRequestError from
+                        src/lib/prisma-errors.ts (single source, package 1.3)
+    helpers/              reset-database.ts (TRUNCATE all tables, refuses
+                        unless the db name ends `_test`; global beforeEach in
+                        setup.ts), tenant.ts (createTestTenant/
+                        createTwoTestTenants — real argon2id users, known
+                        passwords), http.ts (ALLOWED_ORIGIN,
+                        sessionCookieHeader), route-audit.ts (walks the real
+                        Express 5 route tree — app.router.stack + rawPath,
+                        D19 — and diffs it against the registry)
+    auth/, users/, audit/, lib/, middleware/, shared/   one directory per
+                        concern added in 1.3/1.3b/1.4 — see §7 for what each
+                        proves; 33 test files, 124 tests total as of 1.4
 
 packages/shared/        Zod schemas + enums, consumed as a compiled package
   src/roles.ts           ROLES enum
   src/health.ts          health response Zod schema
   src/loss-reasons.ts    LOSS_REASONS constant + Zod enum (package 1.2)
+  src/permissions.ts     PERMISSIONS map, ROLE_PERMISSIONS, hasPermission (1.3)
+  src/auth.ts            loginSchema, changePasswordSchema, meResponseSchema (1.3)
+  src/common.ts          idParamSchema, pageQuerySchema, sortQuerySchema
+                        factory, booleanQueryParam (NOT z.coerce.boolean() —
+                        see §10) (1.4)
+  src/users.ts           create/update/resetPassword/listQuery/response
+                        schemas for the users module (1.4)
+  src/audit.ts           listAuditEventsQuerySchema, auditEventResponseSchema (1.4)
+  tsconfig.watch.json     incremental build config used only by `dev`/
+                        `dev:prepare` (package 1.3b, D24) — tsconfig.json
+                        (build/typecheck) stays non-incremental per D12
+  scripts/clean-watch-cache.mjs   deletes tsconfig.watch.tsbuildinfo before
+                        every `dev:prepare`, so that cache can never go stale
+                        the way D12's did
+
+scripts/dev.mjs          root-level orchestrator replacing `pnpm -r
+                        --parallel dev` (package 1.3b, D24) — see the `pnpm
+                        dev` note in §4
 
 docker-compose.yml       postgres:17-alpine only; project name
                         growspark-sales-crm, named volume, 127.0.0.1:5433 only
 docker/init-db.sh        creates crm_test (crm_dev comes from POSTGRES_DB)
 
 docs/
-  decisions.md           D1, D2, D4, D6–D15 (see §9 — note the gaps)
+  decisions.md           D1–D25 (see §9)
   PROJECT-STATE.md        this file
 ```
 
@@ -179,6 +267,8 @@ packages pin exact versions, no `^`/`~` ranges, per `CLAUDE.md`).
 | apps/api | `express` | 5.3.0 | |
 | apps/api | `@node-rs/argon2` | 2.2.2 | Password hashing, default algorithm Argon2id |
 | apps/api | `pg` | 8.23.1 | |
+| apps/api | `cookie` | 2.0.2 | Session cookie serialize/parse. v2 renamed `serialize`/`parse` to `stringifySetCookie`/`parseCookie` (D16) |
+| apps/api | `express-rate-limit` | 8.7.5 | Login rate limiting (D16, redesigned in D23) |
 | apps/api | `vitest` / `supertest` | 5.1.1 / 7.3.2 | |
 | apps/web | `next` | 16.4.6 | `next lint` was removed in 16.0.0; ESLint runs directly |
 | apps/web | `react` / `react-dom` | 19.3.1 | |
@@ -189,13 +279,11 @@ packages pin exact versions, no `^`/`~` ranges, per `CLAUDE.md`).
 
 ## 7. What has been built, package by package
 
-All commits are **local only**. `git branch -vv` shows local `main` **9
-commits ahead of the `origin/main` tracking ref**; that ref already matches
-the exact tip of package 1.1b (`5f3ef1d`). **Unverified**: how `origin/main`'s
-local tracking ref came to include those 8 commits — no session ever ran
-`git push`, so either the user pushed them independently outside these
-sessions, or something else updated the local ref (e.g. an IDE auto-fetch).
-Worth asking the user directly rather than assuming either way.
+All commits are **local only**. The previously-flagged mystery ("local main
+9 commits ahead of origin/main") **resolved itself**: `git status` now
+reports local `main` exactly matching `origin/main` — someone pushed outside
+these sessions (still unverified who/when, but no longer an open risk; no
+session has ever run `git push`, including this one).
 
 - **Package 1.1 — scaffold** (`00269d5` … `e3b5c78`, 6 commits): pnpm
   workspace root tooling; Postgres 17 docker-compose; `packages/shared`
@@ -212,6 +300,44 @@ Worth asking the user directly rather than assuming either way.
   amendments before being applied), idempotent seed, 17 new tests proving the
   database rejects bad data. Full detail in `docs/decisions.md` D13–D15 and
   §8 below.
+- **Package 1.2c — housekeeping** (`307e373`): widened typecheck
+  (`tsconfig.check.json`) to cover `tests/`/`prisma/*.ts`/`scripts/`;
+  refreshed the stale README; added the website-repo rule to `CLAUDE.md`;
+  added `resetDatabase()` (TRUNCATE, guarded to `_test`-suffixed databases)
+  and `createTestTenant()`/`createTwoTestTenants()` ahead of package 1.3
+  needing them.
+- **Package 1.3 — API core, sessions, auth, permissions** (`c095a9c`):
+  server-side sessions (opaque token, SHA-256 hash stored, sliding 7-day
+  expiry), argon2id passwords with a login timing defence, the permission
+  map (`PERMISSIONS`/`ROLE_PERMISSIONS`/`hasPermission`), the route registry
+  (`defineRoute` — every route declares `'public'`/`'authenticated'`/a
+  permission; a test audits the live Express route tree against it), the
+  central error handler (ZodError/body-parser/Prisma mapping), CSRF (Origin
+  allow-list + conditional JSON check), login/logout/me/change-password. 90
+  tests. Full detail in `docs/decisions.md` D16–D22.
+- **Package 1.3b — fixes before the gate approval** (`2f43bf4`): (1)
+  resolved D21 (Next's proxy never forwards the real client IP) by replacing
+  the per-IP login limiter with a global flood ceiling (`skipSuccessfulRequests`
+  on both remaining limiters, D23); (2) root-caused and fixed the `pnpm dev`
+  startup race — not a timing issue with `packages/shared`'s rebuild (though
+  that redundant rebuild was real and separately fixed) but `pnpm -r
+  --parallel`'s own scheduler breaking `tsx watch`'s child-process startup
+  (D24); replaced with `scripts/dev.mjs`. Verified with 5 clean cold-state
+  runs, then re-verified again after the review gate (see §15's latest
+  entry). 92 tests (2 net new after the rate-limit test rewrite).
+- **Package 1.4 — users module, last-Admin rule, audit log** (`7e780de`):
+  full user CRUD, the last-Admin rule via a raw `SELECT ... FOR UPDATE`
+  (verified with a real concurrency test — two Admins demoted at once,
+  exactly one succeeds), deactivate/reset-password deleting the target's
+  sessions, one audit row per mutation with before/after metadata and no
+  secrets, cross-organisation 404s. 123 tests (124 after the D25 follow-up
+  fix below). `docs/decisions.md` D25.
+- **Package 1.4 follow-up (same review cycle, not yet its own commit at the
+  time of writing)**: fixed a real gap D25 flagged on review —
+  `user.role_changed`'s audit metadata only carried `oldRole`/`newRole` when
+  a `PATCH` changed both `name` and `role` in one request; it now also
+  carries `oldName`/`newName`. One new test added (124 tests total). Will be
+  committed as part of (or just before) package 1.5.
 
 ## 8. Database
 
@@ -280,6 +406,16 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D13 — Same-organisation integrity is service-level, not a composite FK
 - D14 — Schema-approval amendments (indexes/uniques/CHECKs) applied before Phase B
 - D15 — Package 1.2 policy summary: lead CHECK, loss reasons, snake_case, enum policy, normalised columns, UUID choice, seed rules, Prisma error codes (P2039/P2002/P2003), why `migrate reset` stays manual
+- D16 — Package 1.3 dependencies: `cookie@2.0.2` (renamed exports, v2), `express-rate-limit@8.7.5`
+- D17 — `@node-rs/argon2` library defaults (Argon2id, v0x13, m=19456, t=2, p=1); the login timing-defence dummy hash
+- D18 — body-parser error shapes for malformed/oversized bodies (`status`+`type`, both mapped to code `BAD_REQUEST`)
+- D19 — Express 5's internal route-tree shape (`app.router.stack`, `rawPath`); `req.query` has no setter
+- D20 — CSRF Content-Type check only applies when a request actually carries a body (bodyless writes like logout have none)
+- D21 — Next's `rewrites()` proxy forwards neither `X-Forwarded-For` nor `X-Forwarded-Proto` — addressed by D23
+- D22 — `NODE_ENV=test` during `pnpm test` (vitest sets it; `process.loadEnvFile` never overrides an already-set var) — logger goes silent in tests
+- D23 — Package 1.3b: replaced the per-IP login limiter with a global flood ceiling (`createGlobalLoginFloodLimiter`, default 50/15min); both limiters now use `skipSuccessfulRequests`; real per-IP limiting deferred to a deployment decision
+- D24 — Package 1.3b: root cause and fix for the `pnpm dev` startup race — `pnpm -r --parallel`'s own scheduler breaks `tsx watch`; replaced with `scripts/dev.mjs` (independent `pnpm --filter` children, no new dependency)
+- D25 — Package 1.4: last-Admin `SELECT ... FOR UPDATE` locking pattern; the `isActive` boolean query-param gotcha (`z.coerce.boolean()` is wrong — `Boolean("false")` is `true`); the `sort=<field>:asc|desc` convention; one audit row per `PATCH`, with before/after for every changed field (fixed after review to include `oldName`/`newName`, not just the role pair)
 
 ## 10. Gotchas and lessons learned
 
@@ -321,29 +457,64 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   ESLint still covers them. Known, not fixed.
 - **Prisma 7's CLI refuses certain commands when it detects an AI agent**
   invoking it, demanding fresh human consent every time — §3, D15.
+- **`pnpm -r --parallel` can break `tsx watch` on this machine** — reproduced
+  with zero output, zero errors, even with a single package in scope. Fixed
+  by not using it (`scripts/dev.mjs`, D24). If `pnpm dev` ever seems to hang
+  again with apps/api never logging "api listening", check that this script
+  is still what's being invoked, not a reverted `pnpm -r --parallel dev`.
+- **`z.coerce.boolean()` is wrong for a query-string boolean** —
+  `Boolean("false")` is `true` in JS. Use an explicit `z.enum(['true',
+  'false']).transform(...)` instead (`booleanQueryParam`, D25).
+- **Express 5's `req.query` has no setter** (`defineGetter` only, verified in
+  `express/lib/request.js`) — a validated query goes on `req.validatedQuery`
+  instead (D19). `req.body`/`req.params` are plain properties and can be
+  overwritten normally.
+- **`cookie@2.x` renamed its exports** — no `serialize`/`parse`; use
+  `stringifySetCookie`/`parseCookie` (D16).
+- **Prisma's query builder has no row-locking API** — the last-Admin rule
+  uses a raw `tx.$queryRaw` with `SELECT ... FOR UPDATE`, casting to the
+  Postgres enum by its mapped name (`'ADMIN'::role`, not `'ADMIN'::"Role"`) — D25.
 
 ## 11. Testing
 
-- `pnpm test` (root) runs `packages/shared` (no tests yet), `apps/web` (no
-  tests yet), and `apps/api` (`vitest run`) — 12 test files, 20 tests, all
-  passing as of the last run this session.
+- `pnpm test` (root) runs `packages/shared` (no tests yet — its schemas are
+  exercised via `apps/api/tests/shared/`), `apps/web` (no tests yet), and
+  `apps/api` (`vitest run`) — 33+ test files, 124 tests, all passing as of
+  the last run this session (package 1.4 + the D25 follow-up).
 - `apps/api/tests/schema/helpers.ts` provides `createTestOrganization`,
   `createTestUser`/`LeadSource`/`Company`/`Contact`/`Pipeline`/`Deal`,
   `cleanupOrganization` (deletes a test org's rows in FK-safe,
   children-first order, since everything is `onDelete: Restrict`), and
   `expectRejection(promise, code, constraintNameFragment)` for asserting a
   specific Prisma error code *and* that the right constraint fired.
-- `apps/api/vitest.config.ts` sets `fileParallelism: false` — the schema
-  tests share one database (`crm_test`, via `TEST_DATABASE_URL`) and must not
-  run concurrently.
+  `PG_ERROR`/`isKnownRequestError` are now re-exported from
+  `src/lib/prisma-errors.ts` (single source, since the app's own error
+  handler needs the same codes — package 1.3).
+- **Global test isolation (package 1.2c/1.3b)**: `tests/setup.ts` registers
+  a global `beforeEach` that calls `resetDatabase()` (TRUNCATEs every
+  application table; refuses unless the connected database name ends
+  `_test`) and `resetLoginRateLimiters()` (clears the in-memory rate-limit
+  stores) before *every* test in *every* file — not just the schema tests.
+  Existing per-test `cleanupOrganization()` calls stay in place and are
+  harmless (redundant, not conflicting).
+- `createTestTenant()`/`createTwoTestTenants()` (`tests/helpers/tenant.ts`)
+  build a full organisation with real argon2id-hashed Admin/Staff users
+  (known passwords) and a lead source — used throughout the auth/users/audit
+  tests, not just where they were first built.
+- `apps/api/vitest.config.ts` sets `fileParallelism: false` — all tests share
+  one database (`crm_test`, via `TEST_DATABASE_URL`) and must not run
+  concurrently. Vitest still spawns one worker process per test *file*
+  (`isolate: true`, the default) — module-level state (e.g. the rate-limit
+  stores) is shared across `it()` blocks *within* one file but fresh per
+  file; the global `beforeEach` above exists because of this.
 - **`db:verify-fresh` is manual and intentionally never part of `pnpm test`**
   — it drops and recreates `crm_test` from zero, and Prisma's own CLI refuses
   to run that without fresh human consent each time anyway. Run it yourself
   before a release: `pnpm db:verify-fresh`.
-- **Known gaps**: no tests in `apps/web` or `packages/shared` yet (nothing to
-  test yet — no components/logic beyond scaffolding). No API endpoint tests
-  beyond `/health` (no real endpoints exist yet). Test files aren't
-  type-checked by `tsc` (see §10).
+- **Known gaps**: no tests in `apps/web` yet (no components beyond
+  scaffolding). Test files aren't type-checked by plain `tsc -p
+  tsconfig.json` but now are by the wider `tsconfig.check.json` (package
+  1.2c) wired into `pnpm typecheck`.
 
 ## 12. Conventions every future module must follow
 
@@ -362,30 +533,49 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `{ error: { code, message, details?, requestId } }`.
 - API routes live under `/api/v1/*` (already true for `/health`; follow the
   same prefix for every real endpoint).
+- **Every route is declared via `defineRoute()`**
+  (`apps/api/src/lib/route-registry.ts`), never `app.get()`/`router.post()`
+  etc. directly — `defineRoute` wires the session and permission middleware
+  consistently and records the route so a test can audit the live Express
+  app's route tree against it. `tests/lib/route-registry.test.ts` includes
+  a deliberate proof that this check can actually fail (adds a route
+  bypassing `defineRoute`, asserts it's caught, then asserts a clean app
+  passes again) — a future module can copy that proof pattern instead of
+  re-inventing it.
+- An exclusivity/cardinality invariant that must survive concurrent
+  requests (so far: "at least one active Admin") is enforced with a raw
+  `SELECT ... FOR UPDATE` inside the transaction, not an application-level
+  check-then-write — see `assertNotLastActiveAdmin` in
+  `users.service.ts` for the pattern, and its concurrency test for how to
+  prove it.
 
 ## 13. What's next
 
-From the user's planning roadmap (stated directly, not yet detailed in this
-repo — may be refined):
-
-- **1.3 — API core**: sessions, auth, permission map, rate limiting.
-- **1.4 — Users module**: the "last Admin" rule (can't demote/deactivate the
-  only remaining Admin), audit writer, tests.
-- **1.5 — Web shell**: login page, auth guard, Users page.
+- **1.3, 1.3b, 1.4 are done** (see §7). 1.3's permission map and D20/D21
+  (now D23) were explicit approval gates; both were approved, with D25's
+  audit-metadata gap fixed on review before 1.5 started.
+- **1.5 — Web shell (in progress this session)**: Next.js shell, login page,
+  auth guard, Users page, `docs/MANUAL-TEST-DAY1.md` for the user to
+  click-through in a real browser (this environment has no browser).
+- Beyond 1.5: the user's planning roadmap continues into Day 2 (companies,
+  contacts, leads) — not detailed in this repo yet; don't invent content for
+  it.
 
 ## 14. Open questions and unverified items
 
-- How `origin/main`'s local tracking ref came to include the first 8 commits
-  without any session running `git push` (§7) — ask the user directly.
-- The exact plan for Days 2–5 — the user told me the 7-day shape (build/test/
-  stabilise) but not what each of Days 2–5 covers; don't invent content for
-  them.
-- Whether the user wants the website-repo constraint (§2a) formally added to
-  `CLAUDE.md` — it's currently only in this file and in chat history.
-- `README.md` is stale in two places (still says "package 1.1: scaffolding
-  only" and "No database migrations yet") — not fixed this session since the
-  task was docs-only for `PROJECT-STATE.md`/`CLAUDE.md` specifically; flagging
-  so it doesn't get forgotten.
+- **Resolved**: the `origin/main` tracking mystery (local now matches
+  exactly — still unverified *who* pushed, but no longer blocking); the
+  website-repo rule is now in `CLAUDE.md` (1.2c); `README.md`'s stale
+  "package 1.1 only" wording is fixed (1.2c).
+- **D21/D23 — real per-IP login limiting is deferred, not solved.** It needs
+  the true client IP to reach this API, which it currently does not when
+  traffic comes through the Next.js web app's proxy. This is a deployment-
+  architecture decision (how/whether a reverse proxy in front of both apps
+  sets and forwards `X-Forwarded-For`), not something to engineer around in
+  application code. Revisit before relying on it as a real control.
+- The exact plan for Days 2–5 beyond what's already built — the user told me
+  the 7-day shape (build/test/stabilise) but not full detail for every
+  package; don't invent content for them.
 
 ## 15. Session log
 
@@ -399,3 +589,18 @@ log just records that a session happened and what it covered.
   tests passing in `apps/api` (12 files). Nothing left uncommitted — working
   tree was clean before this handover file was written. Created this file and
   added start/end-of-session rules to `CLAUDE.md`.
+- **2026-11-19 (continued, same day)** — Packages 1.2c, 1.3, 1.3b, and 1.4
+  completed and committed locally (4 more commits: `307e373`, `c095a9c`,
+  `2f43bf4`, `7e780de`; still nothing pushed). 1.3's permission map and D20
+  were an explicit approval gate (approved); D21 (per-IP limiter weakness)
+  and the `pnpm dev` race were fixed in 1.3b before that approval; D25's
+  audit-metadata gap (role_changed missing name before/after when both
+  changed in one PATCH) was fixed on review, before starting 1.5 — one new
+  test added, not yet in its own commit at the time this entry was written
+  (will land with or just before 1.5's commit). Test count: 124 passing in
+  `apps/api`. Re-verified on request, after the review gate: the 5
+  rate-limit tests (`tests/auth/rate-limit.test.ts`) all pass, proving D21's
+  fix; `pnpm dev` ran cleanly 5 more times in a row from a cold state (ports
+  checked free before each, both services answering within 10–32s each
+  time, ports confirmed free after each `taskkill .../T /F`). Working tree
+  clean after each commit. Next: package 1.5 (web shell, login, Users page).

@@ -75,4 +75,52 @@ describe('audit trail for user management actions', () => {
       expect(metadataText).not.toMatch(/password|passwordhash|\bhash\b|\$argon2/);
     }
   });
+
+  it('a single PATCH changing both name and role writes one user.role_changed row with before/after for both fields', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const cookie = sessionCookieHeader(token);
+
+    const createRes = await request(app)
+      .post('/api/v1/users')
+      .set('Origin', ALLOWED_ORIGIN)
+      .set('Cookie', cookie)
+      .send({
+        email: `combined-update-${Date.now()}@example.test`,
+        name: 'Before Name',
+        role: 'STAFF',
+        password: 'a-valid-password-1',
+      });
+    const userId = createRes.body.data.id as string;
+
+    const patchRes = await request(app)
+      .patch(`/api/v1/users/${userId}`)
+      .set('Origin', ALLOWED_ORIGIN)
+      .set('Cookie', cookie)
+      .send({ name: 'After Name', role: 'ADMIN' }); // promotion — never blocked by last-Admin
+    expect(patchRes.status).toBe(200);
+
+    const events = await prisma.auditEvent.findMany({
+      where: { organizationId: tenant.organization.id, entityId: userId },
+      orderBy: { createdAt: 'asc' },
+    });
+    const combinedUpdateEvents = events.filter(
+      (e) => e.action === 'user.role_changed' || e.action === 'user.updated',
+    );
+    expect(combinedUpdateEvents).toHaveLength(1); // one row, not two, for the one PATCH
+
+    const event = combinedUpdateEvents[0]!;
+    expect(event.action).toBe('user.role_changed');
+    expect(event.metadata).toMatchObject({
+      changedFields: ['name', 'role'],
+      oldName: 'Before Name',
+      newName: 'After Name',
+      oldRole: 'STAFF',
+      newRole: 'ADMIN',
+    });
+
+    const metadataText = JSON.stringify(event.metadata ?? {}).toLowerCase();
+    expect(metadataText).not.toMatch(/password|passwordhash|\bhash\b|\$argon2/);
+  });
 });

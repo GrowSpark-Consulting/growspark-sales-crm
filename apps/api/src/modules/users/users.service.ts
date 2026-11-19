@@ -144,22 +144,25 @@ export async function updateUser(
       },
     });
 
-    const changedFields: string[] = [];
-    if (input.name !== undefined && input.name !== existing.name) {
-      changedFields.push('name');
-    }
+    const nameChanged = input.name !== undefined && input.name !== existing.name;
     const roleChanged = input.role !== undefined && user.role !== existing.role;
-    if (roleChanged) {
-      changedFields.push('role');
-    }
+    const changedFields: string[] = [
+      ...(nameChanged ? ['name'] : []),
+      ...(roleChanged ? ['role'] : []),
+    ];
 
     if (changedFields.length > 0) {
       await writeAudit(tx, ctx, {
         action: roleChanged ? 'user.role_changed' : 'user.updated',
         entityType: 'user',
         entityId: user.id,
+        // Before/after for every changed field, not just whichever one
+        // decided the action name — a PATCH that changes name and role
+        // together still writes a single row (D25), and that row must
+        // still show what happened to both.
         metadata: {
           changedFields,
+          ...(nameChanged ? { oldName: existing.name, newName: user.name } : {}),
           ...(roleChanged ? { oldRole: existing.role, newRole: user.role } : {}),
         },
       });
