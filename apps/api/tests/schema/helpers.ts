@@ -1,19 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { prisma } from '../../src/db/prisma.js';
 import type { Prisma } from '../../src/generated/prisma/client.js';
+import { PRISMA_ERROR, isKnownRequestError } from '../../src/lib/prisma-errors.js';
 
-/** Real Postgres error codes Prisma 7 surfaces via the pg driver adapter. */
-export const PG_ERROR = {
-  CHECK_VIOLATION: 'P2039',
-  UNIQUE_VIOLATION: 'P2002',
-  FK_VIOLATION: 'P2003',
-} as const;
-
-export function isKnownRequestError(
-  err: unknown,
-): err is Prisma.PrismaClientKnownRequestError {
-  return typeof err === 'object' && err !== null && 'code' in err && 'meta' in err;
-}
+/**
+ * Re-exported under this suite's existing name rather than duplicated — the
+ * single source of truth is now src/lib/prisma-errors.ts, since the app's
+ * central error handler needs the same codes/check.
+ */
+export const PG_ERROR = PRISMA_ERROR;
+export { isKnownRequestError };
 
 /**
  * Awaits `promise`, asserts it rejected with a Prisma

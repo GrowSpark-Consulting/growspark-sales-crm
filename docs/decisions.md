@@ -207,3 +207,95 @@ is a decision made once and not re-litigated without a new entry.
     lives in `apps/api/scripts/db-verify-fresh.ts` (`pnpm db:verify-fresh`) —
     a human runs it before releases; it is deliberately **not** part of
     `pnpm test`, so routine test runs never drop `crm_test`.
+- **D16** — Package 1.3 dependencies (both pre-approved by the brief; exact
+  versions pinned, current npm "latest" at the time):
+  - **`cookie@2.0.2`** (direct dependency of `apps/api`, not just express's
+    transitive one at `0.7.2`): used directly for the session cookie's
+    serialize/parse instead of the `cookie-parser` middleware, for full
+    control over the exact flags (httpOnly, SameSite=Lax, Secure
+    conditional on NODE_ENV, Max-Age). **cookie@2.x renamed its exports**:
+    there is no `serialize`/`parse` in this major version — the real exports
+    are `stringifySetCookie`/`parseCookie` (verified against its generated
+    `.d.ts`, not assumed from memory of the classic API).
+  - **`express-rate-limit@8.7.5`**: two independent limiters (per-IP,
+    per-normalised-email) for login, each with its own `MemoryStore`
+    instance so counts never cross-contaminate. v8's options use `limit`
+    (not the old `max`), a named `rateLimit` export (not default), and a
+    `resetAll()` method on `MemoryStore` — used by
+    `resetLoginRateLimiters()` (`apps/api/src/lib/rate-limit.ts`) to give
+    every test a clean rate-limit slate, the same principle as
+    `resetDatabase()` (D-in-PROJECT-STATE §0.5).
+- **D17** — `@node-rs/argon2`'s library defaults (verified by inspecting its
+  generated `.d.ts` and by generating a real hash): algorithm **Argon2id**,
+  version `0x13`, memory cost **19456 KiB**, time cost **2**, parallelism
+  **1**, output length **32 bytes**. Used as-is, no custom `Options` passed to
+  `hash()`/`verify()`. The login timing-defense dummy hash
+  (`apps/api/src/lib/password.ts`) is a fixed, hard-coded PHC string
+  generated once with these same defaults — not computed at every process
+  start — so startup is deterministic and an unknown-email login still pays
+  one real argon2 verification, equalising response time against a
+  known-email wrong-password attempt.
+- **D18** — Body-parser (`body-parser@2.4.0`, via `express.json()`) error
+  shapes, verified empirically (a controlled script, not assumed): a
+  malformed JSON body throws with `{ status: 400, type:
+  'entity.parse.failed' }`; an oversized body throws with `{ status: 413,
+  type: 'entity.too.large' }`. Both status codes map to the single error
+  code `BAD_REQUEST` in the central handler, per the brief's own table (400 /
+  415 / 413 all share that one code, only the status differs).
+- **D19** — Express 5's internal route-tree shape, used only by the
+  route-registry test's auditor (`apps/api/tests/helpers/route-audit.ts`),
+  verified empirically against the installed `express@5.3.0` (not part of
+  `@types/express`'s public surface, and different from Express 4):
+  - The route tree lives at **`app.router.stack`**, not Express 4's
+    `app._router.stack`.
+  - Each layer carries a **`rawPath`** string — the path segment it was
+    mounted at — so a full path is reconstructed by concatenating `rawPath`
+    down to each leaf `route` layer.
+  - `req.query` is defined via **`defineGetter` with no setter**
+    (`node_modules/express/lib/request.js`) — assigning to it throws under
+    ESM's always-strict mode. `validateRequest`
+    (`apps/api/src/middleware/validate.ts`) therefore writes a validated
+    query to `req.validatedQuery` instead of overwriting `req.query`;
+    `req.body` and `req.params` have no such restriction and are overwritten
+    directly with the parsed/normalised value.
+- **D20** — `enforceOriginAndContentType`
+  (`apps/api/src/middleware/csrf.ts`) only requires `Content-Type:
+  application/json` when the request actually carries a body (`Content-Length
+  > 0` or `Transfer-Encoding` present) — not unconditionally on every
+  POST/PUT/PATCH/DELETE. Found during package 1.3 verification: a bodyless
+  write (logout) legitimately has no Content-Type header at all from a real
+  `fetch()` call with nothing to send, and the original unconditional check
+  would have 415'd every logout. The Origin check (which still runs
+  unconditionally) is what actually defends against cross-site forgery here —
+  a browser never lets script forge its own Origin header, body or no body —
+  so this relaxation does not weaken CSRF protection.
+- **D21** — **Next.js's `rewrites()` proxy does not forward the real client's
+  IP.** Verified empirically (a throwaway raw HTTP server swapped in on port
+  4000, hit once directly and once through the `localhost:3000` → `/api/*`
+  proxy): a direct request's headers are whatever the caller sent; a request
+  that went through Next's rewrite carries no `X-Forwarded-For` and no
+  `X-Forwarded-Proto` at all (only `X-Forwarded-Host`), and the TCP peer the
+  API sees is the Next.js server process itself (`::1` in dev), never the
+  original browser. Consequence: **every browser request that reaches the
+  API through the web app's proxy looks like it comes from the same IP**, so
+  in the real browser → Next.js → API path, the per-IP login rate limit
+  degenerates to one shared counter across every user of the app, not a
+  genuine per-client-IP limit (the per-email limiter is unaffected — it does
+  not depend on IP). `TRUST_PROXY` stays `false` in dev/this architecture,
+  since there is nothing genuine to trust: trusting a Next-forwarded
+  X-Forwarded-For would trust a header Next itself doesn't even set. Fixing
+  this (e.g. having Next's proxy inject a real client-IP header) is
+  out of scope for package 1.3 and not attempted — flagging it for a
+  decision before Day 6's security pass, since it means the per-IP limiter
+  is currently a weaker control than its name suggests for traffic that
+  goes through the web app (the intake API in Day 5, called server-to-server
+  and not through this proxy, is unaffected).
+- **D22** — `NODE_ENV=test` during `pnpm test`: vitest sets this itself
+  before any test file loads; `tests/setup.ts`'s `process.loadEnvFile`
+  (which loads `NODE_ENV=development` from `.env`) does **not** override it,
+  because `process.loadEnvFile` never overrides an already-set env var (the
+  same behaviour already recorded for `TEST_DATABASE_URL`/`DATABASE_URL`).
+  Confirmed by observing `env.NODE_ENV` resolve to `'test'` in a real test
+  run. The logger (`apps/api/src/logger.ts`) now uses this to set its level
+  to `silent` in tests, so `pnpm test` output isn't drowned in per-request
+  log lines — purely cosmetic, no behavioural effect.
