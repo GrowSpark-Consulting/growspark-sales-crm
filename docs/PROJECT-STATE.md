@@ -320,6 +320,13 @@ apps/api/               Express 5 app (port 4000)
       lead-sources/       lead-sources.service.ts, lead-sources.routes.ts
                         (2.1, D33) — GET /lead-sources, active only,
                         leads:read
+      companies/          companies.service.ts, companies.routes.ts (2.2,
+                        D34) — full CRUD + archive/restore,
+                        companies:read/write, records:archive
+      contacts/           contacts.service.ts, contacts.routes.ts (2.2,
+                        D34) — full CRUD + archive/restore, optional
+                        companyId link (nullable, detachable),
+                        contacts:read/write, records:archive
     routes/health.ts     GET /health, /health/db, mirrored at /api/v1/* — now
                         registered via defineRoute too (auth: 'public'), so
                         the route-registry audit covers it like every other
@@ -379,6 +386,9 @@ packages/shared/        Zod schemas + enums, consumed as a compiled package
   src/priorities.ts      PRIORITIES tuple + z.enum (2.1, D33)
   src/duplicates.ts      duplicateMatchSchema — { id, reason } (2.1, D33)
   src/lead-sources.ts    leadSourceResponseSchema + list response (2.1, D33)
+  src/companies.ts       create/update/listQuery/response schemas,
+                        `{ data, duplicates }` mutation envelope (2.2, D34)
+  src/contacts.ts        same shape as companies.ts, for contacts (2.2, D34)
   tsconfig.watch.json     incremental build config used only by `dev`/
                         `dev:prepare` (package 1.3b, D24) — tsconfig.json
                         (build/typecheck) stays non-incremental per D12
@@ -602,6 +612,17 @@ not something to investigate.
   test && pnpm build` all pass (149 tests: 124 carried over + 25 new, all
   `apps/api`). Full detail in `docs/decisions.md` D32 (the conflict) and
   D33 (this package).
+- **Package 2.2 — Companies and Contacts API**: full CRUD plus
+  archive/restore for both resources (`apps/api/src/modules/companies/`,
+  `modules/contacts/`), server-side search/filter/sort/paging reusing
+  2.1's `buildOrderBy` + 1.4's pagination helpers, Contact-to-Company
+  linking (nullable, so a contact can detach), create/update responses
+  carrying `{ data, duplicates }` via the duplicate finder from 2.1,
+  same-organisation checks on `ownerId`/`companyId` before they're wired
+  onto a row (the FK alone doesn't prove cross-org safety — D13), audit
+  rows for every create/update/archive/restore. `pnpm typecheck && pnpm
+  lint && pnpm test && pnpm build` all pass (187 tests: 149 carried over +
+  38 new, all `apps/api`). Full detail in `docs/decisions.md` D34.
 
 ## 8. Database
 
@@ -687,6 +708,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D31 — Package 2.0: every `page.tsx` under `(protected)/` now carries its own `export const instant = false` (thin Server Component wrapper pattern — `users/page.tsx` now renders a new `UsersPageClient`; Home/Forbidden needed no client split, just the export); `PasswordInput` (Lucide Eye/EyeOff toggle) replaces the plain password `Input` on login, Create user, and Reset password
 - D32 — Conflict found before 2.3: the brief wants an optional note on every lead status change, but `lead_status_histories` has no column for one; stopped and asked; resolved as drop the note entirely, no schema change
 - D33 — Package 2.1: normalisers (`normalize.ts`); `LEAD_STATUSES`/`PRIORITIES` as `as const` tuples + `z.enum` (not TS enums, so no `ROLES`-style bridge cast is needed against Prisma's own literal-union enum types); three explicit duplicate-finder functions (`duplicates.ts`, one per resource — different normalised columns per model); `buildOrderBy` (`list-query.ts`, the one generic helper added, reusing 1.4's pagination helpers unchanged); `GET /api/v1/lead-sources` (new module); `GET /api/v1/users/options` (`auth: 'authenticated'`, Staff-allowed, registered before `/users/:id`)
+- D34 — Package 2.2: `{ data, duplicates }` create/update envelope; `archived` tri-state via `booleanQueryParam`; archive/restore of a record already in that state is 404, not a no-op; blank string clears a text field to null on PATCH, `null` detaches a relation field (`companyId`/`ownerId` schemas changed to `.nullable().optional()` so this is expressible); `blankToNull` typed `(string) => string | null` only, never `string | undefined` in, because of an `exactOptionalPropertyTypes` conflict with Prisma's generated update types; `assertOwnerInOrg`/`assertCompanyInOrg` close the real (not just theoretical) same-organisation FK gap from D13; `lifecycleStatus` stays free text (brief never enumerates it), defaults `'ACTIVE'`
 
 ## 10. Gotchas and lessons learned
 
@@ -784,8 +806,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run` — 2
   files: `tests/lib/format.test.ts` (12 tests, package 1.6),
   `tests/lib/api-client.test.ts` (4 tests, package 1.7)), and `apps/api`
-  (`vitest run`) — 149 `apps/api` tests + 16 `apps/web` tests, 165 total,
-  all passing as of the last run this session (package 2.1).
+  (`vitest run`) — 187 `apps/api` tests + 16 `apps/web` tests, 203 total,
+  all passing as of the last run this session (package 2.2).
 - `apps/web/vitest.config.mts` only sets a resolve alias (`@` -> the package
   root, mirroring `tsconfig.json`) — no database, no global setup, unlike
   `apps/api`'s config; nothing in `apps/web` touches the database.
@@ -1223,5 +1245,39 @@ log just records that a session happened and what it covered.
   && pnpm lint && pnpm test && pnpm build` all pass clean (149 tests: 124
   carried over + 25 new, all `apps/api`; `apps/web` unchanged at 16). No
   process was started this package; nothing to stop. Committed locally;
-  nothing pushed. Full detail in `docs/decisions.md` D32–D33. Next: package
-  2.2 (Companies and Contacts API).
+  nothing pushed. Full detail in `docs/decisions.md` D32–D33.
+- **2026-11-19 (same session, continued) — package 2.2, Companies and
+  Contacts API.** Full CRUD plus archive/restore for both resources, built
+  on 2.1's foundations (normalisers, duplicate finder, `buildOrderBy`).
+  Create/update responses carry `{ data, duplicates }` (duplicates always
+  present, an empty array when there are none, never the error envelope —
+  D29). `archived` is a tri-state list filter via the existing
+  `booleanQueryParam` (hidden by default, `archived=true` shows only
+  archived rows). Archiving an already-archived record (or restoring an
+  active one) is 404, consistent with how every other "not in the state
+  you expected" case in this codebase is handled. A blank string on PATCH
+  clears a text field to null; `companyId`/`ownerId` were changed to
+  `.nullable().optional()` in the shared schemas specifically so a client
+  can send `null` to detach a contact from its company or clear an owner
+  (`z.uuid()` alone has no valid empty-string form to overload for that).
+  Hit one real type-level bug caught by `pnpm typecheck` before any test
+  ran: a `blankToNull` typed to accept/return `string | undefined` made the
+  conditionally-built Prisma update object's inferred type include
+  `undefined` on an optional property, which Prisma's generated
+  `*UpdateInput` types (compiled with `exactOptionalPropertyTypes: true`)
+  reject outright — fixed by narrowing `blankToNull` to a plain
+  `(string) => string | null` and only calling it from a branch that had
+  already excluded `undefined`. Added `assertOwnerInOrg`/
+  `assertCompanyInOrg` in both service files — a real, not just
+  theoretical, instance of the cross-organisation FK gap D13 flagged
+  (Postgres's plain FK on `ownerId`/`companyId` only proves the id exists
+  *somewhere*, not that it's in the caller's organisation); without this, a
+  bogus cross-org id would have silently attached instead of 404ing like
+  every other cross-org reference in the app. `lifecycleStatus` stayed
+  free text (defaulting `'ACTIVE'`) rather than inventing an enum the brief
+  never specified values for. `pnpm typecheck && pnpm lint && pnpm test &&
+  pnpm build` all pass clean (187 tests: 149 carried over + 38 new, all
+  `apps/api`; `apps/web` unchanged at 16). No process was started this
+  package; nothing to stop. Committed locally; nothing pushed. Full detail
+  in `docs/decisions.md` D34. Next: package 2.3 (Leads API) — the note on
+  `LeadStatusHistory` was already resolved in D32, ahead of time.

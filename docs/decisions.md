@@ -864,3 +864,76 @@ read) was itself dated for traceability.
     `normalize.ts`'s character-class regex had an unnecessary escape on
     `-` (`no-useless-escape`) — removed (a trailing `-` in a character
     class is already literal, no escape needed).
+- **D34** — Package 2.2 (Companies and Contacts API):
+  - **Response envelope for create/update**: `{ data, duplicates }`, via
+    `companyWithDuplicatesResponseSchema`/`contactWithDuplicatesResponseSchema`
+    (`packages/shared`) — `duplicates` is always present (an empty array
+    when there are none), never folded into or replacing `data`, and never
+    the `{ error: {...} }` shape, per D29. `GET` (list and single) responses
+    carry no `duplicates` field — only a create or an update can produce a
+    new candidate worth surfacing.
+  - **`archived` list filter is tri-state via the existing
+    `booleanQueryParam`**: omitted or `archived=false` -> only
+    non-archived rows (`archivedAt: null`); `archived=true` -> only
+    archived rows (`archivedAt: { not: null }`). There is no "both" mode —
+    matches the brief's "archived hidden by default."
+  - **Archiving an already-archived record (or restoring an active one) is
+    a 404, not a no-op or a 409.** Both `archiveCompany`/`restoreCompany`
+    (and the Contact equivalents) look the existing row up pre-filtered by
+    the state they expect it to be in (`archivedAt: null` for archive,
+    `archivedAt: { not: null }` for restore) — a mismatch means "the active
+    [or archived] record you asked for doesn't exist," consistent with
+    every other cross-organisation/missing-id case in this codebase using
+    404 rather than a different status per situation. Covered by a test.
+  - **Clearing an optional text field is `""` on `PATCH`, not `null`** —
+    `blankToNull` (duplicated once per service file, not shared: it is two
+    lines and the alternative was a generic helper fighting Prisma's
+    per-model generated types for no real benefit) converts a submitted
+    empty string to `null` in the database; omitting the key entirely
+    leaves the field untouched. Relation-valued optional fields
+    (`companyId`, `ownerId`) instead accept `null` directly (the schemas
+    were changed to `.nullable().optional()` specifically so this works —
+    `z.uuid()` alone rejects `""`, which would otherwise make "detach the
+    owner/company" inexpressible through the API). Both conventions are
+    deliberately different because a UUID field has no valid empty-string
+    form to overload as "clear," while a free-text field does.
+  - **exactOptionalPropertyTypes gotcha**: a `blankToNull` that accepted
+    `string | undefined` and returned `string | null | undefined` made the
+    conditionally-spread object literal's inferred property type include
+    `undefined`, which Prisma's generated `*UpdateInput` types (compiled
+    with `exactOptionalPropertyTypes: true`) reject — Prisma distinguishes
+    "key present with value `undefined`" from "key absent" and only the
+    Zod/application layer is supposed to produce the latter. Fixed by
+    typing `blankToNull` as `(value: string) => string | null` and only
+    ever calling it from inside a ternary that already narrowed
+    `input.field` away from `undefined` — not a runtime bug, a type-level
+    one, caught by `pnpm typecheck` before any test ran.
+  - **Same-organisation integrity for `ownerId` (Company, Contact) and
+    `companyId` (Contact) is enforced in the service**, not left to the FK
+    alone: the database's plain (non-composite) FK only proves the id
+    exists *somewhere*, not that it belongs to the caller's organisation
+    (D13) — a real, reachable gap once Day 2 modules started writing real
+    foreign keys, not just a theoretical one deferred to "Day 6" as D13's
+    schema-package-era note assumed. `assertOwnerInOrg`/
+    `assertCompanyInOrg` (one pair per service file, not shared — same
+    reasoning as `blankToNull`) look the referenced row up scoped to
+    `organizationId` first and 404 if it isn't found, before the write.
+    Covered by cross-organisation tests in both modules.
+  - **`lifecycleStatus` is free text, not a fixed enum** — the brief names
+    the field on Contact but never enumerates its values (unlike lead
+    status/priority, which the database itself constrains with a real
+    Postgres enum, D15's "Enum policy"). Defaults to `'ACTIVE'` server-side
+    on create, and an empty-string `PATCH` resets it back to `'ACTIVE'`
+    rather than to `null` (the column is `NOT NULL` with that default, per
+    `SCHEMA-SUMMARY.md`) — a judgment call, flagged here rather than
+    silently invented.
+  - Tests: full CRUD + archive/restore round-trip for both resources;
+    Staff-can-write proof for both (the opposite of the Users module's
+    Staff-blocked default, per D29); duplicate-warns-but-still-saves for
+    both; blank-clears-to-null; cross-organisation 404s on every mutating
+    route plus list-never-leaks; duplicate detection never matches across
+    organisations; a company/owner id from another organisation is
+    rejected (404) when referenced from Contact/Company create; re-pointing
+    and detaching a Contact's company via `PATCH`. `pnpm typecheck && pnpm
+    lint && pnpm test && pnpm build` all pass clean (187 tests: 149 carried
+    over + 38 new, all `apps/api`; `apps/web` unchanged at 16).

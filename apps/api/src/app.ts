@@ -9,6 +9,8 @@ import { registerAuthRoutes } from './modules/auth/auth.routes.js';
 import { registerUsersRoutes } from './modules/users/users.routes.js';
 import { registerAuditRoutes } from './modules/audit/audit.routes.js';
 import { registerLeadSourcesRoutes } from './modules/lead-sources/lead-sources.routes.js';
+import { registerCompaniesRoutes } from './modules/companies/companies.routes.js';
+import { registerContactsRoutes } from './modules/contacts/contacts.routes.js';
 import { resetRouteRegistry } from './lib/route-registry.js';
 import { env } from './env.js';
 
@@ -47,6 +49,8 @@ export function createApp(options: CreateAppOptions = {}): Express {
   registerUsersRoutes(app);
   registerAuditRoutes(app);
   registerLeadSourcesRoutes(app);
+  registerCompaniesRoutes(app);
+  registerContactsRoutes(app);
   options.extraRoutes?.(app);
 
   app.use(errorHandler);

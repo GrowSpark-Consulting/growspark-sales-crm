@@ -50,3 +50,31 @@ export { duplicateMatchSchema } from './duplicates.js';
 export type { DuplicateMatch } from './duplicates.js';
 export { leadSourceResponseSchema, leadSourcesListResponseSchema } from './lead-sources.js';
 export type { LeadSourceResponse } from './lead-sources.js';
+export {
+  createCompanySchema,
+  updateCompanySchema,
+  listCompaniesQuerySchema,
+  companyResponseSchema,
+  companiesListResponseSchema,
+  companyWithDuplicatesResponseSchema,
+} from './companies.js';
+export type {
+  CreateCompanyInput,
+  UpdateCompanyInput,
+  ListCompaniesQuery,
+  CompanyResponse,
+} from './companies.js';
+export {
+  createContactSchema,
+  updateContactSchema,
+  listContactsQuerySchema,
+  contactResponseSchema,
+  contactsListResponseSchema,
+  contactWithDuplicatesResponseSchema,
+} from './contacts.js';
+export type {
+  CreateContactInput,
+  UpdateContactInput,
+  ListContactsQuery,
+  ContactResponse,
+} from './contacts.js';
