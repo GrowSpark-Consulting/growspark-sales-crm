@@ -211,6 +211,12 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         SearchInput, not Input+Button (D28)
       companies/page.tsx     (2.4, D37) thin wrapper + <Suspense> around
                         CompaniesPageClient (useSearchParams for URL state)
+      companies/new/page.tsx, companies/[id]/page.tsx,
+      companies/[id]/edit/page.tsx   (2.5, D38) thin wrappers; the [id]
+                        routes await the Promise `params` inside a small
+                        async inner component wrapped in <Suspense>
+                        (Next 16 + Cache Components requirement)
+      contacts/page.tsx, contacts/[id]/page.tsx   (2.5, D38) same pattern
   components/
     auth-guard.tsx          useMe()-driven redirect: unauth'd -> /login?
                         next=..., shows a Skeleton while loading; also
@@ -246,7 +252,9 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         (Lucide Eye/EyeOff), used by login/Create user/
                         Reset password; data-table.tsx, record-layout.tsx,
                         confirm-action-dialog.tsx (moved here from
-                        components/users/, always generic) (all 2.4, D37)
+                        components/users/, always generic) (all 2.4, D37);
+                        textarea.tsx (2.5, D38 — same Field treatment as
+                        Input, no shadcn-generated one existed)
     pickers/                owner-select.tsx, company-select.tsx (2.4, D37)
                         — OwnerSelect wraps Select over GET /users/options
                         (form use only); CompanySelect is a hand-built
@@ -255,7 +263,20 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         Companies list: DataTable + SearchInput +
                         useListUrlState, owner/archived filters, sortable
                         Name/Created columns only (the two fields
-                        COMPANY_SORT_FIELDS allows)
+                        COMPANY_SORT_FIELDS allows); company-form.tsx (2.5,
+                        D38 — shared create/edit form, always validated
+                        against createCompanySchema, duplicate-name hint on
+                        blur); create-company-page-client.tsx,
+                        edit-company-page-client.tsx,
+                        company-detail-page-client.tsx (RecordLayout,
+                        Overview + Contacts tabs), company-contacts-tab.tsx
+                        (bounded, unpaginated list scoped to one company)
+    contacts/               contact-form-dialog.tsx (2.5, D38 — create/edit
+                        Dialog, reusable from /contacts or a Company's
+                        Contacts tab via `lockedCompany`; no
+                        alternatePhone/preferredCommunicationMethod or
+                        lifecycleStatus fields — see D38/D36),
+                        contacts-page-client.tsx, contact-detail-page-client.tsx
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx,
                         users-page-client.tsx (2.0, D31 — the Client
@@ -281,6 +302,7 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         page and CompanySelect's async search
     use-debounced-value.ts  (2.4, D37) generic debounce hook, used by
                         CompanySelect
+    use-contacts.ts         (2.5, D38) useContactsList(params), useContact(id)
   lib/
     api-client.ts           ApiError + apiGet/apiPost/apiPatch, same-origin
                         credentials; onUnauthorized(listener) — apiFetch
@@ -292,6 +314,10 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     format.ts               formatINR/formatINRCompact/formatDate/formatTime
                         — Indian grouping + L/Cr compaction, "19 Nov 2026",
                         "2:30 PM" (D27)
+    form-utils.ts           (2.5, D38) stripEmptyOptionalFields — strips
+                        ""-valued keys from a form payload before POST/
+                        PATCH, so "left blank" means null/omitted, not a
+                        literal empty string
   tests/lib/
     format.test.ts          12 unit tests for lib/format.ts (D27)
     api-client.test.ts      4 unit tests for onUnauthorized (mocked fetch,
@@ -718,6 +744,23 @@ not something to investigate.
   typecheck && pnpm lint && pnpm test && pnpm build` all pass (249 tests:
   219 `apps/api` unchanged + 30 `apps/web`, 14 new). Full detail in
   `docs/decisions.md` D37.
+- **Package 2.5 — Companies and Contacts UI**: a real PRD/schema conflict
+  found and resolved before building (Contact's "alternate phone"/
+  "preferred communication method" aren't in the schema — dropped, no
+  migration). Companies get full create/edit pages
+  (`/companies/new`, `/companies/[id]/edit`) and a detail page with a
+  Contacts tab; Contacts get a `ContactFormDialog` (create/edit, reusable
+  from both `/contacts` and a Company's Contacts tab) and a detail page.
+  Both forms validate against the *create* schema even when editing
+  (avoids a real `react-hook-form`/Zod generic conflict — `annualRevenue`'s
+  `z.coerce.number()` has an `unknown` input type in Zod v4). Duplicate
+  hint on company-name blur (no dedicated endpoint — reuses the list's `q`
+  search, warn-only). Archive/restore via the shared `ConfirmActionDialog`
+  everywhere. New `Textarea` component; new `stripEmptyOptionalFields`
+  helper so a blank optional field means `null`, not a literal `""`. `pnpm
+  typecheck && pnpm lint && pnpm test && pnpm build` all pass (249 tests,
+  unchanged — UI wiring over already-tested 2.2 endpoints). Full detail in
+  `docs/decisions.md` D38.
 
 ## 8. Database
 
@@ -807,6 +850,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D35 — Package 2.3: status change is its own `POST /leads/:id/status` (no note, D32); `CONVERTED` as a target excluded by the `OpenLeadStatus` type, as a current state refused with 409; `requirement`/`capturedFields` silently stripped by `PATCH`, not rejected, so they stay read-only; clearing both email and phone on update is a service-level 422, not a DB `P2039`-to-500; `GET /leads/duplicates` (standalone check, brief-requested) and `GET /leads/:id/status-history` (not requested, added anyway — cheap, useful ahead of Day 4); `z.iso.datetime()` verified to require a trailing `Z`, matching every other UTC timestamp in the app
 - D36 — Package 2.3b: archive/restore on a record already in that state is 409 (`ALREADY_ARCHIVED`/`NOT_ARCHIVED`), missing/cross-org stays 404; re-confirmed `activities` can hold `NOTE` for Day 4 (no schema change); Contact `lifecycleStatus` stays free text and hidden from the UI (PRD never enumerates values); added `jsdom`/`@testing-library/react`/`@testing-library/dom` to `apps/web`, `vitest.config.mts` set to `environment: "jsdom"` globally
 - D37 — Package 2.4: `DataTable`/`RecordLayout`/`OwnerSelect`/`CompanySelect`/`useListUrlState` built; `DataTable` wired into a real Companies list page; row-opens-record via a real `Link` in the first column, not row click handling; `OwnerSelect` kept to form use, list-page owner filter is a separate plain `Select` (different semantics: "no filter" vs "owner = nobody"); `CompanySelect` hand-built (no Combobox primitive installed); two `useEffect`s in `CompanySelect` rewritten as render-time state adjustments to satisfy `react-hooks/set-state-in-effect`; `ConfirmActionDialog` moved to `components/ui/`; added `apps/web/tests/setup.ts` for RTL's `afterEach(cleanup)` (not automatic without vitest `globals: true`)
+- D38 — Package 2.5: real PRD/schema conflict on Contact's "alternate phone"/"preferred communication method" (not in the schema) — stopped, asked, dropped both; Companies use full create/edit pages, Contacts use a Dialog (different field counts and reuse contexts); both forms validate against the *create* schema even in edit mode, submitting the full field set as PATCH; `z.coerce.number()`'s `unknown` input type (Zod v4) broke a plain `useForm<CreateCompanyInput>` — fixed with a form-local schema overriding just that one field to a non-coercing validator; duplicate hint on company-name blur reuses the plain list `q` search (no dedicated endpoint, unlike Leads); new `Textarea` and `stripEmptyOptionalFields` (blank optional fields must become `null`/omitted, not a literal `""`)
 
 ## 10. Gotchas and lessons learned
 
@@ -1487,5 +1531,45 @@ log just records that a session happened and what it covered.
   convention. `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all
   pass clean (249 tests: 219 `apps/api` unchanged + 30 `apps/web`, 14
   new). No process was started this package; nothing to stop. Committed
-  locally; nothing pushed. Full detail in `docs/decisions.md` D37. Next:
-  package 2.5 (Companies and Contacts UI).
+  locally; nothing pushed. Full detail in `docs/decisions.md` D37.
+- **2026-11-20 (new session, continued) — package 2.5, Companies and
+  Contacts UI.** Before building the Contact form, found a real PRD/schema
+  conflict and stopped to ask per instruction: PRD §13.1 names "alternate
+  phone (optional)" and "preferred communication method (optional)" as
+  Contact fields, but the already-approved `contacts` table has no columns
+  for either. Resolved: drop both, no migration — confirmed by the user.
+  Built full create/edit pages for Companies (`/companies/new`,
+  `/companies/[id]/edit` — richer, ~15-field form with a two-column grid,
+  matching the Field README's own guidance for that case) and a
+  `ContactFormDialog` for Contacts (fewer fields, launched from two
+  different contexts: standalone from `/contacts`, and "Add contact" on a
+  Company's own Contacts tab via a `lockedCompany` prop). Both forms
+  validate against the *create* schema even when editing, submitting the
+  full field set as `PATCH` — sidesteps a real `react-hook-form`/Zod
+  generic-typing conflict entirely rather than fighting it: Zod v4's
+  `z.coerce.number()` (used for `annualRevenue`) has an *input* type of
+  `unknown` by default (confirmed by reading the installed `zod@4.6.7`'s
+  own `coerce.d.ts`), which broke a plain `useForm<CreateCompanyInput>`
+  everywhere a `FormField` touched it; fixed with a form-local
+  `companyFormSchema` that overrides just that one field with a
+  non-coercing validator, rather than react-hook-form's own documented but
+  messier 3-generic `useForm` fix. Added a Company detail page
+  (`RecordLayout`, Overview + Contacts tabs) and a Contact detail page,
+  both with archive/restore via the shared `ConfirmActionDialog` and
+  success toasts. Added a duplicate hint on company-name blur — no
+  dedicated backend endpoint exists for this (unlike Leads' `GET
+  /leads/duplicates`), so it reuses the ordinary `GET /companies?q=` list
+  endpoint as an approximate, warn-only hint; the real normalised-exact
+  match still runs server-side on save regardless. Added `Textarea`
+  (no shadcn-generated one existed) and `stripEmptyOptionalFields` (a real
+  gap reasoned through before shipping, not caught by a failing test:
+  react-hook-form sends `""` for every untouched optional field, which a
+  create endpoint's `?? null` fallback doesn't catch, so without this a
+  blank field would save as a literal empty string instead of `null`).
+  `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+  (249 tests, unchanged — this package was UI wiring over 2.2's
+  already-tested endpoints; new routes confirmed directly in the build
+  output instead). No process was started this package; nothing to stop.
+  Committed locally; nothing pushed. Full detail in `docs/decisions.md`
+  D38. Next: package 2.6 (Leads UI) — the last package before the combined
+  report and `docs/MANUAL-TEST-DAY2.md`.

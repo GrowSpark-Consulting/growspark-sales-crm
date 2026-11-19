@@ -1191,3 +1191,97 @@ read) was itself dated for traceability.
     see also D36.
   - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
     (249 tests: 219 `apps/api` unchanged + 30 `apps/web`, 14 new).
+- **D38** — Package 2.5 (Companies and Contacts UI):
+  - **Real PRD/schema conflict found before building the Contact form,
+    stopped and asked per instruction**: §13.1 lists "alternate phone
+    (optional)" and "preferred communication method (optional)" as Contact
+    fields; the actual `contacts` table (Day 1, already-approved schema)
+    has neither column. Resolved: drop both, no schema change — the
+    Contact form/detail only surfaces fields the schema actually has
+    (first/last name, email, phone, job title, department, company, owner,
+    location, notes; `lifecycleStatus` stays hidden too, per D36).
+  - **Companies use full pages for create/edit** (`/companies/new`,
+    `/companies/[id]/edit`); **Contacts use a Dialog**
+    (`ContactFormDialog`) for both. Deliberately different: Company has
+    ~15 fields including a multi-line address, better served by a page's
+    two-column grid (Field README: "group related fields in a two-column
+    grid on desktop") than a scrollable modal; Contact has fewer fields and
+    is launched from two different contexts (standalone from `/contacts`,
+    and "Add contact" on a Company's own Contacts tab) — a dialog needs no
+    navigation away from either.
+  - **Both forms validate against the *create* schema in edit mode too**
+    (not the separate `update*Schema`), submitting the full field set as
+    `PATCH`. `updateCompanySchema`/`updateContactSchema` make every field
+    optional (so a single-field `PATCH` elsewhere, e.g. the list's inline
+    archive, stays valid) — but a *form* always redisplays and resubmits
+    every field, and `createCompanySchema`'s only extra requirement
+    (`name` non-blank) is correct for editing too. This sidesteps a real
+    `react-hook-form`/Zod generic-typing conflict entirely (see below) by
+    using one schema, not two nearly-identical ones.
+  - **`z.coerce.number()` (`annualRevenue`) breaks a plain
+    `useForm<CreateCompanyInput>`, found via `pnpm typecheck`**: Zod v4's
+    `ZodCoercedNumber<T = unknown>` defaults its *input* type parameter to
+    `unknown` (verified by reading the installed `zod@4.6.7`'s own
+    `coerce.d.ts`) — so the schema's pre-validation shape (`z.input`) and
+    post-validation shape (`z.output`, `= CreateCompanyInput`) genuinely
+    differ for that one field, and `zodResolver`'s inferred `Resolver` type
+    stopped structurally matching `Control`/`UseFormReturn<
+    CreateCompanyInput>` everywhere a `FormField` used it. First attempt
+    (react-hook-form's own documented fix, the 3-generic
+    `useForm<TFieldValues, TContext, TTransformedValues>` signature) technically
+    worked but left `field.value` typed `unknown` for that one field,
+    pushing the problem into every place it was read. Settled on a
+    simpler fix: a form-local `companyFormSchema =
+    createCompanySchema.extend({ annualRevenue: z.number()...optional()
+    })` — swaps just that one field for a non-coercing validator (the
+    form's own `Input` `onChange` already converts to a real number via
+    `valueAsNumber`, so the field never holds a raw string to coerce from
+    anyway), keeping every other field's validator identical to the shared
+    schema and the whole form on one ordinary generic.
+  - **Duplicate hint on company-name blur has no dedicated backend
+    endpoint to call** (unlike Leads' `GET /leads/duplicates`, D35) — adding
+    one wasn't judged worth it for a single blur-triggered hint. Reuses the
+    ordinary `GET /companies?q=` list endpoint instead: an approximate,
+    live, warn-only hint (D29); the authoritative normalised-exact match
+    still runs server-side on save regardless, via the existing `{ data,
+    duplicates }` response (D34). Not built for Contact fields — only
+    Company name was asked for.
+  - **Archive/restore reuses `ConfirmActionDialog`** (moved to
+    `components/ui/` in D37) from three places per resource: the list row's
+    Actions column, and the detail page's header actions — same
+    confirm-then-call-the-API shape everywhere, success toasts via
+    `sonner`.
+  - **New `Textarea`** (`components/ui/textarea.tsx`): no shadcn-generated
+    one existed yet; built to the same Field treatment as `Input` (the
+    Field README explicitly lists textareas among the components sharing
+    "the same height, border, radius and states"). Used for Company's
+    `description` and Contact's `notes`.
+  - **`stripEmptyOptionalFields`** (`lib/form-utils.ts`): react-hook-form
+    initialises every text field to `""`, not `undefined`, so a submit
+    always sends a key for every optional field even when left blank. Sent
+    as-is, a create endpoint's `?? null` fallback (D34) only catches
+    `null`/`undefined`, not `""`, so a blank optional field would be stored
+    as a literal empty string instead of `null` — found by reasoning
+    through the create path before it shipped, not by a failing test.
+    Strips blank keys from the form payload before every Company/Contact
+    submit, so "left blank" means the same thing through the UI as it
+    already does when calling the API directly.
+  - **`CompanySelect` inside `ContactFormDialog`** needs the linked
+    company's *name* to display when editing a contact that already has
+    one (the form only stores the `companyId`) — fetched via the existing
+    `useCompany` hook, gated so `CompanySelect` only mounts once the name
+    has actually resolved (a brief "Loading…" disabled input otherwise),
+    rather than mounting it early with an empty name: `CompanySelect`'s own
+    render-time-sync logic (D37) only re-syncs its input text when the
+    *id* changes, not the *name*, so mounting it early with a blank name
+    would have left the field stuck blank even after the real name loaded.
+  - Staff has the same standing as Admin on every Companies/Contacts
+    screen built this package (D29) — no admin-only gating was added,
+    unlike the Users module.
+  - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+    (249 tests, unchanged — this package was UI wiring over already-tested
+    2.2 endpoints; no new automated tests were added, per the brief, which
+    asked for manual verification via `MANUAL-TEST-DAY2.md` at the end of
+    2.6 instead). New routes confirmed in the build output: `/companies`,
+    `/companies/new`, `/companies/[id]`, `/companies/[id]/edit`,
+    `/contacts`, `/contacts/[id]`.

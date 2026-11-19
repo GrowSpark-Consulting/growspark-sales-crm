@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Home, Users as UsersIcon, Building2, Sun, Moon, Monitor, LogOut } from "lucide-react";
+import { Home, Users as UsersIcon, Building2, Contact, Sun, Moon, Monitor, LogOut } from "lucide-react";
 import { cn } from "cn";
 import { useMe, ME_QUERY_KEY } from "@/hooks/use-me";
 import { apiPost, ApiError } from "@/lib/api-client";
@@ -28,6 +28,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/users": "Users",
   "/forbidden": "Forbidden",
   "/companies": "Companies",
+  "/contacts": "Contacts",
 };
 
 // Falls back to a prefix match (so /companies/:id also shows "Companies")
@@ -115,6 +116,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </NavItem>
           <NavItem href="/companies" active={pathname.startsWith("/companies")} icon={Building2}>
             Companies
+          </NavItem>
+          <NavItem href="/contacts" active={pathname.startsWith("/contacts")} icon={Contact}>
+            Contacts
           </NavItem>
           {isAdmin && (
             <NavItem href="/users" active={pathname.startsWith("/users")} icon={UsersIcon}>

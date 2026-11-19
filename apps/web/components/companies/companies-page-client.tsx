@@ -1,14 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useCompaniesList } from "@/hooks/use-companies";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { useCompaniesList, COMPANIES_QUERY_KEY_ROOT } from "@/hooks/use-companies";
 import { useUserOptions } from "@/hooks/use-user-options";
 import { useListUrlState } from "@/hooks/use-list-url-state";
+import { apiPost } from "@/lib/api-client";
 import { formatDate } from "@/lib/format";
 import type { CompanyResponse } from "@growspark/shared";
 
@@ -16,6 +20,19 @@ const ANY = "ANY";
 
 export function CompaniesPageClient() {
   const { searchParams, page, pageSize, setParams } = useListUrlState();
+  const queryClient = useQueryClient();
+
+  async function archiveCompany(company: CompanyResponse) {
+    await apiPost(`/api/v1/companies/${company.id}/archive`);
+    toast.success(`${company.name} was archived.`);
+    void queryClient.invalidateQueries({ queryKey: [COMPANIES_QUERY_KEY_ROOT] });
+  }
+
+  async function restoreCompany(company: CompanyResponse) {
+    await apiPost(`/api/v1/companies/${company.id}/restore`);
+    toast.success(`${company.name} was restored.`);
+    void queryClient.invalidateQueries({ queryKey: [COMPANIES_QUERY_KEY_ROOT] });
+  }
 
   const q = searchParams.get("q") ?? "";
   const archived = searchParams.get("archived") === "true";
@@ -73,6 +90,38 @@ export function CompaniesPageClient() {
       header: "Created",
       sortable: true,
       render: (company) => <span className="gs-num text-ink-muted">{formatDate(company.createdAt)}</span>,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      align: "right",
+      render: (company) => (
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" size="icon-sm" asChild aria-label={`Edit ${company.name}`}>
+            <Link href={`/companies/${company.id}/edit`}>
+              <Pencil className="size-4" aria-hidden="true" />
+            </Link>
+          </Button>
+          {company.archivedAt ? (
+            <ConfirmActionDialog
+              triggerLabel="Restore"
+              title="Restore company"
+              description={`${company.name} will reappear in the active companies list.`}
+              confirmLabel="Restore"
+              onConfirm={() => restoreCompany(company)}
+            />
+          ) : (
+            <ConfirmActionDialog
+              triggerLabel="Archive"
+              title="Archive company"
+              description={`${company.name} will be hidden from the active companies list. You can restore it later.`}
+              confirmLabel="Archive"
+              destructive
+              onConfirm={() => archiveCompany(company)}
+            />
+          )}
+        </div>
+      ),
     },
   ];
 
