@@ -33,11 +33,10 @@ open at the end of Day 1.
   user approves an **exact file list** in advance — not a general "go
   ahead."
 - **This tool never pushes to `git`.** Commit locally, every time; never
-  `git push`. (Note: local commits have twice turned out to already be on
-  `origin/main` anyway, pushed by something outside this tool — see
-  `PROJECT-STATE.md` §7. That is not permission to push; it just means
-  "local-only" isn't a safe assumption either way — check before relying
-  on it.)
+  `git push`. The project owner pushes manually, after reviewing each
+  report — so `main` already matching `origin/main` at the start of a
+  session just means the owner reviewed and pushed what was committed
+  before. That is not permission to push from this tool.
 - **One work package per prompt, and stop for review after each one.**
   Report what was built, what was verified (commands + actual output), any
   deviation, any new dependency, known gaps, and the next step — then wait.

@@ -423,17 +423,13 @@ packages pin exact versions, no `^`/`~` ranges, per `CLAUDE.md`).
 
 ## 7. What has been built, package by package
 
-All commits are **local only from this tool's side** — no session run from
-this tool has ever executed `git push`. **The "local matches origin" mystery
-has now recurred twice**, not once: first noted around package 1.4/1.5 ("9
-commits ahead of origin/main" resolving itself), and again at the start of
-the end-of-Day-1 docs handover session (2026-11-19, after packages 1.6 and
-1.7), when `git status` showed `main` already "up to date with
-origin/main" — for commits this tool made locally and never pushed. Something outside these
-sessions (the user directly, an IDE auto-sync feature, a git hook — not
-established which) is pushing independently. Not a risk to flag loudly, but
-stop assuming "local only" means "not on the remote": verify with
-`git status`/`git log origin/main` if it matters for a given task.
+Claude Code itself never runs `git push` — every commit below was made
+locally only, from this tool's side. **The project owner pushes manually**,
+after reviewing each report, so `git status` showing `main` already "up to
+date with origin/main" at the start of a session (seen around package
+1.4/1.5, and again after packages 1.6/1.7) simply means the owner reviewed
+and pushed what was committed before that session started — not a mystery,
+not something to investigate.
 
 - **Package 1.1 — scaffold** (`00269d5` … `e3b5c78`, 6 commits): pnpm
   workspace root tooling; Postgres 17 docker-compose; `packages/shared`
@@ -883,10 +879,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 
 ## 14. Open questions and unverified items
 
-- **Resolved**: the `origin/main` tracking mystery (local now matches
-  exactly — still unverified *who* pushed, but no longer blocking); the
-  website-repo rule is now in `CLAUDE.md` (1.2c); `README.md`'s stale
-  "package 1.1 only" wording is fixed (1.2c).
+- **Resolved**: the website-repo rule is now in `CLAUDE.md` (1.2c);
+  `README.md`'s stale "package 1.1 only" wording is fixed (1.2c).
 - **D21/D23 — real per-IP login limiting is deferred, not solved.** It needs
   the true client IP to reach this API, which it currently does not when
   traffic comes through the Next.js web app's proxy. This is a deployment-
@@ -1044,10 +1038,7 @@ log just records that a session happened and what it covered.
 - **2026-11-19 (continued, same day) — end-of-Day-1 docs handover, no code
   changes.** Full pass over the documentation per the user's explicit
   request, so a brand-new session can continue Day 2 from the repo alone:
-  rewrote this file's stale "mystery resolved itself" framing (`git
-  status` showed `main` already matching `origin/main` again at the start
-  of this session, for the 1.6/1.7 commits — the second time this has
-  happened, not a one-off); added an explicit environment-variable-names
+  added an explicit environment-variable-names
   subsection to §4; added two gotchas that existed in practice but weren't
   written down (`cmd.exe`-style command examples, split-screen windows
   sharing one cookie store); added conventions for the design tokens, the
@@ -1098,3 +1089,9 @@ log just records that a session happened and what it covered.
   no process was started this session; ports 3000 and 4000 were both
   already free at session start and remained so throughout — nothing to
   stop. Committed as one docs-only commit; nothing pushed.
+  **Correction (same session, separate commit)**: the first commit above
+  wrongly framed `main` matching `origin/main` at session start as an
+  unresolved "mystery." The user clarified: they push manually after
+  reviewing each report; Claude Code never pushes. Fixed throughout this
+  file, `NEXT-SESSION-START.md`, and `DAY-1-SUMMARY.md`, and removed from
+  the open-items list entirely (it was never something to investigate).
