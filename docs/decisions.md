@@ -711,3 +711,57 @@ read) was itself dated for traceability.
     Does **not** extend to the Users module (still Admin-only, `users:manage`
     — D16/D25) or to anything deal/pipeline-related, which hasn't been
     discussed yet.
+- **D30** — Notes policy for Day 2/package 2.x, decided before 2.1–2.3 started
+  (no code change, a scope boundary): **no dedicated notes table is added.**
+  `leads.notes` and `contacts.notes` (both already real `text` columns per
+  the existing schema) remain simple internal free-text remarks fields,
+  read/write like any other lead/contact field. `companies` gets **no** notes
+  field at all — not present in the schema, and none is being added. Day 4
+  (activities/timelines) is expected to introduce real notes-as-timeline-
+  entries instead of expanding this. **Checked whether `activities` can
+  already hold a Day-4-style note**, per the user's explicit ask, without
+  changing the schema: yes — `activity_type` already includes `NOTE`
+  alongside `TASK`/`CALL`/`MEETING` (`SCHEMA-SUMMARY.md`'s enum table), and
+  the roadmap's own Day 4 plan ("Notes are created as DONE") matches the
+  existing `activities_done_has_completed_at` CHECK
+  (`status <> 'DONE' OR completed_at IS NOT NULL` — a note would be created
+  with `status: 'DONE'` and `completedAt` set at creation time, satisfying
+  the CHECK immediately). No gap found; nothing to flag for a schema
+  amendment.
+- **D31** — Package 2.0 (Day 1 leftovers):
+  - **Thin Server Component page wrapper is now the rule for every
+    `page.tsx` under `app/(protected)/`** — carries `export const instant =
+    false` itself (not just inherited from the shared layout), with any
+    actual client-side interactivity moved into a separate `"use client"`
+    component the page renders. Applied to all three existing protected
+    pages: `users/page.tsx` (previously a Client Component itself, unable to
+    carry `instant` at all per Next's rule that it throws when exported from
+    a Client Component) is now a thin wrapper rendering the new
+    `components/users/users-page-client.tsx` (`UsersPageClient`, unchanged
+    logic, just moved); `page.tsx` (Home) and `forbidden/page.tsx` stay
+    Server Components with no interactivity to extract, so they simply gained
+    the same `export const instant = false` directly — no artificial client
+    split was introduced for static content. The layout-level `instant =
+    false` (D28) is left in place too, as a safety net for any future page
+    that forgets its own export, not removed in favour of the per-page one.
+  - **`PasswordInput`** (`apps/web/components/ui/password-input.tsx`): a
+    thin wrapper around the existing `Input`, adding a show/hide toggle
+    (Lucide `Eye`/`EyeOff`, `aria-label`/`aria-pressed` reflecting state) —
+    same styling, drops into react-hook-form's `{...field}` spread exactly
+    where a bare `<Input type="password" />` was used before (same pattern
+    `Input`/`SearchInput` already use: a plain function component, no
+    `forwardRef`, relying on React 19 treating `ref` as an ordinary prop that
+    flows through the `...props` spread onto the host `<input>`). Replaces
+    the password field in `login-form.tsx`, `create-user-dialog.tsx`, and
+    `reset-password-dialog.tsx` — all three, not just one, since the brief
+    asked for every password field in the app. No new dependency: `lucide-
+    react` was already pinned (D26).
+  - One lint fix needed: ESLint's `@typescript-eslint/no-empty-object-type`
+    rejected `interface PasswordInputProps extends Omit<...> {}` (a no-member
+    interface is flagged as equivalent to its supertype) — changed to a
+    `type` alias instead, which isn't subject to that rule.
+  - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+    (140 tests, unchanged from package 1.7 — this package touched no test
+    files and added no new logic needing its own test, only UI
+    restructuring/wiring already covered by existing build/typecheck/lint
+    gates). No process was started this package; nothing to stop.

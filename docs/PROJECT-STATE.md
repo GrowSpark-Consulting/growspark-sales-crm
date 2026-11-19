@@ -226,10 +226,17 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         to `bg-ink/40` (the one other hard-coded colour
                         found); search-input.tsx (1.7, D28) — magnifier +
                         clear-x search box wrapping Input, reusable by
-                        Leads/Companies/Contacts later
+                        Leads/Companies/Contacts later; password-input.tsx
+                        (2.0, D31) — Input wrapped with a show/hide toggle
+                        (Lucide Eye/EyeOff), used by login/Create user/
+                        Reset password
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx, confirm-action-dialog.tsx
-                        (generic, used for both deactivate and reactivate)
+                        (generic, used for both deactivate and reactivate),
+                        users-page-client.tsx (2.0, D31 — the Client
+                        Component users/page.tsx's logic was moved into,
+                        unchanged, so page.tsx itself can be a thin Server
+                        Component wrapper)
   hooks/
     use-me.ts              useMe() — GET /auth/me via TanStack Query,
                         retry:false (so a 401 settles fast, not after
@@ -545,6 +552,21 @@ not something to investigate.
   pnpm test && pnpm build` all pass (140 tests: 124 `apps/api` + 16
   `apps/web`, 4 new this package). Full detail in `docs/decisions.md` D28.
 
+- **Package 2.0 — Day 1 leftovers**: (a) every `page.tsx` under
+  `app/(protected)/` is now a thin Server Component wrapper carrying its own
+  `export const instant = false` — `users/page.tsx` (a Client Component
+  before, unable to carry `instant` at all) now renders the new
+  `components/users/users-page-client.tsx` (`UsersPageClient`, logic
+  unchanged); `page.tsx` (Home) and `forbidden/page.tsx`, already Server
+  Components with no interactivity, simply gained the same export directly,
+  no client split introduced for static content. (b) `PasswordInput`
+  (`apps/web/components/ui/password-input.tsx`, Lucide Eye/EyeOff toggle)
+  replaces the plain password `Input` in `login-form.tsx`,
+  `create-user-dialog.tsx`, and `reset-password-dialog.tsx`. `pnpm typecheck
+  && pnpm lint && pnpm test && pnpm build` all pass (140 tests, unchanged —
+  UI restructuring/wiring, no new logic needing its own test). Full detail
+  in `docs/decisions.md` D31.
+
 ## 8. Database
 
 - **Migrations applied via** `prisma migrate deploy` (root: `pnpm db:migrate`,
@@ -625,6 +647,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D26 — Package 1.5: no `proxy.ts` (Next 16 renamed `middleware`, recommends against relying on it for security either way); `lucide-react` missing from the shadcn CLI's own output; `next-themes` is Sonner's dependency, not a separate choice; a `Suspense fallback={null}` is a real blank flash under Cache Components, not a no-op; the error-display split (422 inline on the field, 409/401/403 as a dialog banner, 500/network as a toast with the request id)
 - D27 — Package 1.6: design system tokens mapped through Tailwind v4's `@theme inline`; theming switched to `attribute="data-theme"` with the toggle in the user menu; shadcn's structural `accent` repointed to `surface-hover`/`ink` so GS's brand clay accent (its own `--color-brand-accent*` names) stays rare, not merged into generic hover states; `@custom-variant dark` now targets `[data-theme="dark"]`, not `.dark`, so shadcn's baked-in `dark:*` utilities follow the app's own toggle instead of the OS media query; Button/Badge/Alert variants remapped (not renamed) onto the component READMEs, including fixing `destructive`'s old literal `text-white`; the dialog scrim fixed to the README's documented `bg-ink/40`; `vitest@5.1.1` added to `apps/web` (approved first) for `lib/format.ts`'s unit tests; INR/date/time formatting choices (`Intl.NumberFormat("en-IN")` for grouping, not `style: "currency"`; L/Cr thresholds at exactly 1 lakh/1 crore; `en-US` for reliably upper-cased AM/PM)
 - D28 — Package 1.7: `SearchInput` reusable component (magnifier + clear-x, wraps the existing `Input`); global 401 handling lives in `api-client.ts`'s `apiFetch` itself (`onUnauthorized`), not TanStack Query's `QueryCache`/`MutationCache`, because several mutations are plain awaited calls those hooks never see; `SessionExpiryHandler` clears the cache and redirects once, guarded against both a parallel-request burst and `/login`'s own expected 401 on a wrong password; `useMe()` gets `refetchOnWindowFocus: true` as a deliberate one-query exception to the `QueryClient`'s app-wide `false`; `AuthGuard` revalidates `/auth/me` on every route change after first mount; Cache Components' "instant navigation" dev notice fixed with `export const instant = false` on `(protected)/layout.tsx` only (can't be set on `users/page.tsx`, a Client Component — throws if you try)
+- D30 — Notes policy for Day 2: no dedicated notes table added; `leads.notes`/`contacts.notes` stay plain internal remarks text fields, `companies` gets none; confirmed (no schema change) that `activities.activity_type` already includes `NOTE` and its `activities_done_has_completed_at` CHECK already matches the roadmap's Day 4 "notes are created as DONE" plan
+- D31 — Package 2.0: every `page.tsx` under `(protected)/` now carries its own `export const instant = false` (thin Server Component wrapper pattern — `users/page.tsx` now renders a new `UsersPageClient`; Home/Forbidden needed no client split, just the export); `PasswordInput` (Lucide Eye/EyeOff toggle) replaces the plain password `Input` on login, Create user, and Reset password
 
 ## 10. Gotchas and lessons learned
 
@@ -828,19 +852,28 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `instant`, etc.) must be a Server Component** — Next.js throws if
   `instant` (or most other segment config) is exported from a file with
   `"use client"` at the top. `(protected)/layout.tsx` is one today
-  (`instant = false`, D28). **Not yet applied, but the intended pattern
-  going into Day 2**: keep `page.tsx` itself a thin Server Component
-  (default export, no `"use client"`) that just renders a separate client
+  (`instant = false`, D28). **Applied package 2.0, D31 — this is now the
+  rule for every `page.tsx` under `(protected)/`**: keep `page.tsx` itself a
+  thin Server Component (default export, no `"use client"`, carrying its own
+  `export const instant = false`) that just renders a separate client
   component holding the actual interactive logic (`"use client"` on that
-  inner component instead) — so `page.tsx` stays free to carry its own
-  `instant`/other segment config. `apps/web/app/(protected)/users/page.tsx`
-  is currently `"use client"` directly and does **not** follow this
-  pattern yet — see `docs/NEXT-SESSION-START.md`'s open items.
+  inner component instead), e.g. `users/page.tsx` renders
+  `components/users/users-page-client.tsx`'s `UsersPageClient`. A page with
+  no client-side logic (Home, Forbidden) has nothing to extract — it just
+  carries the `instant = false` export directly on the Server Component
+  page itself. Follow this from the start for every new page (Leads,
+  Companies, Contacts, …), not just when a Cache Components warning
+  appears.
 - **Search inputs reuse `SearchInput`**
   (`apps/web/components/ui/search-input.tsx`) — a magnifier icon runs the
   search (same as Enter), a clear `x` appears once there's text and
   re-runs the search empty. Don't rebuild a separate input+button pattern
   for Leads/Companies/Contacts' search boxes.
+- **Password fields reuse `PasswordInput`**
+  (`apps/web/components/ui/password-input.tsx`, D31) — a show/hide toggle
+  (Lucide Eye/EyeOff) wrapping `Input`, same styling, drop-in replacement
+  for `<Input type="password" />`. Don't add a bare password `Input`
+  anywhere new.
 - **Any new `apiGet`/`apiPost`/`apiPatch` call automatically participates
   in session-expiry handling** — `apps/web/lib/api-client.ts`'s `apiFetch`
   notifies a registered `onUnauthorized` listener on every 401, regardless
@@ -1095,3 +1128,32 @@ log just records that a session happened and what it covered.
   reviewing each report; Claude Code never pushes. Fixed throughout this
   file, `NEXT-SESSION-START.md`, and `DAY-1-SUMMARY.md`, and removed from
   the open-items list entirely (it was never something to investigate).
+- **2026-11-19 (new session) — package 2.0, Day 1 leftovers closed out.**
+  (a) Every `page.tsx` under `app/(protected)/` is now a thin Server
+  Component wrapper carrying its own `export const instant = false`:
+  `users/page.tsx` (previously `"use client"` itself, unable to carry
+  `instant` at all — Next throws) now renders a new
+  `components/users/users-page-client.tsx` (`UsersPageClient`, the exact
+  same logic, just moved, not rewritten); `page.tsx` (Home) and
+  `forbidden/page.tsx`, already plain Server Components with nothing
+  interactive, simply gained the same export directly — no artificial
+  client split was introduced for static content. This closes open item
+  (a) from `NEXT-SESSION-START.md` and is now documented as the standing
+  convention for every future protected page (§12). (b) Added
+  `PasswordInput` (`apps/web/components/ui/password-input.tsx`) — a
+  show/hide toggle (Lucide `Eye`/`EyeOff`, with `aria-label`/`aria-pressed`)
+  wrapping the existing `Input`, same styling, drop-in compatible with
+  react-hook-form's `{...field}` spread. Replaced the bare
+  `<Input type="password" />` in `login-form.tsx`, `create-user-dialog.tsx`,
+  and `reset-password-dialog.tsx` — all three password fields in the app,
+  closing open item (b). One lint fix needed along the way: ESLint's
+  `@typescript-eslint/no-empty-object-type` rejected an empty `interface
+  PasswordInputProps extends Omit<...> {}`; changed to a `type` alias.
+  `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+  (140 tests, unchanged from package 1.7 — this package was UI
+  restructuring/wiring with no new logic needing its own test). No process
+  was started this package (no dev server run); nothing to stop. Committed
+  locally; nothing pushed. Full detail in `docs/decisions.md` D31 (and D30
+  for the separately-recorded notes policy decided at the same time, ahead
+  of package 2.3). Next: package 2.1 (shared list helper, normalisers,
+  duplicate finder, lookups).

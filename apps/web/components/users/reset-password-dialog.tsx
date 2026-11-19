@@ -9,7 +9,7 @@ import { resetUserPasswordSchema, type ResetUserPasswordInput, type UserResponse
 import { apiPost } from "@/lib/api-client";
 import { handleApiFormError } from "@/lib/handle-form-error";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import {
   Dialog,
   DialogContent,
@@ -85,7 +85,7 @@ export function ResetPasswordDialog({ user }: { user: UserResponse }) {
                 <FormItem>
                   <FormLabel>New password</FormLabel>
                   <FormControl>
-                    <Input type="password" autoComplete="new-password" {...field} />
+                    <PasswordInput autoComplete="new-password" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

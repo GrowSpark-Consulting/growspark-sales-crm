@@ -10,6 +10,7 @@ import { apiPost, ApiError } from "@/lib/api-client";
 import { useMe, ME_QUERY_KEY } from "@/hooks/use-me";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -88,7 +89,7 @@ export function LoginForm() {
             <FormItem>
               <FormLabel>Password</FormLabel>
               <FormControl>
-                <Input type="password" autoComplete="current-password" className="h-(--control-lg) text-base" {...field} />
+                <PasswordInput autoComplete="current-password" className="h-(--control-lg) text-base" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
