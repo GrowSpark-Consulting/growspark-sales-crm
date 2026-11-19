@@ -209,6 +209,8 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
       forbidden/page.tsx     403 page; same, no own <h1>
       users/page.tsx         the Users page (see below); search box is now
                         SearchInput, not Input+Button (D28)
+      companies/page.tsx     (2.4, D37) thin wrapper + <Suspense> around
+                        CompaniesPageClient (useSearchParams for URL state)
   components/
     auth-guard.tsx          useMe()-driven redirect: unauth'd -> /login?
                         next=..., shows a Skeleton while loading; also
@@ -242,10 +244,20 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         Leads/Companies/Contacts later; password-input.tsx
                         (2.0, D31) — Input wrapped with a show/hide toggle
                         (Lucide Eye/EyeOff), used by login/Create user/
-                        Reset password
+                        Reset password; data-table.tsx, record-layout.tsx,
+                        confirm-action-dialog.tsx (moved here from
+                        components/users/, always generic) (all 2.4, D37)
+    pickers/                owner-select.tsx, company-select.tsx (2.4, D37)
+                        — OwnerSelect wraps Select over GET /users/options
+                        (form use only); CompanySelect is a hand-built
+                        async combobox (no Combobox primitive installed)
+    companies/              companies-page-client.tsx (2.4, D37) — the
+                        Companies list: DataTable + SearchInput +
+                        useListUrlState, owner/archived filters, sortable
+                        Name/Created columns only (the two fields
+                        COMPANY_SORT_FIELDS allows)
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
-                        reset-password-dialog.tsx, confirm-action-dialog.tsx
-                        (generic, used for both deactivate and reactivate),
+                        reset-password-dialog.tsx,
                         users-page-client.tsx (2.0, D31 — the Client
                         Component users/page.tsx's logic was moved into,
                         unchanged, so page.tsx itself can be a thin Server
@@ -259,6 +271,16 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     use-users.ts            useUsersList(params) — server-side page/pageSize/
                         q/role/isActive, placeholderData keeps the old page
                         visible while a new one loads
+    use-list-url-state.ts   (2.4, D37) page/pageSize off useSearchParams +
+                        setParams(updates) merging into the query string
+                        via router.replace, resets page to 1 on any other change
+    use-user-options.ts     (2.4, D37) useUserOptions() — GET /users/options,
+                        staleTime 60s (shared across OwnerSelect instances)
+    use-companies.ts        (2.4, D37) useCompaniesList(params),
+                        useCompany(id) — used by both the Companies list
+                        page and CompanySelect's async search
+    use-debounced-value.ts  (2.4, D37) generic debounce hook, used by
+                        CompanySelect
   lib/
     api-client.ts           ApiError + apiGet/apiPost/apiPatch, same-origin
                         credentials; onUnauthorized(listener) — apiFetch
@@ -274,9 +296,16 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     format.test.ts          12 unit tests for lib/format.ts (D27)
     api-client.test.ts      4 unit tests for onUnauthorized (mocked fetch,
                         no DOM needed) (D28)
+  tests/components/        (2.4, D37) data-table.test.tsx (7),
+                        search-input.test.tsx (4), owner-select.test.tsx
+                        (3, mocked fetch + QueryClientProvider)
+  tests/setup.ts            (2.4, D37) afterEach(cleanup) for
+                        @testing-library/react — not automatic without
+                        vitest's globals:true, which this repo doesn't use
   vitest.config.mts       `.mts` (not `.ts` — avoids a Vite native-loader
                         ESM/CJS warning); one alias (`@` -> package root)
-                        mirroring tsconfig.json (D27)
+                        mirroring tsconfig.json (D27); environment:"jsdom"
+                        + setupFiles:["./tests/setup.ts"] (2.3b/2.4, D36/D37)
   next.config.ts         proxies /api/:path* to API_INTERNAL_URL; transpiles
                         @growspark/shared
 
@@ -671,6 +700,24 @@ not something to investigate.
   typecheck && pnpm lint && pnpm test && pnpm build` all pass (219
   `apps/api` tests: 215 carried over + 4 new). Full detail in
   `docs/decisions.md` D36.
+- **Package 2.4 — shared UI building blocks**: `DataTable`
+  (`components/ui/data-table.tsx` — server-side paging/sorting, filter bar
+  slot, loading skeleton, empty/error states, first column opens the
+  record via a real `Link`, not row-level click handling); `RecordLayout`
+  (`components/ui/record-layout.tsx` — header/key-fields-strip/Tabs, built
+  but not yet wired into a page); `OwnerSelect` and `CompanySelect`
+  (`components/pickers/`); `useListUrlState`
+  (`hooks/use-list-url-state.ts` — page/pageSize/filters live in the URL).
+  Wired into a real Companies list page (`app/(protected)/companies/`) with
+  a new sidebar entry. `ConfirmActionDialog` moved from `components/users/`
+  to `components/ui/` (it was always generic). Component tests for
+  `DataTable`, `SearchInput`, and `OwnerSelect` (the one picker tested, per
+  the brief) — needed a new `apps/web/tests/setup.ts`
+  (`afterEach(cleanup)`) since RTL's auto-cleanup doesn't self-register
+  without vitest's `globals: true`, which this repo doesn't use. `pnpm
+  typecheck && pnpm lint && pnpm test && pnpm build` all pass (249 tests:
+  219 `apps/api` unchanged + 30 `apps/web`, 14 new). Full detail in
+  `docs/decisions.md` D37.
 
 ## 8. Database
 
@@ -759,6 +806,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D34 — Package 2.2: `{ data, duplicates }` create/update envelope; `archived` tri-state via `booleanQueryParam`; archive/restore of a record already in that state is 404, not a no-op; blank string clears a text field to null on PATCH, `null` detaches a relation field (`companyId`/`ownerId` schemas changed to `.nullable().optional()` so this is expressible); `blankToNull` typed `(string) => string | null` only, never `string | undefined` in, because of an `exactOptionalPropertyTypes` conflict with Prisma's generated update types; `assertOwnerInOrg`/`assertCompanyInOrg` close the real (not just theoretical) same-organisation FK gap from D13; `lifecycleStatus` stays free text (brief never enumerates it), defaults `'ACTIVE'`
 - D35 — Package 2.3: status change is its own `POST /leads/:id/status` (no note, D32); `CONVERTED` as a target excluded by the `OpenLeadStatus` type, as a current state refused with 409; `requirement`/`capturedFields` silently stripped by `PATCH`, not rejected, so they stay read-only; clearing both email and phone on update is a service-level 422, not a DB `P2039`-to-500; `GET /leads/duplicates` (standalone check, brief-requested) and `GET /leads/:id/status-history` (not requested, added anyway — cheap, useful ahead of Day 4); `z.iso.datetime()` verified to require a trailing `Z`, matching every other UTC timestamp in the app
 - D36 — Package 2.3b: archive/restore on a record already in that state is 409 (`ALREADY_ARCHIVED`/`NOT_ARCHIVED`), missing/cross-org stays 404; re-confirmed `activities` can hold `NOTE` for Day 4 (no schema change); Contact `lifecycleStatus` stays free text and hidden from the UI (PRD never enumerates values); added `jsdom`/`@testing-library/react`/`@testing-library/dom` to `apps/web`, `vitest.config.mts` set to `environment: "jsdom"` globally
+- D37 — Package 2.4: `DataTable`/`RecordLayout`/`OwnerSelect`/`CompanySelect`/`useListUrlState` built; `DataTable` wired into a real Companies list page; row-opens-record via a real `Link` in the first column, not row click handling; `OwnerSelect` kept to form use, list-page owner filter is a separate plain `Select` (different semantics: "no filter" vs "owner = nobody"); `CompanySelect` hand-built (no Combobox primitive installed); two `useEffect`s in `CompanySelect` rewritten as render-time state adjustments to satisfy `react-hooks/set-state-in-effect`; `ConfirmActionDialog` moved to `components/ui/`; added `apps/web/tests/setup.ts` for RTL's `afterEach(cleanup)` (not automatic without vitest `globals: true`)
 
 ## 10. Gotchas and lessons learned
 
@@ -853,12 +901,18 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 ## 11. Testing
 
 - `pnpm test` (root) runs `packages/shared` (no tests yet — its schemas are
-  exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run` — 2
-  files: `tests/lib/format.test.ts` (12 tests, package 1.6),
-  `tests/lib/api-client.test.ts` (4 tests, package 1.7)), and `apps/api`
-  (`vitest run`) — 219 `apps/api` tests + 16 `apps/web` tests, 235 total,
-  all passing as of the last run this session (package 2.3b). `apps/web`
-  now runs under a jsdom environment (D36), ready for component tests.
+  exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run` — 5
+  files: `tests/lib/format.test.ts` (12, package 1.6),
+  `tests/lib/api-client.test.ts` (4, package 1.7),
+  `tests/components/data-table.test.tsx` (7),
+  `tests/components/search-input.test.tsx` (4),
+  `tests/components/owner-select.test.tsx` (3) — the last three package
+  2.4), and `apps/api` (`vitest run`) — 219 `apps/api` tests + 30
+  `apps/web` tests, 249 total, all passing as of the last run this session
+  (package 2.4). `apps/web` runs under jsdom (D36) with
+  `tests/setup.ts` registering RTL's `afterEach(cleanup)` (D37) —
+  needed because RTL's own auto-cleanup never self-registers without
+  vitest's `globals: true`, which this repo doesn't use.
 - `apps/web/vitest.config.mts` only sets a resolve alias (`@` -> the package
   root, mirroring `tsconfig.json`) — no database, no global setup, unlike
   `apps/api`'s config; nothing in `apps/web` touches the database.
@@ -1392,5 +1446,46 @@ log just records that a session happened and what it covered.
   now running under jsdom — duration rose from under 1s to ~9s, almost
   entirely jsdom setup, no code change needed). No process was started
   this package; nothing to stop. Committed locally; nothing pushed. Full
-  detail in `docs/decisions.md` D36. Next: package 2.4 (shared UI building
-  blocks).
+  detail in `docs/decisions.md` D36.
+- **2026-11-19 (new session, continued) — package 2.4, shared UI building
+  blocks.** Built `DataTable` (wraps the existing, already-restyled Table
+  components; server-side paging/sorting; filter-bar slot; loading
+  skeleton; empty state with one action; error state with retry; a
+  sortable header is a real focusable `<button>`, not a styled `<div>`;
+  row-opens-record is a real `<Link>` in the first column's own `render`,
+  not row-level click/keydown handling — matches the Table README's "first
+  column is the record name... and opens the record" literally).
+  `RecordLayout` (header + key-fields strip + Tabs) built but not yet
+  wired into a page — only `DataTable` needed real-page proof this
+  package. `OwnerSelect` (wraps `Select` over `GET /users/options`,
+  deliberately kept to form use — a list-page owner *filter* has different
+  "no filter" vs "owner = nobody" semantics, so the Companies list uses a
+  separate plain `Select` instead) and `CompanySelect` (a small hand-built
+  async combobox, debounced 300ms into `GET /companies?q=`, since no
+  Combobox/Command primitive is installed and one wasn't added for a
+  single picker). `useListUrlState` (page/pageSize/filters live in the
+  URL via `router.replace`). Wired all of this into a real Companies list
+  page (`/companies`) — search, owner/archived filters, sort limited to
+  the two fields the API's `COMPANY_SORT_FIELDS` actually allows — plus a
+  new sidebar entry; the "Add company"/row links point at `/companies/new`
+  and `/companies/:id`, which don't exist until package 2.5 (a known,
+  temporary 404, not an oversight). Moved `ConfirmActionDialog` from
+  `components/users/` to `components/ui/` — it was always fully generic.
+  Found and fixed a real ESLint catch in `CompanySelect`: two `useEffect`s
+  syncing derived state tripped `react-hooks/set-state-in-effect`;
+  rewritten using React's own documented "adjust state during render"
+  pattern instead, with no `useEffect` at all. Component tests added for
+  `DataTable`, `SearchInput`, and `OwnerSelect` (the one picker tested per
+  the brief — `CompanySelect`'s async/debounced behaviour was judged not
+  worth the added timer-mocking fragility for this package; it'll be
+  exercised through the Lead form in 2.6 instead). The very first test run
+  surfaced a real gap: `@testing-library/react`'s automatic cleanup never
+  self-registers without vitest's `globals: true` (not used anywhere in
+  this repo), so `render()` calls were piling up across tests in the same
+  file instead of unmounting — fixed with a new `apps/web/tests/setup.ts`
+  (`afterEach(cleanup)`), mirroring `apps/api`'s own existing setup-file
+  convention. `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all
+  pass clean (249 tests: 219 `apps/api` unchanged + 30 `apps/web`, 14
+  new). No process was started this package; nothing to stop. Committed
+  locally; nothing pushed. Full detail in `docs/decisions.md` D37. Next:
+  package 2.5 (Companies and Contacts UI).

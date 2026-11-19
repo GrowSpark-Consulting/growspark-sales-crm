@@ -1078,3 +1078,116 @@ read) was itself dated for traceability.
   - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
     (219 `apps/api` tests: 215 carried over + 4 new; `apps/web` unchanged
     at 16, now running under jsdom).
+- **D37** — Package 2.4 (shared UI building blocks):
+  - **`DataTable`** (`apps/web/components/ui/data-table.tsx`): wraps the
+    existing `Table`/`TableHeader`/`TableRow`/`TableHead`/`TableBody`/
+    `TableCell` (already restyled to the design system in package 1.6),
+    rather than reimplementing table markup — server-side paging/sorting
+    only (the caller owns the actual query; this renders what it's given
+    and reports clicks via `onSortChange`/`onPageChange`), a `filterBar`
+    slot, a loading skeleton (one `Skeleton` row per visible row, capped at
+    8), an empty state (title + description + one action, per the Table
+    README), and an error state with a Retry button. A sortable column
+    header is a real `<button>` inside the `<th>` (keyboard-focusable,
+    `aria-sort` on the cell) with a chevron icon showing direction, not a
+    `<div onClick>`. Row-opens-record is **not** handled by `DataTable`
+    itself — per the Table README ("first column is the record name... and
+    opens the record"), the first column's own `render` returns a real
+    Next.js `<Link>`, which is natively keyboard-accessible, rather than
+    adding row-level click/keydown handling for the same behaviour.
+  - **`RecordLayout`** (`apps/web/components/ui/record-layout.tsx`): header
+    (title, status badge, actions) + a key-fields strip (label/value pairs
+    in a bordered `surface` panel) + `Tabs` (reusing the existing, already
+    design-system-restyled `Tabs` from package 1.6) — the "consistent
+    tabs/sections" the PRD's §13.2 "Record detail experience" asks for
+    across Leads/Companies/Contacts/Deals. Built but not yet wired into a
+    real page — record detail pages are 2.5/2.6's job; only `DataTable`
+    needed real-page proof per this package's brief.
+  - **Pickers**: `OwnerSelect` (`components/pickers/owner-select.tsx`)
+    wraps the existing `Select` over `GET /users/options` (2.1), with an
+    explicit "Unassigned" option mapped to `undefined` — deliberately kept
+    to *form* use (a record's own owner field, including clearing it), not
+    reused for the Companies list page's owner *filter* (where "no filter"
+    and "owner = nobody" are different concepts the same widget shouldn't
+    conflate); the list page's filter is a plain inline `Select` instead.
+    `CompanySelect` (`components/pickers/company-select.tsx`) is a small
+    hand-built async combobox (debounced 300ms into `GET /companies?q=`) —
+    no Combobox/Command primitive is installed (`radix-ui` ships `Select`,
+    not a command palette), and adding `cmdk` for one picker wasn't judged
+    worth a new dependency. Built with `role="combobox"`/`listbox`/`option`
+    and arrow-key/Enter/Escape navigation. Not yet wired into a real page
+    (the Lead "link to existing company" use case is part of 2.6).
+  - **React Compiler ESLint gotcha, found via `pnpm lint`**: `CompanySelect`
+    originally used two `useEffect`s to sync local state from a changed
+    prop (`value`) and to reset `highlightedIndex` when the debounced query
+    changed — both trip `react-hooks/set-state-in-effect`
+    ("calling setState() directly within an effect" risks a cascading
+    render). Rewritten using React's own documented alternative
+    ("adjusting state during rendering" — comparing a tracked previous
+    value against the current one and calling `setState` directly in the
+    render body, guarded by a condition, with no `useEffect` at all).
+    Functionally identical; one fewer render per prop/query change.
+  - **`useListUrlState`** (`apps/web/hooks/use-list-url-state.ts`): the one
+    generic piece of "filters live in the URL" — parses `page`/`pageSize`
+    off `useSearchParams()` and a `setParams(updates)` that merges into the
+    query string via `router.replace` (no history entry per keystroke) and
+    resets `page` to 1 whenever anything *other than* `page` itself
+    changes. Each page still reads its own specific filter values directly
+    off the returned `searchParams` — Leads has five filters, Companies has
+    one; shapes differ too much to generalise further than page/pageSize.
+  - **Proof page: Companies list** (`app/(protected)/companies/`,
+    `components/companies/companies-page-client.tsx`) — the one real page
+    `DataTable` is wired into per this package's brief. Search (name/email/
+    phone, reusing `SearchInput` unchanged), an owner filter (plain
+    `Select`, not `OwnerSelect` — see above), an Active/Archived toggle,
+    sortable Name/Created columns (the only two fields
+    `COMPANY_SORT_FIELDS`, D33/2.2, actually allows — the table's other
+    columns are deliberately not marked sortable, since clicking them would
+    404/422 against the API). Links to `/companies/new` and
+    `/companies/:id` are present but those routes don't exist yet
+    (package 2.5) — a deliberate, temporary 404 until then, not an
+    oversight. A new "Companies" sidebar entry and top-bar title were
+    added; `pageTitle()` in `app-shell.tsx` now also prefix-matches
+    (`/companies/:id` → "Companies"), not just the flat exact-route lookup
+    from package 1.6 (still noted as a from-the-route-tree improvement to
+    make eventually, per that package's own comment).
+  - **`ConfirmActionDialog` moved** from `components/users/` to
+    `components/ui/confirm-action-dialog.tsx` — it was already fully
+    generic (any confirm-then-call-the-API action), just mis-filed under
+    the one module that happened to use it first; Companies/Contacts/
+    Leads archive-restore (2.5/2.6) reuse it unchanged from its new home.
+  - **Component tests** (`apps/web/tests/components/`): `DataTable` (renders
+    rows/columns, empty state, error state + retry, loading skeleton,
+    sortable-header click, Previous/Next disabled state and page-change
+    callback), `SearchInput` (Enter, magnifier click, clear button
+    appearing only with text and re-searching empty, whitespace trimming),
+    and `OwnerSelect` (the one picker — fetches the right endpoint, renders
+    an accessible combobox trigger, and the options query is cached/shared
+    rather than refetched on every prop change). **`CompanySelect` was not
+    separately unit-tested** — the brief asked for one picker, and
+    `OwnerSelect` was chosen as the more reliable one to test in jsdom
+    (`CompanySelect`'s debounced async dropdown adds timer-mocking
+    fragility a second component test wasn't worth taking on for this
+    package); it will be exercised through the Lead form in package 2.6
+    instead.
+  - **A real `afterEach(cleanup)` was missing for `apps/web`'s component
+    tests, found immediately on first run**: `@testing-library/react`'s
+    automatic cleanup only self-registers when it detects vitest's
+    `globals: true` (not used anywhere in this repo — `apps/api`'s own
+    `tests/setup.ts` imports hooks explicitly too, same convention); without
+    it, every `render()` within one test file piled up in the jsdom
+    document instead of unmounting, so a later test's `getByRole` matched
+    more than one element. Fixed with `apps/web/tests/setup.ts`
+    (`afterEach(() => cleanup())`) wired into `vitest.config.mts`'s new
+    `setupFiles`, mirroring `apps/api`'s existing setup-file pattern rather
+    than inventing a new one.
+  - **No `@testing-library/jest-dom` or `@testing-library/user-event`
+    added** — neither is a true `@testing-library/react` peer requirement
+    (tests use `fireEvent`, already re-exported by `@testing-library/react`
+    itself, and plain `expect(...).toBe(...)`/`.toBeTruthy()` assertions
+    instead of jest-dom's convenience matchers like `toBeInTheDocument`),
+    and the approval in this session was scoped to "jsdom and
+    @testing-library/react (and its required companions)" specifically —
+    see also D36.
+  - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+    (249 tests: 219 `apps/api` unchanged + 30 `apps/web`, 14 new).

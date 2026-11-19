@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Home, Users as UsersIcon, Sun, Moon, Monitor, LogOut } from "lucide-react";
+import { Home, Users as UsersIcon, Building2, Sun, Moon, Monitor, LogOut } from "lucide-react";
 import { cn } from "cn";
 import { useMe, ME_QUERY_KEY } from "@/hooks/use-me";
 import { apiPost, ApiError } from "@/lib/api-client";
@@ -27,10 +27,19 @@ const PAGE_TITLES: Record<string, string> = {
   "/": "Home",
   "/users": "Users",
   "/forbidden": "Forbidden",
+  "/companies": "Companies",
 };
 
+// Falls back to a prefix match (so /companies/:id also shows "Companies")
+// once more than the flat lookup's exact routes exist — still revisit with
+// a real route-tree-derived title once the page count grows further
+// (noted in package 1.6, D27).
 function pageTitle(pathname: string): string {
-  return PAGE_TITLES[pathname] ?? "Grow Spark CRM";
+  if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  const prefixMatch = Object.entries(PAGE_TITLES).find(
+    ([path]) => path !== "/" && pathname.startsWith(`${path}/`)
+  );
+  return prefixMatch?.[1] ?? "Grow Spark CRM";
 }
 
 function NavItem({
@@ -103,6 +112,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="flex flex-col gap-1">
           <NavItem href="/" active={pathname === "/"} icon={Home}>
             Home
+          </NavItem>
+          <NavItem href="/companies" active={pathname.startsWith("/companies")} icon={Building2}>
+            Companies
           </NavItem>
           {isAdmin && (
             <NavItem href="/users" active={pathname.startsWith("/users")} icon={UsersIcon}>

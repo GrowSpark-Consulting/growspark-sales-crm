@@ -14,6 +14,12 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ApiError } from "@/lib/api-client";
 
+/**
+ * A confirm-then-call-the-API dialog: archive/restore/deactivate/reactivate,
+ * anything that's one action behind one confirmation. Originally built for
+ * the Users module (package 1.4); moved here in package 2.4 since
+ * Companies/Contacts/Leads archive-restore all reuse it unchanged.
+ */
 export function ConfirmActionDialog({
   triggerLabel,
   title,

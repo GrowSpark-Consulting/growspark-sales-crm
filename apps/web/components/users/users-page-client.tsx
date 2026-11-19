@@ -16,7 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { CreateUserDialog } from "@/components/users/create-user-dialog";
 import { EditUserDialog } from "@/components/users/edit-user-dialog";
 import { ResetPasswordDialog } from "@/components/users/reset-password-dialog";
-import { ConfirmActionDialog } from "@/components/users/confirm-action-dialog";
+import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 
 const PAGE_SIZE = 10;
 const ANY = "ANY";
