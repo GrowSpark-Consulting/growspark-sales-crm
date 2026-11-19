@@ -78,3 +78,25 @@ export type {
   ListContactsQuery,
   ContactResponse,
 } from './contacts.js';
+export {
+  createLeadSchema,
+  updateLeadSchema,
+  updateLeadStatusSchema,
+  listLeadsQuerySchema,
+  leadDuplicateCheckQuerySchema,
+  leadResponseSchema,
+  leadsListResponseSchema,
+  leadWithDuplicatesResponseSchema,
+  leadDuplicatesResponseSchema,
+  leadStatusHistoryResponseSchema,
+  leadStatusHistoryListResponseSchema,
+} from './leads.js';
+export type {
+  CreateLeadInput,
+  UpdateLeadInput,
+  UpdateLeadStatusInput,
+  ListLeadsQuery,
+  LeadDuplicateCheckQuery,
+  LeadResponse,
+  LeadStatusHistoryResponse,
+} from './leads.js';

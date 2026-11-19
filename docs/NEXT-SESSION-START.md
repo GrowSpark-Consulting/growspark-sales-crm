@@ -79,26 +79,36 @@ specific package you're about to work on.
 
 ## The Day 2 plan, as far as it's known
 
-**Do not invent package content beyond what's written here.** The exact
-scope of 2.1 through 2.6 has not been detailed in this repo — confirm it
-with the user before assuming what each one covers. What *is* known:
+**Packages 2.0 through 2.3 are done** (see `PROJECT-STATE.md` §7 for full
+detail, `decisions.md` D30–D35). **2.4–2.6 (the frontend UI for leads/
+companies/contacts) have not been started and are not detailed in this
+repo** — confirm exact scope with the user before building ahead of it;
+do not invent package content beyond what's written here.
 
-- **2.0 — Day 1 leftovers first.** Close out (or at least explicitly
-  re-confirm) the open items below before starting new feature work, so
-  Day 2 doesn't build on top of an unresolved Day 1 question.
-- **2.1–2.3 — backend.** The next backend packages, in order. Based on the
-  project's own stated sales journey (leads → companies/contacts → deals),
-  this almost certainly means the Company/Contact/Lead data model and
-  services, but the exact package boundaries (what's in 2.1 vs. 2.2 vs.
-  2.3) aren't written down — ask.
-- **2.4–2.6 — UI.** The corresponding frontend work for whatever 2.1–2.3
-  build. Same caveat: exact scope not detailed yet.
-- **Four rules were approved on 2026-11-19 for this work** (full detail in
-  `decisions.md` D29 — read the real entry before building against this
-  summary):
+- **2.0 — Day 1 leftovers — done.** Every protected `page.tsx` is now a
+  thin Server Component wrapper carrying its own `export const instant =
+  false` (the standing convention for every future page, see
+  `PROJECT-STATE.md` §12); `PasswordInput` (show/hide) replaced the three
+  bare password `Input`s.
+- **2.1 — backend foundations — done.** Normalisers
+  (`packages/shared/src/normalize.ts`), the duplicate finder
+  (`apps/api/src/lib/duplicates.ts`), `buildOrderBy`
+  (`apps/api/src/lib/list-query.ts`), `GET /api/v1/lead-sources`, `GET
+  /api/v1/users/options`.
+- **2.2 — Companies and Contacts API — done.** Full CRUD + archive/restore
+  for both, `apps/api/src/modules/companies/` and `modules/contacts/`.
+- **2.3 — Leads API — done.** Full CRUD + archive/restore,
+  `POST /leads/:id/status` (the D29 status workflow, no note field — see
+  D32), `GET /leads/duplicates`, `GET /leads/:id/status-history`.
+  `apps/api/src/modules/leads/`.
+- **2.4–2.6 — UI.** The corresponding frontend work for 2.1–2.3's
+  Companies/Contacts/Leads APIs. Exact scope not detailed yet — ask.
+- **Four rules were approved on 2026-11-19 for this work, and are now
+  implemented** (full detail in `decisions.md` D29 — read the real entry,
+  not just this summary):
   - Lead status: any open status → any other open status directly;
     `CONVERTED` only through the (Day 3) convert action; every change
-    writes a `LeadStatusHistory` row.
+    writes a `LeadStatusHistory` row (no note — D32).
   - Lead creation requires a name, plus an email or a phone (not
     necessarily both).
   - Duplicates (exact normalised email, phone, or company name match)
@@ -129,28 +139,20 @@ it isn't lost. As currently planned (per the user, 2026-11-19):
 Each of these was re-checked against the actual current code before being
 written down below, not carried over on assumption.
 
-**(a) The Cache Components "instant navigation" dev notice still appears
-on `/users`, even after package 1.7's fix.** Confirmed in code:
-`apps/web/app/(protected)/layout.tsx` does have `export const instant =
-false;`, but `apps/web/app/(protected)/users/page.tsx` is a Client
-Component (`"use client"` at the top, hooks used directly in the page) —
-Next.js throws if `instant` is exported from a Client Component, so it
-cannot carry its own exemption. Per the user's own browser testing, the
-layout-level `false` alone is not enough to suppress the framework's
-default per-Page-segment validation for a descendant page that has no
-config of its own. **Planned fix, not yet implemented**: restructure
-`users/page.tsx` into a thin Server Component wrapper (default export, no
-`"use client"`, carrying `export const instant = false` itself) that
-renders a new `"use client"` component (e.g. `UsersPageClient`) holding
-today's actual logic unchanged. This is now a documented convention for
-Day 2's own pages too (`PROJECT-STATE.md` §12) — build new interactive
-pages this way from the start, rather than retrofitting later.
+**(a) RESOLVED in package 2.0.** `users/page.tsx` is now a thin Server
+Component wrapper (`export const instant = false`) rendering
+`components/users/users-page-client.tsx`'s `UsersPageClient`, exactly the
+planned fix below. Every other protected `page.tsx` follows the same
+convention (`PROJECT-STATE.md` §12, `decisions.md` D31). Original note,
+kept for context: the Cache Components "instant navigation" dev notice
+kept appearing on `/users` even after package 1.7's layout-level fix,
+because `users/page.tsx` was a Client Component and Next.js throws if
+`instant` is exported from one.
 
-**(b) No show/hide password toggle anywhere.** Confirmed by grep: every
-password field (`login-form.tsx`, `create-user-dialog.tsx`,
-`reset-password-dialog.tsx`) is a plain `<Input type="password">` with no
-eye icon, no `showPassword` state. Still open — a `PasswordInput`
-component does not exist yet.
+**(b) RESOLVED in package 2.0.** `PasswordInput`
+(`apps/web/components/ui/password-input.tsx`, Lucide Eye/EyeOff toggle)
+now wraps every password field (`login-form.tsx`, `create-user-dialog.tsx`,
+`reset-password-dialog.tsx`). See `decisions.md` D31.
 
 **(c) The Users search value lives in component state, not the URL.**
 Confirmed by grep: `apps/web/app/(protected)/users/page.tsx` uses

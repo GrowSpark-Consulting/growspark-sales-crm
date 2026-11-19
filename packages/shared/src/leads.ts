@@ -1,0 +1,156 @@
+import { z } from 'zod';
+import { pageQuerySchema, paginationMetaSchema, sortQuerySchema, booleanQueryParam } from './common.js';
+import { duplicateMatchSchema } from './duplicates.js';
+import { leadStatusSchema, openLeadStatusSchema } from './lead-statuses.js';
+import { prioritySchema } from './priorities.js';
+
+function optionalTrimmed(max: number) {
+  return z.string().trim().max(max).optional();
+}
+
+const leadCreatableFields = {
+  firstName: z.string().trim().min(1, 'First name is required').max(200, 'First name is too long'),
+  lastName: optionalTrimmed(200),
+  email: z.string().trim().max(320, 'Email is too long').optional(),
+  phone: optionalTrimmed(50),
+  companyName: optionalTrimmed(300),
+  website: optionalTrimmed(2000),
+  jobTitle: optionalTrimmed(200),
+  industry: optionalTrimmed(200),
+  sourceId: z.uuid('A lead source is required'),
+  sourceDetail: optionalTrimmed(200),
+  priority: prioritySchema.optional(),
+  ownerId: z.uuid().nullable().optional(),
+  purchaseTimeline: optionalTrimmed(200),
+  nextFollowUpAt: z.iso.datetime().nullable().optional(),
+  notes: z.string().trim().max(5000, 'Notes are too long').optional(),
+};
+
+/**
+ * D29: a lead needs a name plus at least one of an email or a phone.
+ * `requirement`/`capturedFields` are only settable here — see
+ * updateLeadSchema below for why they're read-only after creation.
+ */
+export const createLeadSchema = z
+  .object({
+    ...leadCreatableFields,
+    requirement: z.string().trim().max(5000, 'Requirement is too long').optional(),
+    estimatedBudget: z.coerce.number().nonnegative('Estimated budget cannot be negative').optional(),
+    capturedFields: z.record(z.string(), z.unknown()).optional(),
+  })
+  .refine((data) => Boolean(data.email?.trim()) || Boolean(data.phone?.trim()), {
+    message: 'Provide an email or a phone number',
+    path: ['email'],
+  });
+export type CreateLeadInput = z.infer<typeof createLeadSchema>;
+
+/**
+ * Deliberately excludes `requirement` and `capturedFields` — the roadmap's
+ * 2.3 brief: "the lead keeps its original enquiry fields ... read-only
+ * after creation." Also excludes `status`/`convertedAt`: status changes go
+ * through the dedicated `updateLeadStatusSchema` endpoint only (D29).
+ */
+export const updateLeadSchema = z
+  .object(leadCreatableFields)
+  .partial()
+  .refine((data) => Object.keys(data).length > 0, { message: 'At least one field must be provided' });
+export type UpdateLeadInput = z.infer<typeof updateLeadSchema>;
+
+/**
+ * D29: any open status may move to any other open status directly.
+ * CONVERTED is reachable only through the Day 3 convert action — excluded
+ * here structurally (openLeadStatusSchema), not just checked at runtime.
+ * No `note` field — see docs/decisions.md D32.
+ */
+export const updateLeadStatusSchema = z.object({
+  status: openLeadStatusSchema,
+});
+export type UpdateLeadStatusInput = z.infer<typeof updateLeadStatusSchema>;
+
+const LEAD_SORT_FIELDS = [
+  'createdAt',
+  'updatedAt',
+  'firstName',
+  'lastName',
+  'status',
+  'priority',
+  'nextFollowUpAt',
+] as const;
+
+export const listLeadsQuerySchema = pageQuerySchema.extend({
+  sort: sortQuerySchema(LEAD_SORT_FIELDS),
+  q: z.string().trim().min(1).optional(),
+  status: leadStatusSchema.optional(),
+  sourceId: z.uuid().optional(),
+  ownerId: z.uuid().optional(),
+  priority: prioritySchema.optional(),
+  archived: booleanQueryParam.optional(),
+  createdFrom: z.iso.datetime().optional(),
+  createdTo: z.iso.datetime().optional(),
+});
+export type ListLeadsQuery = z.infer<typeof listLeadsQuerySchema>;
+
+export const leadDuplicateCheckQuerySchema = z.object({
+  email: z.string().trim().optional(),
+  phone: z.string().trim().optional(),
+  companyName: z.string().trim().optional(),
+  excludeId: z.uuid().optional(),
+});
+export type LeadDuplicateCheckQuery = z.infer<typeof leadDuplicateCheckQuerySchema>;
+
+export const leadResponseSchema = z.object({
+  id: z.string(),
+  firstName: z.string(),
+  lastName: z.string().nullable(),
+  email: z.string().nullable(),
+  phone: z.string().nullable(),
+  companyName: z.string().nullable(),
+  website: z.string().nullable(),
+  jobTitle: z.string().nullable(),
+  industry: z.string().nullable(),
+  sourceId: z.string(),
+  sourceDetail: z.string().nullable(),
+  status: leadStatusSchema,
+  priority: prioritySchema,
+  ownerId: z.string().nullable(),
+  requirement: z.string().nullable(),
+  estimatedBudget: z.string().nullable(),
+  purchaseTimeline: z.string().nullable(),
+  nextFollowUpAt: z.string().nullable(),
+  notes: z.string().nullable(),
+  capturedFields: z.unknown().nullable(),
+  convertedAt: z.string().nullable(),
+  archivedAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type LeadResponse = z.infer<typeof leadResponseSchema>;
+
+export const leadsListResponseSchema = z.object({
+  data: z.array(leadResponseSchema),
+  meta: paginationMetaSchema,
+});
+
+/** Create/update response: D29 duplicates warn, so they ride alongside `data`, never replacing it. */
+export const leadWithDuplicatesResponseSchema = z.object({
+  data: leadResponseSchema,
+  duplicates: z.array(duplicateMatchSchema),
+});
+
+export const leadDuplicatesResponseSchema = z.object({
+  data: z.array(duplicateMatchSchema),
+});
+
+export const leadStatusHistoryResponseSchema = z.object({
+  id: z.string(),
+  leadId: z.string(),
+  fromStatus: leadStatusSchema.nullable(),
+  toStatus: leadStatusSchema,
+  changedById: z.string(),
+  createdAt: z.string(),
+});
+export type LeadStatusHistoryResponse = z.infer<typeof leadStatusHistoryResponseSchema>;
+
+export const leadStatusHistoryListResponseSchema = z.object({
+  data: z.array(leadStatusHistoryResponseSchema),
+});

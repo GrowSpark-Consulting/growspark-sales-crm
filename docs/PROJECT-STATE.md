@@ -33,6 +33,19 @@ manual click-through script (`docs/MANUAL-TEST-DAY1.md`, now including
 design-system and session-expiry sections) is ready for the user to run in
 a real browser, which this session could not do itself.
 
+**Update, same calendar date, a later session**: **Day 2's backend
+(packages 2.0 through 2.3) is also now complete** — see §7 for full detail
+per package. In short: the Cache Components page-wrapper pattern and a
+password show/hide toggle (2.0); normalisers, the duplicate finder, and
+two small lookup endpoints (2.1); full Companies and Contacts CRUD with
+archive/restore (2.2); full Leads CRUD with archive/restore, a separate
+status-change endpoint implementing D29's status workflow, and a
+duplicate-check endpoint (2.3). 215 `apps/api` tests (up from 124 at the
+end of Day 1) and 16 `apps/web` tests, all passing. Nothing has been
+pushed. Packages 2.4–2.6 (the corresponding frontend UI for leads/
+companies/contacts) have not been started and are not detailed in this
+repo yet.
+
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
@@ -327,6 +340,11 @@ apps/api/               Express 5 app (port 4000)
                         D34) — full CRUD + archive/restore, optional
                         companyId link (nullable, detachable),
                         contacts:read/write, records:archive
+      leads/              leads.service.ts, leads.routes.ts (2.3, D35) —
+                        full CRUD + archive/restore, POST /:id/status
+                        (separate from PATCH, no note), GET
+                        /:id/status-history, GET /duplicates (registered
+                        before /:id), leads:read/write, records:archive
     routes/health.ts     GET /health, /health/db, mirrored at /api/v1/* — now
                         registered via defineRoute too (auth: 'public'), so
                         the route-registry audit covers it like every other
@@ -389,6 +407,9 @@ packages/shared/        Zod schemas + enums, consumed as a compiled package
   src/companies.ts       create/update/listQuery/response schemas,
                         `{ data, duplicates }` mutation envelope (2.2, D34)
   src/contacts.ts        same shape as companies.ts, for contacts (2.2, D34)
+  src/leads.ts           create/update/status/listQuery/response schemas,
+                        duplicate-check query, status-history schema
+                        (2.3, D35)
   tsconfig.watch.json     incremental build config used only by `dev`/
                         `dev:prepare` (package 1.3b, D24) — tsconfig.json
                         (build/typecheck) stays non-incremental per D12
@@ -623,6 +644,21 @@ not something to investigate.
   rows for every create/update/archive/restore. `pnpm typecheck && pnpm
   lint && pnpm test && pnpm build` all pass (187 tests: 149 carried over +
   38 new, all `apps/api`). Full detail in `docs/decisions.md` D34.
+- **Package 2.3 — Leads API**: full CRUD plus archive/restore
+  (`apps/api/src/modules/leads/`); the status workflow from D29/D32 as a
+  separate `POST /leads/:id/status` endpoint (`CONVERTED` excluded as a
+  target by the `OpenLeadStatus` type itself, rejected as a current state
+  with 409, every change writing one `LeadStatusHistory` row — no note
+  column); `requirement`/`capturedFields` genuinely absent from the update
+  schema (not rejected — silently stripped by Zod, like any other unknown
+  key), so they survive a `PATCH` unchanged; clearing both email and phone
+  on update is a service-level 422 (not a database `P2039` falling through
+  to 500); `GET /leads/duplicates` (the standalone duplicate-check
+  endpoint the brief asked for) and `GET /leads/:id/status-history` (not
+  explicitly asked for, added anyway — cheap now, useful for the 2.4–2.6
+  UI ahead of Day 4's richer timeline). `pnpm typecheck && pnpm lint &&
+  pnpm test && pnpm build` all pass (215 tests: 187 carried over + 28 new,
+  all `apps/api`). Full detail in `docs/decisions.md` D35.
 
 ## 8. Database
 
@@ -709,6 +745,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D32 — Conflict found before 2.3: the brief wants an optional note on every lead status change, but `lead_status_histories` has no column for one; stopped and asked; resolved as drop the note entirely, no schema change
 - D33 — Package 2.1: normalisers (`normalize.ts`); `LEAD_STATUSES`/`PRIORITIES` as `as const` tuples + `z.enum` (not TS enums, so no `ROLES`-style bridge cast is needed against Prisma's own literal-union enum types); three explicit duplicate-finder functions (`duplicates.ts`, one per resource — different normalised columns per model); `buildOrderBy` (`list-query.ts`, the one generic helper added, reusing 1.4's pagination helpers unchanged); `GET /api/v1/lead-sources` (new module); `GET /api/v1/users/options` (`auth: 'authenticated'`, Staff-allowed, registered before `/users/:id`)
 - D34 — Package 2.2: `{ data, duplicates }` create/update envelope; `archived` tri-state via `booleanQueryParam`; archive/restore of a record already in that state is 404, not a no-op; blank string clears a text field to null on PATCH, `null` detaches a relation field (`companyId`/`ownerId` schemas changed to `.nullable().optional()` so this is expressible); `blankToNull` typed `(string) => string | null` only, never `string | undefined` in, because of an `exactOptionalPropertyTypes` conflict with Prisma's generated update types; `assertOwnerInOrg`/`assertCompanyInOrg` close the real (not just theoretical) same-organisation FK gap from D13; `lifecycleStatus` stays free text (brief never enumerates it), defaults `'ACTIVE'`
+- D35 — Package 2.3: status change is its own `POST /leads/:id/status` (no note, D32); `CONVERTED` as a target excluded by the `OpenLeadStatus` type, as a current state refused with 409; `requirement`/`capturedFields` silently stripped by `PATCH`, not rejected, so they stay read-only; clearing both email and phone on update is a service-level 422, not a DB `P2039`-to-500; `GET /leads/duplicates` (standalone check, brief-requested) and `GET /leads/:id/status-history` (not requested, added anyway — cheap, useful ahead of Day 4); `z.iso.datetime()` verified to require a trailing `Z`, matching every other UTC timestamp in the app
 
 ## 10. Gotchas and lessons learned
 
@@ -806,8 +843,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run` — 2
   files: `tests/lib/format.test.ts` (12 tests, package 1.6),
   `tests/lib/api-client.test.ts` (4 tests, package 1.7)), and `apps/api`
-  (`vitest run`) — 187 `apps/api` tests + 16 `apps/web` tests, 203 total,
-  all passing as of the last run this session (package 2.2).
+  (`vitest run`) — 215 `apps/api` tests + 16 `apps/web` tests, 231 total,
+  all passing as of the last run this session (package 2.3).
 - `apps/web/vitest.config.mts` only sets a resolve alias (`@` -> the package
   root, mirroring `tsconfig.json`) — no database, no global setup, unlike
   `apps/api`'s config; nothing in `apps/web` touches the database.
@@ -1279,5 +1316,45 @@ log just records that a session happened and what it covered.
   pnpm build` all pass clean (187 tests: 149 carried over + 38 new, all
   `apps/api`; `apps/web` unchanged at 16). No process was started this
   package; nothing to stop. Committed locally; nothing pushed. Full detail
-  in `docs/decisions.md` D34. Next: package 2.3 (Leads API) — the note on
-  `LeadStatusHistory` was already resolved in D32, ahead of time.
+  in `docs/decisions.md` D34.
+- **2026-11-19 (same session, continued) — package 2.3, Leads API.** Full
+  CRUD plus archive/restore, built on 2.1/2.2's patterns. The status
+  workflow is a separate `POST /leads/:id/status` endpoint, not folded into
+  the general `PATCH` — its input type (`OpenLeadStatus`) structurally
+  excludes `CONVERTED` as a target, so submitting it is a 422 at the
+  validation layer, not a runtime check; the complementary "the lead is
+  already CONVERTED" case can't be expressed in the type system, so the
+  service checks `existing.status === 'CONVERTED'` and refuses with 409.
+  Every successful change writes one `LeadStatusHistory` row and one audit
+  row in the same transaction — no `note` field, per D32's earlier
+  resolution. `requirement` and `capturedFields` are simply absent from
+  `updateLeadSchema`'s shape, so a `PATCH` that mentions them succeeds
+  (200) and silently changes nothing about them (Zod's default
+  non-`.strict()` stripping) — a test asserts the original values survive,
+  read as the more consistent interpretation of "read-only" (matching how
+  `updateUserSchema` already treats `email`, not a special new error).
+  Clearing both email and phone on a `PATCH` is caught as a clean
+  service-level 422 before the write, rather than letting the database's
+  `leads_has_email_or_phone` CHECK fire as an unmapped `P2039` that would
+  otherwise fall through to a generic 500 (the central error handler's own
+  comment explains why that code is deliberately left unmapped). Added
+  `GET /api/v1/leads/duplicates` (the standalone duplicate-check endpoint
+  the brief asked for, registered before `GET /leads/:id` for the same
+  Express route-ordering reason as `GET /users/options` in 2.1) and `GET
+  /api/v1/leads/:id/status-history` (not explicitly asked for, added
+  anyway since it's a thin read over rows the status endpoint already
+  writes — useful for the 2.4–2.6 lead detail UI ahead of Day 4's richer
+  merged timeline, nothing to migrate later). Verified Zod v4's
+  `z.iso.datetime()` empirically (`node -e` against the installed
+  `zod@4.6.7`) before using it for `nextFollowUpAt`/the list's date-range
+  filters: its default mode requires a trailing `Z` and rejects both a bare
+  local datetime and a `+05:30` offset, matching every other UTC timestamp
+  in this app. `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+  all pass clean (215 tests: 187 carried over + 28 new, all `apps/api`;
+  `apps/web` unchanged at 16). No process was started this package;
+  nothing to stop. Committed locally; nothing pushed. Full detail in
+  `docs/decisions.md` D35.
+  **Day 2 backend (packages 2.1–2.3) is now complete.** Next: packages
+  2.4–2.6 (the corresponding frontend UI) — not yet detailed in this repo,
+  per `docs/NEXT-SESSION-START.md`'s existing caveat; confirm scope with
+  the user before building ahead of it.

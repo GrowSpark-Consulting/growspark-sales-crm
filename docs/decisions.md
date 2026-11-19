@@ -937,3 +937,87 @@ read) was itself dated for traceability.
     and detaching a Contact's company via `PATCH`. `pnpm typecheck && pnpm
     lint && pnpm test && pnpm build` all pass clean (187 tests: 149 carried
     over + 38 new, all `apps/api`; `apps/web` unchanged at 16).
+- **D35** — Package 2.3 (Leads API):
+  - **Status endpoint is a separate `POST /leads/:id/status`, not part of
+    the general `PATCH`** — `updateLeadStatusSchema` takes only `{ status:
+    OpenLeadStatus }` (D32: no note field), and `OpenLeadStatus`
+    structurally excludes `CONVERTED` as a target (2.1's
+    `openLeadStatusSchema`, D33), so submitting `CONVERTED` here is a 422,
+    not a runtime check. The complementary "from" direction — a lead that
+    is *already* `CONVERTED` — can't be expressed in the type system, so
+    `updateLeadStatus` checks `existing.status === 'CONVERTED'` in the
+    service and refuses with 409 `CONFLICT` (a state conflict, not a
+    validation failure: the request body itself was well-formed). Every
+    successful change writes one `LeadStatusHistory` row
+    (from/to/who/when) and one audit row, in the same transaction.
+  - **`requirement` and `capturedFields` are genuinely unreachable from
+    `PATCH`** — not rejected, simply absent from `updateLeadSchema`'s
+    shape. Zod's default (non-`.strict()`) object parsing silently strips
+    any extra key a client sends for either field, so a `PATCH` containing
+    `requirement` succeeds (200) and changes nothing about it — covered by
+    a test that asserts the original value survives. This was a deliberate
+    reading of "read-only after creation": a 422 would have implied the
+    field is forbidden to *mention*, which is stricter than what "read-only"
+    means for every other already-set field in this app (e.g. a user's
+    `email` is likewise never accepted by `updateUserSchema`, with the same
+    silent-strip behaviour, not a special error).
+  - **Clearing both contact methods on `PATCH` is a clean 422, not a
+    database 500.** The `leads_has_email_or_phone` CHECK (D14/D15) would
+    otherwise fire as Prisma's `P2039`, which `error-handler.ts` deliberately
+    leaves unmapped (a CHECK violation reaching the handler is meant to
+    signal validation that should have been caught earlier — see its own
+    comment). `updateLead` computes what the lead's normalised email/phone
+    would become *after* applying the PATCH (untouched fields keep the
+    existing row's normalised value) and throws a regular `ApiError(422,
+    'VALIDATION_FAILED', ...)` itself before the write, if both would end up
+    empty. Covered by a test that clears email while phone remains (200),
+    then clears phone too (422).
+  - **`companyId`/`ownerId`-style "detach via null" pattern from D34 is
+    reused for `ownerId` here too** (Lead has no company-link field, so
+    only `ownerId` needed it): `.nullable().optional()` in the shared
+    schema, `owner: input.ownerId ? { connect } : { disconnect: true }` in
+    the service.
+  - **`GET /api/v1/leads/:id/status-history`** (new, not explicitly asked
+    for in the 2.3 brief, added anyway): a thin read endpoint over the rows
+    `updateLeadStatus` already writes. Day 4's planned "timeline" endpoint
+    (merging activities + status + stage + conversion history) supersedes
+    this eventually, but there's no reason the lead detail UI built in
+    2.4–2.6 should have to wait until Day 4 to show status history that
+    already exists in the database — cheap to add now, nothing to migrate
+    later (Day 4 can fold this data into the richer merged view without
+    removing this endpoint).
+  - **`GET /api/v1/leads/duplicates`** (the "duplicate check endpoint for
+    the create/edit form" the brief asked for): takes raw, not
+    pre-normalised, `email`/`phone`/`companyName` query params (normalised
+    server-side, same as create/update) plus an optional `excludeId` (so
+    the edit form doesn't flag the record against itself). Registered
+    before `GET /leads/:id` for the same Express route-ordering reason as
+    `GET /users/options` (D33) — `"duplicates"` would otherwise be captured
+    as `:id`.
+  - **`z.iso.datetime()`** (Zod v4's dedicated ISO-datetime validator, not
+    the deprecated `z.string().datetime()`) is used for `nextFollowUpAt`
+    and the list's `createdFrom`/`createdTo` — verified empirically
+    (`node -e` against the installed `zod@4.6.7`) that its *default* mode
+    requires a trailing `Z` (UTC) and rejects both a bare local datetime
+    and a `+05:30`-style offset; not widened to `{ offset: true }`, since
+    every other timestamp in this app is already UTC
+    (`timestamptz` columns, D13's conventions) and a frontend's own
+    `Date.toISOString()` already produces exactly this shape.
+  - **Same-organisation integrity for `sourceId`/`ownerId`** follows D34's
+    `assertOwnerInOrg`/new `assertSourceInOrg` pattern exactly (not shared
+    as a generic helper across modules — same reasoning as D34).
+  - Tests: full CRUD + archive/restore; email-or-phone requirement on
+    create (both directions: phone-only accepted, neither rejected);
+    blank-name rejected; cross-org `sourceId` rejected; requirement/
+    capturedFields immutability; the clear-both-contacts 422; Staff can
+    create/edit/archive (D29); duplicate-warns-but-still-saves; the
+    standalone duplicates-check endpoint (including `excludeId`); full
+    status-workflow coverage (free movement between open statuses with
+    history rows asserted directly against the database, `CONVERTED` as a
+    target rejected with an empty history, `CONVERTED` as a starting state
+    rejected with 409, an unknown status value rejected, history ordering);
+    unknown sort field 422; filters (status/source/owner/priority/date
+    range) and search; cross-organisation 404s on every mutating route plus
+    list/duplicate-detection leakage. `pnpm typecheck && pnpm lint && pnpm
+    test && pnpm build` all pass clean (215 tests: 187 carried over + 28
+    new, all `apps/api`; `apps/web` unchanged at 16).
