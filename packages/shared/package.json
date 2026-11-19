@@ -12,7 +12,8 @@
     }
   },
   "scripts": {
-    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "dev": "tsc -p tsconfig.watch.json --watch --preserveWatchOutput",
+    "dev:prepare": "node scripts/clean-watch-cache.mjs && tsc -p tsconfig.watch.json",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",

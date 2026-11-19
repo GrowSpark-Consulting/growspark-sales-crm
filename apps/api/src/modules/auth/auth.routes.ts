@@ -8,7 +8,7 @@ import {
 } from '@growspark/shared';
 import { defineRoute } from '../../lib/route-registry.js';
 import { buildSessionCookieHeader, buildClearedSessionCookieHeader, readSessionToken } from '../../lib/cookies.js';
-import { loginIpRateLimiter, loginEmailRateLimiter } from '../../lib/rate-limit.js';
+import { loginGlobalFloodLimiter, loginEmailRateLimiter } from '../../lib/rate-limit.js';
 import * as authService from './auth.service.js';
 
 export function registerAuthRoutes(app: Application): void {
@@ -20,7 +20,7 @@ export function registerAuthRoutes(app: Application): void {
     validate: { body: loginSchema },
     // Rate limiters run after validation so the per-email key is already
     // normalised (trimmed, lowercased).
-    middlewares: [loginIpRateLimiter, loginEmailRateLimiter],
+    middlewares: [loginGlobalFloodLimiter, loginEmailRateLimiter],
     handler: async (req, res, next) => {
       try {
         const { email, password } = req.body as LoginInput;

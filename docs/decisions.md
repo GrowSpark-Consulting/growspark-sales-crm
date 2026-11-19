@@ -217,14 +217,16 @@ is a decision made once and not re-litigated without a new entry.
     there is no `serialize`/`parse` in this major version — the real exports
     are `stringifySetCookie`/`parseCookie` (verified against its generated
     `.d.ts`, not assumed from memory of the classic API).
-  - **`express-rate-limit@8.7.5`**: two independent limiters (per-IP,
-    per-normalised-email) for login, each with its own `MemoryStore`
-    instance so counts never cross-contaminate. v8's options use `limit`
-    (not the old `max`), a named `rateLimit` export (not default), and a
-    `resetAll()` method on `MemoryStore` — used by
-    `resetLoginRateLimiters()` (`apps/api/src/lib/rate-limit.ts`) to give
-    every test a clean rate-limit slate, the same principle as
-    `resetDatabase()` (D-in-PROJECT-STATE §0.5).
+  - **`express-rate-limit@8.7.5`**: two independent limiters for login
+    (per-normalised-email, and a global flood ceiling — see D23 for why
+    there is no per-IP limiter), each with its own `MemoryStore` instance so
+    counts never cross-contaminate. v8's options use `limit` (not the old
+    `max`), a named `rateLimit` export (not default), `skipSuccessfulRequests`
+    (counts only 4xx/5xx responses), and a `resetAll()` method on
+    `MemoryStore` — used by `resetLoginRateLimiters()`
+    (`apps/api/src/lib/rate-limit.ts`) to give every test a clean rate-limit
+    slate, the same principle as `resetDatabase()` (D-in-PROJECT-STATE
+    §0.5).
 - **D17** — `@node-rs/argon2`'s library defaults (verified by inspecting its
   generated `.d.ts` and by generating a real hash): algorithm **Argon2id**,
   version `0x13`, memory cost **19456 KiB**, time cost **2**, parallelism
@@ -277,19 +279,21 @@ is a decision made once and not re-litigated without a new entry.
   `X-Forwarded-Proto` at all (only `X-Forwarded-Host`), and the TCP peer the
   API sees is the Next.js server process itself (`::1` in dev), never the
   original browser. Consequence: **every browser request that reaches the
-  API through the web app's proxy looks like it comes from the same IP**, so
-  in the real browser → Next.js → API path, the per-IP login rate limit
-  degenerates to one shared counter across every user of the app, not a
-  genuine per-client-IP limit (the per-email limiter is unaffected — it does
-  not depend on IP). `TRUST_PROXY` stays `false` in dev/this architecture,
+  API through the web app's proxy looks like it comes from the same
+  address**, so a per-IP limiter here would, in the real browser → Next.js →
+  API path, already be one shared counter across every user of the app, not
+  a genuine per-client-IP limit (the per-email limiter is unaffected — it
+  does not depend on IP). `TRUST_PROXY` stays `false` in this architecture,
   since there is nothing genuine to trust: trusting a Next-forwarded
-  X-Forwarded-For would trust a header Next itself doesn't even set. Fixing
-  this (e.g. having Next's proxy inject a real client-IP header) is
-  out of scope for package 1.3 and not attempted — flagging it for a
-  decision before Day 6's security pass, since it means the per-IP limiter
-  is currently a weaker control than its name suggests for traffic that
-  goes through the web app (the intake API in Day 5, called server-to-server
-  and not through this proxy, is unaffected).
+  X-Forwarded-For would trust a header Next itself doesn't even set.
+  **Addressed by D23**: rather than keep a per-IP limiter that was
+  effectively already global, the login rate limiting was redesigned around
+  that reality instead of hiding it. Genuine per-client-IP limiting needs
+  the real client IP to reach this process — a deployment-architecture
+  question (e.g. a reverse proxy in front of both apps that sets
+  X-Forwarded-For, which Next would then need to forward downstream too),
+  revisit then; the intake API in Day 5, called server-to-server and not
+  through this proxy, is unaffected either way.
 - **D22** — `NODE_ENV=test` during `pnpm test`: vitest sets this itself
   before any test file loads; `tests/setup.ts`'s `process.loadEnvFile`
   (which loads `NODE_ENV=development` from `.env`) does **not** override it,
@@ -299,3 +303,95 @@ is a decision made once and not re-litigated without a new entry.
   run. The logger (`apps/api/src/logger.ts`) now uses this to set its level
   to `silent` in tests, so `pnpm test` output isn't drowned in per-request
   log lines — purely cosmetic, no behavioural effect.
+- **D23** — Package 1.3b-1: replaced the per-IP login limiter with a global
+  flood ceiling, and made both remaining limiters count failed attempts
+  only, per direct instruction after reviewing D21:
+  - **Per-email limiter** (`loginEmailRateLimiter`): unchanged threshold (10
+    per 15 minutes per normalised email), but now with
+    `skipSuccessfulRequests: true` — a correct login is never counted,
+    however many times in a row. A failed attempt is express-rate-limit's
+    own definition of "failed": any response with status ≥ 400, which
+    includes a wrong password, an unknown/inactive-user generic 401, *and* a
+    422 validation failure (a malformed login body still looks like a
+    credential-probing attempt and is deliberately not exempted).
+  - **Global flood ceiling** (`loginGlobalFloodLimiter`, default 50 per 15
+    minutes): replaces the per-IP limiter outright rather than keeping it
+    under a misleading name. Built by `createGlobalLoginFloodLimiter(ceiling)`
+    — a factory, not a module-level constant, specifically so tests can
+    build an isolated instance with a low ceiling (verified with 3) without
+    touching the real production limiter's configuration or threshold.
+    Labelled "global flood ceiling" in both the code and here, not
+    "per-IP" or "rate limiter" alone, so its real scope is never ambiguous
+    to a future reader.
+  - **Real per-IP limiting is deferred, not abandoned.** It needs the true
+    client IP to reach this process, which (per D21) it currently does not
+    when traffic comes through the Next.js web app. Revisit at deployment,
+    once the actual network path in front of both apps is known (e.g. a
+    reverse proxy that sets X-Forwarded-For *and* a Next.js config that
+    forwards it through its own rewrite, or terminating the proxy
+    differently).
+  - `CreateAppOptions.trustProxy` (the test-only override added in package
+    1.3 purely to simulate two different client IPs for the now-removed
+    per-IP isolation test) was removed as dead code — `createApp()` again
+    takes `TRUST_PROXY` only from `env`, which is still the correct,
+    deployment-configurable source of truth for the real setting.
+- **D24** — Package 1.3b-2: `pnpm dev` could hang with apps/api's `tsx watch`
+  never binding its port and producing zero output (not even an error) —
+  reproduced reliably, then root-caused with a sequence of isolated tests
+  rather than guessed at:
+  1. First hypothesis (wrong, but real and worth fixing anyway): `packages/shared`'s
+     `tsc --watch` always does a full, unconditional first-pass compile —
+     `incremental` is off on `tsconfig.json` (D12) — even though the root
+     `dev` script had just built it a moment before via a plain `tsc`. That
+     redundant first-pass write to `dist/*.js` lands while apps/api's
+     `tsx watch` is also just starting, and — empirically — a restart that
+     lands during `tsx watch`'s own startup window can hang rather than
+     recover (a restart after full startup, proven separately, always
+     recovers cleanly). **Fixed in isolation first** (verified by watching
+     `dist/index.js`'s mtime across a `tsc --watch` start with a pre-warmed
+     cache: unchanged, versus always-rewritten without one):
+     `packages/shared` gained `tsconfig.watch.json` (extends `tsconfig.json`,
+     re-enables `incremental` with its own `tsBuildInfoFile`,
+     `tsconfig.watch.tsbuildinfo` — already covered by the existing
+     `*.tsbuildinfo` gitignore entry) and a `dev:prepare` script
+     (`scripts/clean-watch-cache.mjs` deletes that one cache file
+     unconditionally, then runs `tsc -p tsconfig.watch.json` once) that the
+     root `dev` script now runs instead of the plain `build` as its
+     prebuild step. Because `dev:prepare` and `dev` (now `tsc -p
+     tsconfig.watch.json --watch`) share that cache, and the cache is always
+     freshly regenerated immediately beforehand, `tsc --watch`'s first pass
+     correctly sees nothing changed and does not rewrite `dist` at all — the
+     race trigger is removed, not just raced-around. Deleting the cache
+     unconditionally first avoids resurrecting D12's exact bug (a stale
+     cache surviving a hand-deleted `dist`) for this new file.
+  2. **Real root cause**: with that fix applied, the hang still reproduced —
+     with *no* restart line in the log at all. Isolated further:
+     `pnpm --filter api run dev` alone always worked; `pnpm --filter api -r
+     --parallel dev` *alone* (one package, through the `-r --parallel` code
+     path) hung exactly the same way; two independently-spawned `pnpm
+     --filter <pkg> run dev` processes (no `-r`, no `--parallel` — the moral
+     equivalent of a developer opening two terminal tabs) always worked.
+     Conclusion, confirmed by elimination rather than inferred:
+     **pnpm's own `-r --parallel` scheduler breaks `tsx watch`'s child
+     process startup on this machine** — it is not about shared, not about
+     timing, not about which or how many packages are in scope.
+  - **Fix**: `scripts/dev.mjs` (new, root-level, Node built-ins only —
+     `child_process` + `readline`, no new dependency) spawns
+     `packages/shared`, `apps/api` and `apps/web`'s `dev` scripts as three
+     independent `pnpm --filter <pkg> run dev` children (not through `pnpm
+     -r`), forwarding and prefixing each one's stdout/stderr itself so the
+     interleaved-output readability of the old `--parallel` output is kept.
+     The root `dev` script now runs `... && node scripts/dev.mjs` as its
+     final step. Child cleanup uses `taskkill /PID <pid> /T /F` (not a plain
+     `child.kill()`), because each child is itself a multi-process tree
+     (`pnpm` → `tsx`/`tsc`/`next` → their own spawned children) that a
+     single non-tree kill would not reliably stop on Windows.
+  - **Verified**: from a cold state (no node processes, ports 3000/4000
+    free), `pnpm dev` started cleanly five times in a row — `/health` on
+    :4000 and `/` on :3000 both answering within 10–22 seconds each time —
+    and, once up, editing `packages/shared/src/roles.ts` produced exactly
+    one clean `tsx watch` restart (`[tsx] change in .../dist/roles.js
+    Restarting...` → a fresh `"api listening"` line, new PID) with `/health`
+    answering immediately after. Every run's full process tree was
+    confirmed gone (no leftover `node.exe`, ports free) before the next run
+    started.

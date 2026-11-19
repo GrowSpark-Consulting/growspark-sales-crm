@@ -11,12 +11,6 @@ import { env } from './env.js';
 
 export interface CreateAppOptions {
   /**
-   * Overrides env.TRUST_PROXY for this instance. Exists so tests can run an
-   * app instance that trusts X-Forwarded-For (to simulate requests arriving
-   * through a proxy) without changing the real dev/prod configuration.
-   */
-  trustProxy?: boolean | number;
-  /**
    * Test-only: register additional routes (via defineRoute) before the error
    * handler is wired, so their errors still flow through it. A route added
    * after createApp() returns would land after the error handler in the
@@ -31,7 +25,13 @@ export function createApp(options: CreateAppOptions = {}): Express {
   resetRouteRegistry();
 
   const app = express();
-  app.set('trust proxy', options.trustProxy ?? env.TRUST_PROXY);
+  // TRUST_PROXY is "false" in this app's current architecture on purpose —
+  // see docs/decisions.md D21/D23: the Next.js web app's rewrite() proxy
+  // forwards neither X-Forwarded-For nor X-Forwarded-Proto, so there is
+  // nothing genuine to trust yet. Still env-driven (not hard-coded) so a
+  // future deployment that does forward real client info only needs a
+  // config change, not a code change.
+  app.set('trust proxy', env.TRUST_PROXY);
 
   app.use(helmet());
   app.use(requestId);
