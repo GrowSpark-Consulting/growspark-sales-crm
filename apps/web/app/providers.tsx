@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
+import { SessionExpiryHandler } from "@/components/session-expiry-handler";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -28,6 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           persists the choice (localStorage) and resolves "system" via
           prefers-color-scheme on its own. */}
       <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
+        <SessionExpiryHandler />
         {children}
         <Toaster />
       </ThemeProvider>

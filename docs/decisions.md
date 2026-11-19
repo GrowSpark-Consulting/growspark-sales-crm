@@ -581,4 +581,94 @@ is a decision made once and not re-litigated without a new entry.
     `<html>` and no server-side exception markers are present — not via a
     live browser console, since no browser-automation tool is available in
     this environment. The full visual/console check is in
-    `docs/MANUAL-TEST-DAY1.md` §12 for the user to confirm directly.
+    `docs/MANUAL-TEST-DAY1.md` §15 (renumbered from §12 in package 1.7) for
+    the user to confirm directly.
+- **D28** — Package 1.7 (search box pattern, session expiry, Cache
+  Components validation):
+  - **`SearchInput` (`apps/web/components/ui/search-input.tsx`)** replaces
+    the Users page's separate `Input` + "Search" `Button`: a magnifier
+    icon inside the field runs the search (same as Enter), and a clear
+    `x` appears once there's text, clearing it **and** re-running the
+    search with an empty value (not just emptying the text box and
+    leaving stale filtered results on screen). Built as a thin wrapper
+    around the existing `Input` (reusing its `gs-input` styling, not a new
+    primitive) so Leads/Companies/Contacts can reuse it unchanged. The
+    search value was never actually reflected in the URL before this
+    package (checked — `apps/web/app/(protected)/users/page.tsx`'s `q`/
+    `page`/`role`/`status` are plain `useState`, not `useSearchParams`),
+    so "keep the search value in the URL as before" meant: don't regress
+    anything, not: add new URL-sync behaviour that didn't exist. Flagged
+    here rather than silently expanding scope.
+  - **Global 401 handling lives in `apps/web/lib/api-client.ts`, not in
+    TanStack Query's `QueryCache`/`MutationCache` hooks.** Several
+    mutations in this app (`users/page.tsx`'s deactivate/reactivate,
+    the dialogs' direct `apiPost`/`apiPatch` calls) are plain awaited
+    function calls, not `useMutation` — a `QueryCache`/`MutationCache`
+    `onError` config would miss every one of them. `apiFetch` itself now
+    calls a module-level listener (`onUnauthorized`/registered by the new
+    `SessionExpiryHandler`) on any `res.status === 401`, so it fires for
+    literally every `apiGet`/`apiPost`/`apiPatch` call in the app,
+    regardless of how it was invoked.
+  - **`SessionExpiryHandler` (mounted once in `providers.tsx`, inside both
+    `QueryClientProvider` and `ThemeProvider`) is the one place that
+    clears the cache and redirects.** Two guards prevent a redirect loop:
+    a synchronous `redirectingRef` (so a burst of parallel requests
+    failing together produces exactly one redirect, re-armed on the next
+    pathname change) and an explicit no-op while `pathname === "/login"`
+    — necessary because `POST /auth/login` itself returns **401** on a
+    wrong password (`auth.service.ts`'s `UNAUTHENTICATED`), which is a
+    normal, expected, inline-handled outcome on the login page itself,
+    not a session expiry.
+  - **`AuthGuard`'s existing redirect-on-401 (from `useMe()`'s own error
+    state, added in package 1.5) was left as-is, not removed.** It's now
+    partly redundant with `SessionExpiryHandler` for the "/me itself
+    returns 401" case, but the two compute the same destination and
+    `router.replace` to an unchanged URL is a no-op — not worth the risk
+    of touching tested first-paint-redirect behaviour to deduplicate it.
+  - **Revalidation**: `useMe()` now sets `refetchOnWindowFocus: true`,
+    overriding the `QueryClient`'s own app-wide default of `false` (set
+    deliberately in package 1.5 so data queries like `useUsersList` don't
+    refetch on every tab-focus) — this one query is the exception, since
+    the whole point is catching a deactivation that happened while the
+    tab was unfocused. `AuthGuard` also now calls
+    `queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY })` on every
+    `pathname` change after the first mount (guarded by a ref so it
+    doesn't double-fetch alongside `useMe()`'s own initial fetch).
+  - **Tests**: `apps/web/tests/lib/api-client.test.ts` (4 tests) covers
+    `onUnauthorized` with a mocked `fetch` — pure logic, no DOM needed.
+    `SearchInput` and `SessionExpiryHandler` themselves are not unit
+    tested: both need a DOM (`jsdom` + `@testing-library/react`), which
+    aren't installed, and adding a second new testing dependency wasn't
+    asked for in this package the way `vitest` itself was in 1.6 — flagged
+    as a gap rather than silently added. `docs/MANUAL-TEST-DAY1.md` §13/§14
+    cover both by hand, including the two-cookie-store (normal +
+    incognito) scenario for session expiry.
+  - **Cache Components "instant navigation" dev notice**: confirmed with
+    the user (this project's earlier decision on this was not recoverable
+    from `decisions.md`, `PROJECT-STATE.md`, or any stored session
+    transcript, so it was asked again rather than guessed) —
+    `export const instant = false` on the affected routes. Root cause,
+    read from Next's own docs (`authentication-with-cache-components.md`,
+    `route-segment-config/instant.md`, both bundled in the installed
+    `next` package): with `cacheComponents: true`, Cache Components
+    validates "instant navigation" for every Page/Default segment by
+    default (`validationLevel: 'warning'`, dev-only) — i.e. it flags any
+    route whose navigation can't resolve to a UI update immediately. This
+    app's whole protected area reads the session client-side
+    (`AuthGuard` → `useMe()`) rather than via `cookies()` + `use cache:
+    private` behind a `<Suspense>` boundary (the pattern Next's own guide
+    recommends for Cache Components), so it is genuinely, deliberately
+    not "instant" by that definition — restructuring it onto the
+    recommended pattern is out of scope for a 3-item package. Fix: one
+    `export const instant = false;` on `apps/web/app/(protected)/
+    layout.tsx` — the single Server Component ancestor shared by every
+    protected route. Not set per-page: `instant` throws if exported from a
+    Client Component, and `users/page.tsx` is one (`"use client"`, uses
+    hooks directly); `page.tsx` (Home) and `forbidden/page.tsx` are
+    Server Components but don't need their own export since nothing in
+    their subtree opts into `instant = true` — only an ancestor `false`
+    with a descendant `true` needs both set, per the "Disabling instant"
+    section of Next's `instant` doc. `/login` was left untouched — it's
+    outside the brief's "protected pages" scope for this fix, and it has
+    its own, already-solved `Suspense` boundary (D26) for its one dynamic
+    piece (`useSearchParams()`).

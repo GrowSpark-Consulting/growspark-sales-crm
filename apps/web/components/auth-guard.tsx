@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useMe } from "@/hooks/use-me";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMe, ME_QUERY_KEY } from "@/hooks/use-me";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -17,12 +18,26 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { data, isLoading, isError } = useMe();
   const router = useRouter();
   const pathname = usePathname();
+  const queryClient = useQueryClient();
+  const hasMountedRef = useRef(false);
 
   useEffect(() => {
     if (!isLoading && (isError || !data)) {
       router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
   }, [isLoading, isError, data, pathname, router]);
+
+  // Revalidate /auth/me on every route change inside the protected shell
+  // (not the first mount — useMe() already fetches then), so a user
+  // deactivated elsewhere is signed out on their next navigation, without
+  // needing a manual refresh.
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+  }, [pathname, queryClient]);
 
   if (isLoading) {
     return (

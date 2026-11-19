@@ -192,9 +192,83 @@ API mid-request), check:
       switch above — it should apply with no animation (or a near-instant
       one), not the normal transition
 
+## 13. Search box pattern (package 1.7)
+
+- [ ] On the Users page, the "Search" button is gone — there's a magnifier
+      icon inside the search field instead
+- [ ] Type part of a name/email, press **Enter**. The table narrows to
+      matching rows (same as before)
+- [ ] Type something else, this time **click the magnifier icon** instead
+      of pressing Enter. Same result — the table narrows
+- [ ] Once the field has text, a small **x** appears at the right. Click
+      it: the field clears **and** the table goes back to showing everyone
+      (not just a cleared text box with stale results)
+- [ ] Tab to the field with the keyboard only. Both the magnifier and the
+      x (once it appears) are reachable and usable with the keyboard, and
+      a screen reader (or the browser's accessibility inspector) announces
+      a real label for the field, not just "edit text"
+
+## 14. Session expiry while the page is open (package 1.7)
+
+This needs **two separate cookie stores** signed in at once — a normal
+window and an incognito window (not a split-screen view of the same
+window/profile, which would share one cookie store and let only one of the
+two sessions exist at a time).
+
+- [ ] Window A (normal): sign in as `staff@growspark.test` (or any Staff
+      user you don't mind deactivating temporarily) and land on `/`
+- [ ] Window B (incognito): sign in as `admin@growspark.test`, go to Users,
+      and **deactivate** the account signed in in Window A
+- [ ] Back in Window A, **click any link in the sidebar** (e.g. "Home"
+      again). You should be redirected straight to `/login?next=...` —
+      not shown a broken page, not stuck on the old content
+- [ ] Repeat the setup (reactivate, sign in again as the same Staff user in
+      Window A), but this time **don't click anything** — switch to another
+      application, wait a few seconds, then switch back to Window A's
+      browser tab (giving it focus again). Same result: redirected to
+      `/login?next=...` without you having clicked or refreshed anything
+- [ ] In either case, you land on `/login` exactly **once** — no flicker
+      between the page and `/login`, no loop
+- [ ] Reactivate the account from Window B afterwards if you want to keep
+      using it
+
+## 15. Design system (package 1.6) — theme, fonts, console
+
+- [ ] Open the user menu and switch the theme to **Dark**. The whole app
+      (sidebar, top bar, cards, inputs, badges) repaints to the dark
+      palette immediately, with no flash of unstyled content. The sidebar
+      stays visually dark in **both** themes (it's the one fixed-dark
+      surface), everything else lightens/darkens
+- [ ] Switch to **Light**, then to **System** — matches your OS theme.
+      Reload the page after picking Dark or Light: the choice survives the
+      reload (no flash back to the other theme before it settles)
+- [ ] In both Light and Dark, confirm nothing is pure white or pure
+      black — surfaces look like warm off-white / warm charcoal, not
+      stark `#fff`/`#000`
+- [ ] Headings and body text visibly use Inter; any ID/code-like text uses
+      a monospace font (JetBrains Mono) — check via the browser's "Inspect"
+      on a heading if unsure
+- [ ] Tab through the login form and the Users page with the keyboard only
+      (no mouse). Every focused control (inputs, buttons, links, menu
+      items) shows a clearly visible outline — never an invisible focus
+- [ ] On the Users page, the "Active"/"Inactive" badges each show a small
+      coloured dot **and** the word — cover the dot with a finger/thumb on
+      screen and confirm the word alone still tells you the status
+- [ ] Open the browser's DevTools console on `/login`, then reload the
+      page. No red errors — in particular, no React hydration-mismatch
+      warning about `<html>` (this was the bug reported before 1.6)
+- [ ] Log in, then open the console again on `/` (Home). Same check — no
+      red errors, no hydration warnings
+- [ ] If your OS/browser has "reduce motion" turned on, repeat the theme
+      switch above — it should apply with no animation (or a near-instant
+      one), not the normal transition
+- [ ] (package 1.7) Open the Next.js DevTools (bottom-left badge) on
+      `/login`, `/`, and `/users` in dev. No "Could not validate instant
+      navigation" / dropped-segment error for any of the three
+
 ---
 
-If everything above checked out, Day 1 (packages 1.1 through 1.6) is
+If everything above checked out, Day 1 (packages 1.1 through 1.7) is
 functionally complete end to end: auth, permissions, user management, the
-last-Admin rule, audit logging, and the Grow Spark design system all work
-through a real browser, not just the automated test suite.
+last-Admin rule, audit logging, session expiry, and the Grow Spark design
+system all work through a real browser, not just the automated test suite.

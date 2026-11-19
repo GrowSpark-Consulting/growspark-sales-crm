@@ -16,19 +16,21 @@ independently verifiable from this repo. The user's plan is **7 days**: Days
 known about Days 2–5).
 
 **Current status (end of 2026-11-19 session)**: **Day 1 is functionally
-complete.** Packages 1.1 through 1.6 are all built, tested, and committed
+complete.** Packages 1.1 through 1.7 are all built, tested, and committed
 locally (not yet pushed). The full sales-journey-adjacent foundation exists:
 server-side session auth, the full permission map, user management with the
 last-Admin rule and audit log, and a working browser UI (login, role-aware
 navigation, a Users page with create/edit/deactivate/reactivate/reset-
 password, a 403 page, a 404 page) all exist and are wired together, now
 restyled end to end with the Grow Spark Workspace design system (tokens,
-fonts, Light/Dark/System theming, a rebuilt sidebar/top-bar shell) — login
-through the real browser-facing proxy on :3000 was verified with curl (no
-browser available in this environment), and a full manual click-through
-script (`docs/MANUAL-TEST-DAY1.md`, now including a design-system section)
-is ready for the user to run in a real browser, which this session could not
-do itself.
+fonts, Light/Dark/System theming, a rebuilt sidebar/top-bar shell), with a
+reusable search box pattern and a real session-expiry-while-open flow
+(global 401 handling, window-focus + route-change revalidation of `/auth/
+me`) on top — login through the real browser-facing proxy on :3000 was
+verified with curl (no browser available in this environment), and a full
+manual click-through script (`docs/MANUAL-TEST-DAY1.md`, now including
+design-system and session-expiry sections) is ready for the user to run in
+a real browser, which this session could not do itself.
 
 ## 2. Hard constraints
 
@@ -153,7 +155,8 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     providers.tsx         QueryClientProvider + next-themes ThemeProvider
                         (attribute="data-theme", defaultTheme="system",
                         enableSystem — the toggle lives in AppShell's user
-                        menu, D27)
+                        menu, D27) + SessionExpiryHandler (D28), mounted
+                        inside both providers
     not-found.tsx         404 page (Next's own file convention)
     login/page.tsx         public; wraps LoginForm in <Suspense> (needed for
                         useSearchParams) with a real skeleton fallback, not
@@ -161,14 +164,28 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     (protected)/           route group, no URL segment; EVERY authenticated
                         page lives here behind one layout
       layout.tsx            AuthGuard (client-side nav convenience only,
-                        never the real security control — D26) + AppShell
+                        never the real security control — D26) + AppShell;
+                        `export const instant = false` (D28 — Cache
+                        Components' instant-navigation dev validation;
+                        can't be set on users/page.tsx itself, a Client
+                        Component, so it's set once here instead)
       page.tsx              Home — plain placeholder; no own <h1> (the top
                         bar carries the page title — D27)
       forbidden/page.tsx     403 page; same, no own <h1>
-      users/page.tsx         the Users page (see below)
+      users/page.tsx         the Users page (see below); search box is now
+                        SearchInput, not Input+Button (D28)
   components/
     auth-guard.tsx          useMe()-driven redirect: unauth'd -> /login?
-                        next=..., shows a Skeleton while loading
+                        next=..., shows a Skeleton while loading; also
+                        invalidates the `me` query on every pathname change
+                        after first mount, so a deactivated user is caught
+                        on their next navigation (D28)
+    session-expiry-handler.tsx  mounted once in providers.tsx; registers
+                        api-client's onUnauthorized listener — on any 401,
+                        clears the whole query cache and redirects to
+                        /login?next=<path>, guarded against redirect loops
+                        and against firing on /login's own failed-login 401
+                        (D28)
     app-shell.tsx           rebuilt per the design system (D27): 240px dark
                         sidebar with the Sales product chip, 56px top bar
                         showing the current page's title (a flat pathname
@@ -185,26 +202,36 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         tabs restyled per their design-system READMEs in
                         1.6 (D27); dialog's overlay fixed from `bg-black/50`
                         to `bg-ink/40` (the one other hard-coded colour
-                        found)
+                        found); search-input.tsx (1.7, D28) — magnifier +
+                        clear-x search box wrapping Input, reusable by
+                        Leads/Companies/Contacts later
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx, confirm-action-dialog.tsx
                         (generic, used for both deactivate and reactivate)
   hooks/
     use-me.ts              useMe() — GET /auth/me via TanStack Query,
-                        retry:false (so a 401 settles fast, not after retries)
+                        retry:false (so a 401 settles fast, not after
+                        retries); refetchOnWindowFocus:true, the one
+                        exception to the QueryClient's app-wide default of
+                        false (D28)
     use-users.ts            useUsersList(params) — server-side page/pageSize/
                         q/role/isActive, placeholderData keeps the old page
                         visible while a new one loads
   lib/
     api-client.ts           ApiError + apiGet/apiPost/apiPatch, same-origin
-                        credentials
+                        credentials; onUnauthorized(listener) — apiFetch
+                        calls the registered listener on every 401,
+                        regardless of caller (D28)
     handle-form-error.ts    the one place that decides: 422 -> field errors,
                         409/401/403 -> inline banner, 500/network -> toast
                         with request id (D26)
     format.ts               formatINR/formatINRCompact/formatDate/formatTime
                         — Indian grouping + L/Cr compaction, "19 Nov 2026",
                         "2:30 PM" (D27)
-  tests/lib/format.test.ts  12 unit tests for lib/format.ts (D27)
+  tests/lib/
+    format.test.ts          12 unit tests for lib/format.ts (D27)
+    api-client.test.ts      4 unit tests for onUnauthorized (mocked fetch,
+                        no DOM needed) (D28)
   vitest.config.mts       `.mts` (not `.ts` — avoids a Vite native-loader
                         ESM/CJS warning); one alias (`@` -> package root)
                         mirroring tsconfig.json (D27)
@@ -463,8 +490,29 @@ session has ever run `git push`, including this one).
   `curl` against the SSR payload (confirms `suppressHydrationWarning`
   reaches `<html>`, no server exception markers) — not a live browser
   console, which this environment cannot run; added as an explicit manual
-  check in `docs/MANUAL-TEST-DAY1.md` §12 instead. Full detail in
-  `docs/decisions.md` D27.
+  check in `docs/MANUAL-TEST-DAY1.md` §15 instead (renumbered from §12
+  after package 1.7 inserted its own sections before it — see §13/§14).
+  Full detail in `docs/decisions.md` D27.
+- **Package 1.7 — search box pattern, session expiry, Cache Components
+  validation**: `SearchInput` (magnifier runs the search, clear-`x`
+  appears once there's text and resets the filter) replaces the Users
+  page's separate input+button, built as a reusable wrapper so Leads/
+  Companies/Contacts can reuse it unchanged. A global 401 handler
+  (`api-client.ts`'s `onUnauthorized`, registered by the new
+  `SessionExpiryHandler`) now clears the TanStack Query cache and redirects
+  to `/login?next=<path>` on **any** API call's 401, not just the ones
+  TanStack Query itself tracks — guarded against redirect loops and
+  against firing on `/login`'s own (expected) failed-login 401.
+  `useMe()` now revalidates on window focus; `AuthGuard` revalidates it on
+  every route change inside the protected shell too — together these catch
+  a deactivated user on their next focus or navigation, not just on a
+  manual refresh. Cache Components' dev-only "instant navigation"
+  validation notice on protected pages is silenced with one `export const
+  instant = false;` on `(protected)/layout.tsx` (confirmed with the user
+  what the fix should be — the earlier decision referenced wasn't
+  recoverable from this repo's history). `pnpm typecheck && pnpm lint &&
+  pnpm test && pnpm build` all pass (140 tests: 124 `apps/api` + 16
+  `apps/web`, 4 new this package). Full detail in `docs/decisions.md` D28.
 
 ## 8. Database
 
@@ -545,6 +593,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D25 — Package 1.4: last-Admin `SELECT ... FOR UPDATE` locking pattern; the `isActive` boolean query-param gotcha (`z.coerce.boolean()` is wrong — `Boolean("false")` is `true`); the `sort=<field>:asc|desc` convention; one audit row per `PATCH`, with before/after for every changed field (fixed after review to include `oldName`/`newName`, not just the role pair)
 - D26 — Package 1.5: no `proxy.ts` (Next 16 renamed `middleware`, recommends against relying on it for security either way); `lucide-react` missing from the shadcn CLI's own output; `next-themes` is Sonner's dependency, not a separate choice; a `Suspense fallback={null}` is a real blank flash under Cache Components, not a no-op; the error-display split (422 inline on the field, 409/401/403 as a dialog banner, 500/network as a toast with the request id)
 - D27 — Package 1.6: design system tokens mapped through Tailwind v4's `@theme inline`; theming switched to `attribute="data-theme"` with the toggle in the user menu; shadcn's structural `accent` repointed to `surface-hover`/`ink` so GS's brand clay accent (its own `--color-brand-accent*` names) stays rare, not merged into generic hover states; `@custom-variant dark` now targets `[data-theme="dark"]`, not `.dark`, so shadcn's baked-in `dark:*` utilities follow the app's own toggle instead of the OS media query; Button/Badge/Alert variants remapped (not renamed) onto the component READMEs, including fixing `destructive`'s old literal `text-white`; the dialog scrim fixed to the README's documented `bg-ink/40`; `vitest@5.1.1` added to `apps/web` (approved first) for `lib/format.ts`'s unit tests; INR/date/time formatting choices (`Intl.NumberFormat("en-IN")` for grouping, not `style: "currency"`; L/Cr thresholds at exactly 1 lakh/1 crore; `en-US` for reliably upper-cased AM/PM)
+- D28 — Package 1.7: `SearchInput` reusable component (magnifier + clear-x, wraps the existing `Input`); global 401 handling lives in `api-client.ts`'s `apiFetch` itself (`onUnauthorized`), not TanStack Query's `QueryCache`/`MutationCache`, because several mutations are plain awaited calls those hooks never see; `SessionExpiryHandler` clears the cache and redirects once, guarded against both a parallel-request burst and `/login`'s own expected 401 on a wrong password; `useMe()` gets `refetchOnWindowFocus: true` as a deliberate one-query exception to the `QueryClient`'s app-wide `false`; `AuthGuard` revalidates `/auth/me` on every route change after first mount; Cache Components' "instant navigation" dev notice fixed with `export const instant = false` on `(protected)/layout.tsx` only (can't be set on `users/page.tsx`, a Client Component — throws if you try)
 
 ## 10. Gotchas and lessons learned
 
@@ -625,9 +674,10 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 ## 11. Testing
 
 - `pnpm test` (root) runs `packages/shared` (no tests yet — its schemas are
-  exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run`, package
-  1.6 — 1 file, `tests/lib/format.test.ts`, 12 tests), and `apps/api`
-  (`vitest run`) — 124 `apps/api` tests + 12 `apps/web` tests, 136 total,
+  exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run` — 2
+  files: `tests/lib/format.test.ts` (12 tests, package 1.6),
+  `tests/lib/api-client.test.ts` (4 tests, package 1.7)), and `apps/api`
+  (`vitest run`) — 124 `apps/api` tests + 16 `apps/web` tests, 140 total,
   all passing as of the last run this session.
 - `apps/web/vitest.config.mts` only sets a resolve alias (`@` -> the package
   root, mirroring `tsconfig.json`) — no database, no global setup, unlike
@@ -662,11 +712,16 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   — it drops and recreates `crm_test` from zero, and Prisma's own CLI refuses
   to run that without fresh human consent each time anyway. Run it yourself
   before a release: `pnpm db:verify-fresh`.
-- **Known gaps**: `apps/web`'s test coverage is still just the package 1.6
-  formatters (`lib/format.ts`) — no component/integration tests yet for
-  anything else in the app. Test files aren't type-checked by plain `tsc -p
-  tsconfig.json` but now are by the wider `tsconfig.check.json` (package
-  1.2c) wired into `pnpm typecheck`.
+- **Known gaps**: `apps/web`'s test coverage is still only pure-logic
+  (`lib/format.ts`, `lib/api-client.ts`'s `onUnauthorized`) — no component/
+  integration tests for `SearchInput`, `SessionExpiryHandler`, `AuthGuard`,
+  or anything else that needs a DOM. That needs `jsdom` +
+  `@testing-library/react`, neither installed; not added in package 1.7
+  since it wasn't the dependency actually asked for that package (unlike
+  `vitest` itself in 1.6, which was asked and approved) — raise it
+  explicitly if/when component tests are wanted. Test files aren't
+  type-checked by plain `tsc -p tsconfig.json` but now are by the wider
+  `tsconfig.check.json` (package 1.2c) wired into `pnpm typecheck`.
 
 ## 12. Conventions every future module must follow
 
@@ -712,15 +767,19 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 
 ## 13. What's next
 
-- **Day 1 (packages 1.1–1.6) is done** (see §7). Every explicit approval
+- **Day 1 (packages 1.1–1.7) is done** (see §7). Every explicit approval
   gate (1.3's permission map, D20/D21→D23) was approved; D25's
   audit-metadata gap was fixed on review before 1.5 started; adding
-  `vitest` to `apps/web` in 1.6 was confirmed with the user before doing it.
+  `vitest` to `apps/web` in 1.6 was confirmed with the user before doing it;
+  1.7's Cache Components fix was confirmed with the user (the earlier
+  decision it referenced wasn't recoverable from this repo's history, so
+  it was asked again rather than guessed).
 - **Not yet done, and not part of Day 1's scope**: the actual browser
   click-through in `docs/MANUAL-TEST-DAY1.md` (now including the package
-  1.6 design-system section, §12) — this environment has no browser, so
-  that still needs the user to run it before Day 1 is truly *verified*, not
-  just built and automatically tested.
+  1.6 design-system section §12/§15 and the 1.7 search/session-expiry
+  sections §13/§14) — this environment has no browser, so that still needs
+  the user to run it before Day 1 is truly *verified*, not just built and
+  automatically tested.
 - Beyond Day 1: the user's planning roadmap continues into Day 2 (companies,
   contacts, leads) — not detailed in this repo yet; don't invent content for
   it. Day 6/7 (testing, stabilisation, demo) are explicitly out of scope
@@ -830,10 +889,49 @@ log just records that a session happened and what it covered.
   return 200 and that `suppressHydrationWarning: true` actually reaches
   `<html>` in the SSR payload; a live browser console check was not
   possible in this environment (no browser-automation tool available) and
-  is now an explicit manual item in `docs/MANUAL-TEST-DAY1.md` §12, which
-  also gained checks for theme switching, no-pure-white/black, fonts,
-  visible focus rings, and the badge dot-plus-word rule. Two ports (3000,
-  4000) were already occupied at session start by node processes that
-  predate this session (the user's own long-running `pnpm dev`, consistent
-  with the pasted error having come from a live dev session) — left
-  running rather than killed, since this session did not start them.
+  is now an explicit manual item in `docs/MANUAL-TEST-DAY1.md` §15
+  (renumbered from §12 in package 1.7), which also gained checks for theme
+  switching, no-pure-white/black, fonts, visible focus rings, and the badge
+  dot-plus-word rule. Two ports (3000, 4000) were already occupied at
+  session start by node processes that predate this session (the user's
+  own long-running `pnpm dev`, consistent with the pasted error having
+  come from a live dev session) — left running rather than killed, since
+  this session did not start them.
+- **2026-11-19 (continued, same day) — package 1.7, three small fixes.**
+  (1) Replaced the Users page's separate search `Input` + "Search"
+  `Button` with a new reusable `SearchInput` (magnifier runs the search,
+  clear-`x` resets it) meant for Leads/Companies/Contacts to reuse later;
+  confirmed the search value was never actually in the URL before this
+  package, so nothing needed preserving there beyond not regressing it.
+  (2) Added real session-expiry-while-open handling: a module-level
+  `onUnauthorized` listener in `api-client.ts` fires on any 401 from any
+  `apiGet`/`apiPost`/`apiPatch` call (covering direct mutation calls, not
+  just ones wrapped in TanStack Query), and the new `SessionExpiryHandler`
+  (mounted once in `providers.tsx`) clears the query cache and redirects
+  to `/login?next=<path>` exactly once — guarded against both a parallel-
+  request burst and `/login`'s own expected 401 on a wrong password.
+  `useMe()` now revalidates on window focus; `AuthGuard` revalidates it on
+  every route change inside the protected shell. Added 4 unit tests for
+  `onUnauthorized` (mocked `fetch`, no DOM needed); `SearchInput` and
+  `SessionExpiryHandler` themselves are not unit tested — that needs
+  `jsdom`/`@testing-library/react`, not installed and not what was asked
+  for in this package, flagged as a gap rather than added silently.
+  (3) For the Cache Components "instant navigation" dev notice: the
+  earlier decision this package's brief referred to wasn't recoverable
+  from `decisions.md`, `PROJECT-STATE.md`, or any stored session
+  transcript, so it was asked again rather than guessed — confirmed as
+  `export const instant = false` on the affected routes, applied as one
+  export on `(protected)/layout.tsx` (the only Server Component ancestor
+  shared by every protected route; can't be set on `users/page.tsx`
+  itself, a Client Component — throws if you try). `pnpm typecheck && pnpm
+  lint && pnpm test && pnpm build` all pass clean (140 tests: 124
+  `apps/api` + 16 `apps/web`, 4 new). Verified via `curl` that `/`,
+  `/users`, `/login` still return 200 on the already-running dev server
+  after all three changes; a live browser/DevTools check (the search box's
+  keyboard/screen-reader behaviour, the two-cookie-store session-expiry
+  scenario, the Cache Components dev notice itself) was not possible in
+  this environment and is now `docs/MANUAL-TEST-DAY1.md` §13/§14, plus one
+  added check in the renumbered §15. `docs/decisions.md` D28. Day 1
+  (packages 1.1 through 1.7) remains complete and committed locally;
+  nothing has been pushed. The two pre-existing node processes on ports
+  3000/4000 were left untouched again, for the same reason as last time.

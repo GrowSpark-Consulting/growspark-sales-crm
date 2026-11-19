@@ -9,7 +9,7 @@ import { useMe } from "@/hooks/use-me";
 import { useUsersList, USERS_QUERY_KEY_ROOT } from "@/hooks/use-users";
 import { apiPost } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -58,11 +58,6 @@ export default function UsersPage() {
   const meta = listQuery.data?.meta;
   const totalPages = meta ? Math.max(1, Math.ceil(meta.total / meta.pageSize)) : 1;
 
-  function applySearch() {
-    setPage(1);
-    setQ(searchInput.trim());
-  }
-
   async function handleDeactivate(userId: string) {
     await apiPost(`/api/v1/users/${userId}/deactivate`);
     toast.success("User deactivated.");
@@ -82,20 +77,17 @@ export default function UsersPage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Input
-          placeholder="Search name or email"
+        <SearchInput
           value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              applySearch();
-            }
+          onValueChange={setSearchInput}
+          onSearch={(value) => {
+            setPage(1);
+            setQ(value);
           }}
+          placeholder="Search name or email"
+          aria-label="Search users by name or email"
           className="w-64"
         />
-        <Button variant="outline" onClick={applySearch}>
-          Search
-        </Button>
         <Select
           value={role}
           onValueChange={(value) => {

@@ -23,6 +23,20 @@ interface ApiErrorBody {
   };
 }
 
+type UnauthorizedListener = () => void;
+let unauthorizedListener: UnauthorizedListener | null = null;
+
+/**
+ * Registered once (by SessionExpiryHandler) so apiFetch can react to a 401
+ * from ANY request — not just ones TanStack Query itself tracks, like a
+ * mutation fired directly from a button handler (apiPost/apiPatch calls in
+ * the users dialogs aren't wrapped in useMutation). This module has no
+ * access to the query client or router itself, so it just notifies.
+ */
+export function onUnauthorized(listener: UnauthorizedListener | null): void {
+  unauthorizedListener = listener;
+}
+
 /**
  * Same-origin, credentials-included fetch wrapper. The web app only ever
  * talks to its own origin (Next's /api/* rewrite proxies to the API), so
@@ -46,6 +60,10 @@ async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const body: unknown = await res.json().catch(() => null);
 
   if (!res.ok) {
+    if (res.status === 401) {
+      unauthorizedListener?.();
+    }
+
     const errorBody = body as ApiErrorBody | null;
     throw new ApiError(
       res.status,
