@@ -1,8 +1,9 @@
 # Project State — Session Handover
 
-Read this first in any new session, together with `CLAUDE.md` and
-`docs/decisions.md`. This file is append-only in its Session Log (§15); every
-other section should be kept accurate as reality changes, not just added to.
+A new session should start at `docs/NEXT-SESSION-START.md`, which reads this
+file next, together with `CLAUDE.md` and `docs/decisions.md`. This file is
+append-only in its Session Log (§15); every other section should be kept
+accurate as reality changes, not just added to.
 
 ## 1. Project snapshot
 
@@ -84,6 +85,27 @@ a real browser, which this session could not do itself.
 - Ports: web **3000**, API **4000**, Postgres **127.0.0.1:5433** (bound to
   localhost only, not `0.0.0.0`). Databases: **crm_dev**, **crm_test**, in one
   Postgres 17 container (`growspark-sales-crm-postgres`).
+
+### Environment variables (names only — never commit or paste real values)
+
+`apps/api/.env` (copy from `apps/api/.env.example`, which already holds
+placeholder dev-only values, not secrets):
+
+- `NODE_ENV`, `PORT` — standard.
+- `DATABASE_URL`, `TEST_DATABASE_URL` — Postgres connection strings for
+  `crm_dev` and `crm_test` respectively.
+- `ALLOWED_ORIGINS` — comma-separated origin allow-list for the CSRF
+  Content-Type/Origin check (D20); the web app's own origin.
+- `TRUST_PROXY` — `"false"` locally; a hop-count integer once a real
+  reverse proxy sits in front (see D21/D23, still deferred).
+- `SESSION_TTL_DAYS` — sliding session expiry window.
+- `SEED_ADMIN_PASSWORD`, `SEED_STAFF_PASSWORD` — dev-only; the seed has no
+  built-in default and refuses to run without both set.
+
+`apps/web/.env` (copy from `apps/web/.env.example`):
+
+- `API_INTERNAL_URL` — server-side only, used by `next.config.ts` to build
+  the `/api/*` rewrite proxy.
 
 ### Starting everything from scratch
 
@@ -353,8 +375,15 @@ docker-compose.yml       postgres:17-alpine only; project name
 docker/init-db.sh        creates crm_test (crm_dev comes from POSTGRES_DB)
 
 docs/
-  decisions.md           D1–D27 (see §9)
+  NEXT-SESSION-START.md   the first file a fresh session reads — brief,
+                        hard rules, reading order, the Day 2 plan, open items
+  decisions.md           D1–D29 (see §9)
   PROJECT-STATE.md        this file
+  DAY-1-SUMMARY.md        what was built/verified per package 1.1–1.7, bugs
+                        found and fixed, "how to run the app and log in"
+  MANUAL-TEST-DAY1.md     15-section browser click-through script (package
+                        1.5, extended in 1.6/1.7) — not yet run by anyone,
+                        this environment has no browser (§14)
   design-system/          the Grow Spark Workspace design system handed to
                         this session (README.md, tokens.css, tokens.json,
                         manifest.json, api/, components/*/README.md +
@@ -394,11 +423,17 @@ packages pin exact versions, no `^`/`~` ranges, per `CLAUDE.md`).
 
 ## 7. What has been built, package by package
 
-All commits are **local only**. The previously-flagged mystery ("local main
-9 commits ahead of origin/main") **resolved itself**: `git status` now
-reports local `main` exactly matching `origin/main` — someone pushed outside
-these sessions (still unverified who/when, but no longer an open risk; no
-session has ever run `git push`, including this one).
+All commits are **local only from this tool's side** — no session run from
+this tool has ever executed `git push`. **The "local matches origin" mystery
+has now recurred twice**, not once: first noted around package 1.4/1.5 ("9
+commits ahead of origin/main" resolving itself), and again at the start of
+the end-of-Day-1 docs handover session (2026-11-19, after packages 1.6 and
+1.7), when `git status` showed `main` already "up to date with
+origin/main" — for commits this tool made locally and never pushed. Something outside these
+sessions (the user directly, an IDE auto-sync feature, a git hook — not
+established which) is pushing independently. Not a risk to flag loudly, but
+stop assuming "local only" means "not on the remote": verify with
+`git status`/`git log origin/main` if it matters for a given task.
 
 - **Package 1.1 — scaffold** (`00269d5` … `e3b5c78`, 6 commits): pnpm
   workspace root tooling; Postgres 17 docker-compose; `packages/shared`
@@ -670,6 +705,20 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   them** — `app/(protected)/page.tsx` and a pre-existing `app/page.tsx`
   both resolve to `/`; the old one has to be deleted, not just left
   alongside, or the build fails on a route conflict.
+- **This repo's own command examples use Windows `cmd.exe` syntax, not
+  PowerShell** — `netstat -ano | findstr :3000`, `taskkill /PID <pid> /T
+  /F`, `copy apps\api\.env.example apps\api\.env` (see §4's "Starting
+  everything from scratch"). Keep new examples in that same style (e.g.
+  `findstr`, not `Select-String`; `copy`, not `Copy-Item`) unless the user
+  specifically asks for PowerShell.
+- **Two browser windows split-screened side by side (tiled on the same
+  desktop) still share one cookie store if they're the same browser
+  profile** — only one authenticated session can exist across them at a
+  time. Testing two different users signed in simultaneously (e.g. the
+  session-expiry-while-open scenario in `MANUAL-TEST-DAY1.md` §14, or the
+  deactivate-while-signed-in scenario in §10) needs a normal window *plus*
+  an incognito/private window — two genuinely separate cookie stores — not
+  two tiled views of the same window.
 
 ## 11. Testing
 
@@ -727,10 +776,17 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 
 - Service functions take a context `{ userId, orgId, role }` — never read
   these off a raw request object inside a service.
-- Every database query is scoped by `organizationId` taken from that context;
-  a record belonging to a different organisation must look like a 404, not a
-  403 (don't leak existence).
+- Every database query is scoped by `organizationId` taken from that context
+  via the `scoped(ctx)` helper (`apps/api/src/lib/scoped.ts` — returns
+  `{ organizationId: ctx.orgId }`), not a hand-written filter re-spelled per
+  module; a record belonging to a different organisation must look like a
+  404, not a 403 (don't leak existence).
 - Every route declares a required permission explicitly.
+- Request bodies/params/query are validated via `validateRequest`
+  (`apps/api/src/middleware/validate.ts`) using a `packages/shared` Zod
+  schema — body/params overwrite `req.body`/`req.params`; a validated query
+  goes on `req.validatedQuery` instead, since Express 5's `req.query` has
+  no setter (D19). Never validate ad hoc inside a route handler.
 - Multi-table writes happen inside one transaction, with the audit row
   written inside that same transaction (not after, not best-effort).
 - `packages/shared`'s Zod schemas are the single source of validation — don't
@@ -764,6 +820,37 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   500-toast-with-request-id split stays consistent everywhere. Client
   components that read `useSearchParams()` need a real `<Suspense>`
   fallback (not `null`) — see the gotcha above.
+- **Every colour, radius, shadow, size and font comes from a Grow Spark
+  design-system token** (`apps/web/app/design-tokens.css`, mapped through
+  Tailwind v4's `@theme inline` in `globals.css`) — never a hex literal or
+  a bare Tailwind palette class (`bg-slate-500`, `text-red-600`, etc.) and
+  never `white`/`black` directly. Use the generated utility (`bg-surface`,
+  `text-ink-muted`, `border-danger`, …) or an explicit token reference
+  (`h-(--control-md)`) for a size that has no Tailwind equivalent. See
+  `docs/decisions.md` D27.
+- **A page needing its own route-segment config (`export const dynamic`,
+  `instant`, etc.) must be a Server Component** — Next.js throws if
+  `instant` (or most other segment config) is exported from a file with
+  `"use client"` at the top. `(protected)/layout.tsx` is one today
+  (`instant = false`, D28). **Not yet applied, but the intended pattern
+  going into Day 2**: keep `page.tsx` itself a thin Server Component
+  (default export, no `"use client"`) that just renders a separate client
+  component holding the actual interactive logic (`"use client"` on that
+  inner component instead) — so `page.tsx` stays free to carry its own
+  `instant`/other segment config. `apps/web/app/(protected)/users/page.tsx`
+  is currently `"use client"` directly and does **not** follow this
+  pattern yet — see `docs/NEXT-SESSION-START.md`'s open items.
+- **Search inputs reuse `SearchInput`**
+  (`apps/web/components/ui/search-input.tsx`) — a magnifier icon runs the
+  search (same as Enter), a clear `x` appears once there's text and
+  re-runs the search empty. Don't rebuild a separate input+button pattern
+  for Leads/Companies/Contacts' search boxes.
+- **Any new `apiGet`/`apiPost`/`apiPatch` call automatically participates
+  in session-expiry handling** — `apps/web/lib/api-client.ts`'s `apiFetch`
+  notifies a registered `onUnauthorized` listener on every 401, regardless
+  of how the call was made (a direct `await`, not just a `useMutation`).
+  Nothing extra is needed per call site for this to work; don't add a
+  bespoke 401 check in a new dialog/page.
 
 ## 13. What's next
 
@@ -781,9 +868,18 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   the user to run it before Day 1 is truly *verified*, not just built and
   automatically tested.
 - Beyond Day 1: the user's planning roadmap continues into Day 2 (companies,
-  contacts, leads) — not detailed in this repo yet; don't invent content for
-  it. Day 6/7 (testing, stabilisation, demo) are explicitly out of scope
-  until the build days are done.
+  contacts, leads). **A fresh session should start from
+  `docs/NEXT-SESSION-START.md`**, not this section — it has the actual Day 2
+  package order (2.0 leftovers, then 2.1–2.3 backend, then 2.4–2.6 UI) and
+  the open items. Four Day 2 rules were approved on 2026-11-19 (end of this
+  Day 1 handover session) but **nothing against them is built yet**: lead
+  status transitions (any open status to any other; `CONVERTED` only via
+  the Day 3 convert action; every change writes `LeadStatusHistory`), lead
+  creation requires a name plus an email or a phone, duplicate detection
+  (exact normalised email/phone/company name) warns only and still saves,
+  and Staff may create/edit/archive companies/contacts/leads — see
+  `docs/decisions.md` D29. Day 6/7 (testing, stabilisation, demo) are
+  explicitly out of scope until the build days are done.
 
 ## 14. Open questions and unverified items
 
@@ -812,8 +908,18 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   documented fix for the exact pasted error (next-themes writing
   `class`/`style`/`data-theme` onto `<html>` after mount) and the SSR
   payload confirms the prop is reaching `<html>`, but neither proves the
-  browser console is actually silent — that's §12 of
+  browser console is actually silent — that's §15 of
   `docs/MANUAL-TEST-DAY1.md`, still outstanding.
+- **A full list of open items from package 1.7 and this handover session
+  lives in `docs/NEXT-SESSION-START.md` ("Open items")** — not duplicated
+  here to avoid the two files drifting apart. In short: the Cache
+  Components notice still appears on `/users` (the `(protected)/layout.tsx`
+  fix wasn't enough on its own); no password-visibility toggle anywhere;
+  the Users search value isn't in the URL; `SearchInput`/
+  `SessionExpiryHandler` have no component tests; and whether route-change
+  revalidation actually produces a fast redirect in a real browser (versus
+  needing a refresh) was reasoned through from the code but not watched
+  happen — see that file for the full, individually-verified list.
 
 ## 15. Session log
 
@@ -935,3 +1041,60 @@ log just records that a session happened and what it covered.
   (packages 1.1 through 1.7) remains complete and committed locally;
   nothing has been pushed. The two pre-existing node processes on ports
   3000/4000 were left untouched again, for the same reason as last time.
+- **2026-11-19 (continued, same day) — end-of-Day-1 docs handover, no code
+  changes.** Full pass over the documentation per the user's explicit
+  request, so a brand-new session can continue Day 2 from the repo alone:
+  rewrote this file's stale "mystery resolved itself" framing (`git
+  status` showed `main` already matching `origin/main` again at the start
+  of this session, for the 1.6/1.7 commits — the second time this has
+  happened, not a one-off); added an explicit environment-variable-names
+  subsection to §4; added two gotchas that existed in practice but weren't
+  written down (`cmd.exe`-style command examples, split-screen windows
+  sharing one cookie store); added conventions for the design tokens, the
+  `SearchInput` pattern, the global 401 handler, and the planned "thin
+  Server Component page wrapper" pattern for `instant`; added `docs/
+  design-system/`, `DAY-1-SUMMARY.md`, `MANUAL-TEST-DAY1.md`, and
+  `NEXT-SESSION-START.md` to the repo map. `docs/decisions.md` got a
+  numbering/dating note at the top (every entry D1–D29 happened on
+  2026-11-19) and a new **D29** for four Day 2 rules the user approved at
+  the end of this session (lead status transitions, lead-creation
+  requirements, duplicate-detection-warns-only, Staff permissions on
+  companies/contacts/leads) — none of them built yet. Wrote two new files:
+  `docs/DAY-1-SUMMARY.md` (plain-language what-was-built/verified/fixed,
+  and a how-to-run-and-log-in section) and `docs/NEXT-SESSION-START.md`
+  (the actual first-file-to-read: brief, hard rules, reading order, the
+  known shape of the Day 2 plan, the Day 4 staging plan, and every open
+  item re-verified against the current code before being written down).
+  `CLAUDE.md` got one small edit — its "start of session" line now points
+  to `NEXT-SESSION-START.md` first.
+
+  Each open item carried into `NEXT-SESSION-START.md` was individually
+  checked against the actual code in this session, not carried over on
+  assumption: (a) the Cache Components notice on `/users` is confirmed
+  still open — `(protected)/layout.tsx` has `instant = false`, but
+  `users/page.tsx` is a Client Component and can't carry its own
+  exemption, and per the user's own browser testing the layout-level
+  setting alone isn't enough; the fix (a thin Server Component wrapper) is
+  real but not yet implemented. (b) no password-visibility toggle exists
+  anywhere — confirmed by grep, still open. (c) the Users search value is
+  still plain `useState`, not in the URL — confirmed by grep, still open.
+  (d) no `jsdom`/`@testing-library/react` in `apps/web/package.json` —
+  confirmed, no component tests exist for `SearchInput` or
+  `SessionExpiryHandler`, still open. (e) **not resolved either way**:
+  traced the actual `@tanstack/query-core` reducer source to confirm a
+  failed background refetch does set `status: "error"` (so `AuthGuard`'s
+  redirect condition should fire), and the global 401 handler is wired
+  independently of `AuthGuard` too — on paper this should already work
+  promptly, but that's a code reading, not a watched browser test (no
+  browser-automation tool in this environment), and it contradicts the
+  user's own report of it only working after a refresh. Written up as an
+  open, unreconciled discrepancy rather than claimed as fixed. (g) the
+  design-system `.zip` is still untracked, confirmed via `git status` —
+  intentional, unchanged.
+
+  Verification: `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
+  all pass, test counts unchanged from package 1.7 as expected for a
+  docs-only change (140: 124 `apps/api` + 16 `apps/web`). Process hygiene:
+  no process was started this session; ports 3000 and 4000 were both
+  already free at session start and remained so throughout — nothing to
+  stop. Committed as one docs-only commit; nothing pushed.

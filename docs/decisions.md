@@ -3,6 +3,14 @@
 Record of approved architectural decisions for the Sales & CRM project. Each entry
 is a decision made once and not re-litigated without a new entry.
 
+Numbering is append-only starting at D1; **D3 and D5 do not exist** (never
+assigned in this file — presumably reserved in the user's own separate
+planning roadmap, which uses different decision IDs than this file). Every
+entry from D1 through D29 was made on **2026-11-19** — the entire Day 1 of
+the project's 7-day plan happened on one calendar date — individual dates
+are only called out inline where a specific fact (a version check, a doc
+read) was itself dated for traceability.
+
 - **D1** — pnpm monorepo: `apps/web` (Next.js), `apps/api` (Express), `packages/shared`.
 - **D2** — Auth will be our own server-side sessions, built in a later package. Nothing
   implemented for it in package 1.1.
@@ -672,3 +680,34 @@ is a decision made once and not re-litigated without a new entry.
     outside the brief's "protected pages" scope for this fix, and it has
     its own, already-solved `Suspense` boundary (D26) for its one dynamic
     piece (`useSearchParams()`).
+- **D29** — End-of-Day-1 handover: four Day 2 rules approved by the user,
+  **not yet implemented** (no Lead/Company/Contact model or module exists
+  yet — these govern work starting in package 2.1+):
+  - **Lead status transitions**: any open (non-terminal) status may move
+    to any other open status directly — no fixed linear pipeline order
+    enforced between open statuses. `CONVERTED` is reachable **only**
+    through the dedicated convert action (planned for Day 3, when
+    Company/Contact/Deal creation-from-lead exists), never via a plain
+    status-field edit. Every status change, including the eventual
+    convert, writes a `LeadStatusHistory` row — this is an audit trail
+    requirement, analogous to the existing `AuditEvent` rows for users
+    (D25), not optional telemetry.
+  - **Lead creation requires a name, plus at least one of an email or a
+    phone** — not both required, but not neither. Validate this in the
+    shared Zod schema (`packages/shared`), not duplicated in the API
+    service and the frontend form separately.
+  - **Duplicate detection warns, it never blocks.** A duplicate is an
+    exact match (after normalising: lower-cased/trimmed email, digits-only
+    phone, lower-cased/trimmed company name) against an existing
+    email, phone, or company name within the same organisation. On a
+    match, surface a warning to the user; the record **still saves** —
+    this is a heads-up, not a validation failure, and must not use the
+    same 422/409 error-response shape the rest of the API uses for actual
+    rejections.
+  - **Staff may create, edit, and archive companies, contacts, and leads**
+    (same standing as Admin for these three resources specifically) — this
+    was an open question going into Day 2 ("D3" in the user's own separate
+    roadmap numbering, unrelated to this file's missing D3); answered yes.
+    Does **not** extend to the Users module (still Admin-only, `users:manage`
+    — D16/D25) or to anything deal/pipeline-related, which hasn't been
+    discussed yet.

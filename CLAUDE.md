@@ -4,10 +4,11 @@ Working rules for this repository (Sales & CRM for Grow Spark Consulting).
 
 ## Start of every session
 
-Read `docs/PROJECT-STATE.md`, this file, and `docs/decisions.md` before doing
-anything else. Run the read-only environment checks (git status/log, node/
-pnpm/docker versions, port checks). Do not start coding until the user's
-first prompt of the session arrives.
+Read `docs/NEXT-SESSION-START.md` first — it points to this file,
+`docs/PROJECT-STATE.md`, and `docs/decisions.md`, in the order to read them,
+plus the current plan and open items. Run the read-only environment checks
+(git status/log, node/pnpm/docker versions, port checks). Do not start coding
+until the user's first prompt of the session arrives.
 
 ## End of every session
 
