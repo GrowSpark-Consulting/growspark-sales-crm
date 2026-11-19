@@ -217,6 +217,8 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         async inner component wrapped in <Suspense>
                         (Next 16 + Cache Components requirement)
       contacts/page.tsx, contacts/[id]/page.tsx   (2.5, D38) same pattern
+      leads/page.tsx, leads/new/page.tsx, leads/[id]/page.tsx,
+      leads/[id]/edit/page.tsx   (2.6, D39) same thin-wrapper pattern
   components/
     auth-guard.tsx          useMe()-driven redirect: unauth'd -> /login?
                         next=..., shows a Skeleton while loading; also
@@ -277,6 +279,17 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         alternatePhone/preferredCommunicationMethod or
                         lifecycleStatus fields — see D38/D36),
                         contacts-page-client.tsx, contact-detail-page-client.tsx
+    leads/                  (2.6, D39) leads-page-client.tsx (list: all 5
+                        named filters + search/sort/paging, sortable
+                        name/status/priority/created only); lead-form.tsx
+                        (shared fields via leadCreatableFields, but
+                        genuinely separate create/edit schemas —
+                        requirement is create-only; duplicate warning via
+                        the real GET /leads/duplicates); create-lead-page-
+                        client.tsx, edit-lead-page-client.tsx,
+                        lead-detail-page-client.tsx (status buttons minus
+                        current status, hidden entirely once CONVERTED;
+                        read-only original-enquiry panel; History tab)
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx,
                         users-page-client.tsx (2.0, D31 — the Client
@@ -303,6 +316,9 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     use-debounced-value.ts  (2.4, D37) generic debounce hook, used by
                         CompanySelect
     use-contacts.ts         (2.5, D38) useContactsList(params), useContact(id)
+    use-leads.ts            (2.6, D39) useLeadsList(params), useLead(id),
+                        useLeadStatusHistory(id)
+    use-lead-sources.ts     (2.6, D39) GET /lead-sources, for the Source select
   lib/
     api-client.ts           ApiError + apiGet/apiPost/apiPatch, same-origin
                         credentials; onUnauthorized(listener) — apiFetch
@@ -318,6 +334,14 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         ""-valued keys from a form payload before POST/
                         PATCH, so "left blank" means null/omitted, not a
                         literal empty string
+    lead-presentation.ts    (2.6, D39) leadStatusLabel/leadStatusBadgeVariant,
+                        priorityLabel/priorityBadgeVariant — reuses the
+                        Badge README's status-tone mapping (D27)
+    datetime-local.ts       (2.6, D39) toDatetimeLocalValue/
+                        fromDatetimeLocalValue — bridges the native
+                        <input type="datetime-local"> (bare local string,
+                        no timezone) and the API's ISO instants, for
+                        "Next follow-up"
   tests/lib/
     format.test.ts          12 unit tests for lib/format.ts (D27)
     api-client.test.ts      4 unit tests for onUnauthorized (mocked fetch,
@@ -464,7 +488,8 @@ packages/shared/        Zod schemas + enums, consumed as a compiled package
   src/contacts.ts        same shape as companies.ts, for contacts (2.2, D34)
   src/leads.ts           create/update/status/listQuery/response schemas,
                         duplicate-check query, status-history schema
-                        (2.3, D35)
+                        (2.3, D35); leadCreatableFields exported (2.6,
+                        D39 — apps/web rebuilds a form-local schema from it)
   tsconfig.watch.json     incremental build config used only by `dev`/
                         `dev:prepare` (package 1.3b, D24) — tsconfig.json
                         (build/typecheck) stays non-incremental per D12
@@ -483,7 +508,7 @@ docker/init-db.sh        creates crm_test (crm_dev comes from POSTGRES_DB)
 docs/
   NEXT-SESSION-START.md   the first file a fresh session reads — brief,
                         hard rules, reading order, the Day 2 plan, open items
-  decisions.md           D1–D29 (see §9)
+  decisions.md           D1–D39 (see §9)
   PROJECT-STATE.md        this file
   DAY-1-SUMMARY.md        what was built/verified per package 1.1–1.7, bugs
                         found and fixed, "how to run the app and log in"
@@ -761,6 +786,26 @@ not something to investigate.
   typecheck && pnpm lint && pnpm test && pnpm build` all pass (249 tests,
   unchanged — UI wiring over already-tested 2.2 endpoints). Full detail in
   `docs/decisions.md` D38.
+- **Package 2.6 — Leads UI**: list page (`/leads`) with search plus all
+  five named filters (status/source/priority/owner/created-date-range),
+  server-side sort limited to name/status/priority/created, archived
+  toggle; create form (`/leads/new`) and edit form (`/leads/[id]/edit`)
+  sharing `leadCreatableFields` (newly exported from
+  `packages/shared/src/leads.ts`) but genuinely different form-local
+  schemas — `requirement` is create-only, never editable; the
+  name+email-or-phone rule enforced client-side via `.refine()` on both;
+  duplicate-warning banner calls the real `GET /leads/duplicates` endpoint
+  (unlike Company's blur-hint approximation, D38) and never blocks saving.
+  Detail page (`/leads/[id]`) shows status-change buttons for every open
+  status except the current one, hides the whole section once
+  `CONVERTED` (D29 — no Day 3 convert action exists yet), a read-only
+  "Original enquiry" panel (`requirement` + `capturedFields`), and a
+  History tab listing every `LeadStatusHistory` row newest-first. New
+  `lib/datetime-local.ts` converts between the native
+  `datetime-local` input and ISO instants for "Next follow-up". Sidebar
+  gained a **Leads** entry, placed first. `pnpm typecheck && pnpm lint &&
+  pnpm test && pnpm build` all pass (249 tests, unchanged — UI wiring over
+  already-tested 2.3 endpoints). Full detail in `docs/decisions.md` D39.
 
 ## 8. Database
 
@@ -851,6 +896,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D36 — Package 2.3b: archive/restore on a record already in that state is 409 (`ALREADY_ARCHIVED`/`NOT_ARCHIVED`), missing/cross-org stays 404; re-confirmed `activities` can hold `NOTE` for Day 4 (no schema change); Contact `lifecycleStatus` stays free text and hidden from the UI (PRD never enumerates values); added `jsdom`/`@testing-library/react`/`@testing-library/dom` to `apps/web`, `vitest.config.mts` set to `environment: "jsdom"` globally
 - D37 — Package 2.4: `DataTable`/`RecordLayout`/`OwnerSelect`/`CompanySelect`/`useListUrlState` built; `DataTable` wired into a real Companies list page; row-opens-record via a real `Link` in the first column, not row click handling; `OwnerSelect` kept to form use, list-page owner filter is a separate plain `Select` (different semantics: "no filter" vs "owner = nobody"); `CompanySelect` hand-built (no Combobox primitive installed); two `useEffect`s in `CompanySelect` rewritten as render-time state adjustments to satisfy `react-hooks/set-state-in-effect`; `ConfirmActionDialog` moved to `components/ui/`; added `apps/web/tests/setup.ts` for RTL's `afterEach(cleanup)` (not automatic without vitest `globals: true`)
 - D38 — Package 2.5: real PRD/schema conflict on Contact's "alternate phone"/"preferred communication method" (not in the schema) — stopped, asked, dropped both; Companies use full create/edit pages, Contacts use a Dialog (different field counts and reuse contexts); both forms validate against the *create* schema even in edit mode, submitting the full field set as PATCH; `z.coerce.number()`'s `unknown` input type (Zod v4) broke a plain `useForm<CreateCompanyInput>` — fixed with a form-local schema overriding just that one field to a non-coercing validator; duplicate hint on company-name blur reuses the plain list `q` search (no dedicated endpoint, unlike Leads); new `Textarea` and `stripEmptyOptionalFields` (blank optional fields must become `null`/omitted, not a literal `""`)
+- D39 — Package 2.6: `leadCreatableFields` exported from `packages/shared` so a form-local schema override could be rebuilt without `.extend()` (`createLeadSchema` is a `ZodEffects`, not a plain `ZodObject`); create and edit use two genuinely different form-local schemas (unlike Company/Contact's one-schema-for-both, D38) because `requirement` is create-only and never editable; duplicate warning calls the real `GET /leads/duplicates` endpoint (unlike Company's blur-hint approximation); status-change buttons omit the current status and the whole section disappears once `CONVERTED` (D29 — no convert action exists yet); new `lib/datetime-local.ts` bridges the native `datetime-local` input and ISO instants; a Zod `.refine()` options object needed its `path` cast away from `as const` (`readonly ["email"]` vs. Zod's mutable `PropertyKey[]`)
 
 ## 10. Gotchas and lessons learned
 
@@ -953,7 +999,10 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `tests/components/owner-select.test.tsx` (3) — the last three package
   2.4), and `apps/api` (`vitest run`) — 219 `apps/api` tests + 30
   `apps/web` tests, 249 total, all passing as of the last run this session
-  (package 2.4). `apps/web` runs under jsdom (D36) with
+  (package 2.6 — unchanged from 2.4/2.5 since 2.5 and 2.6 were pure UI
+  wiring over already-tested 2.2/2.3 endpoints, with manual coverage in
+  `docs/MANUAL-TEST-DAY2.md` instead of new automated tests, per the
+  brief). `apps/web` runs under jsdom (D36) with
   `tests/setup.ts` registering RTL's `afterEach(cleanup)` (D37) —
   needed because RTL's own auto-cleanup never self-registers without
   vitest's `globals: true`, which this repo doesn't use.
@@ -1573,3 +1622,47 @@ log just records that a session happened and what it covered.
   Committed locally; nothing pushed. Full detail in `docs/decisions.md`
   D38. Next: package 2.6 (Leads UI) — the last package before the combined
   report and `docs/MANUAL-TEST-DAY2.md`.
+- **2026-11-20 (continued, same day) — package 2.6, Leads UI, Day 2's last
+  package.** Built the list page (`/leads`) with all five named filters
+  (status/source/priority/owner/created-date-range) plus search, all
+  server-side and reflected in the URL (`useListUrlState`, D37); sort
+  limited to the fields the API actually allows
+  (name/status/priority/createdAt). Built a shared `lead-form.tsx` for
+  both create (`/leads/new`) and edit (`/leads/[id]/edit`), but — unlike
+  Company/Contact's "always validate against create, PATCH the full set"
+  shortcut (D38) — these needed two genuinely different form-local
+  schemas, because `requirement` ("original enquiry") is create-only and
+  must never be editable afterwards; exported a new
+  `leadCreatableFields` from `packages/shared/src/leads.ts` so both
+  schemas could be rebuilt from the same ~13 field validators without
+  duplicating them (`createLeadSchema` is a `ZodEffects`, not a plain
+  `ZodObject`, so it has no `.extend()` the way Company's schema did).
+  Hit the same `z.coerce.number()`-vs-`useForm` generic clash as
+  Company's `annualRevenue` (D38), this time for `estimatedBudget` — same
+  fix, a form-local non-coercing override. The duplicate-warning banner
+  calls the real `GET /leads/duplicates` endpoint (2.3, D35) rather than
+  approximating like Company's blur hint — Leads already had the
+  purpose-built endpoint — and, per D29, still never blocks the save.
+  Built the lead detail page (`/leads/[id]`) with status-change buttons
+  for every open status except the current one, the whole "Change
+  status" section omitted entirely once `CONVERTED` (no convert action
+  exists yet — Day 3), a read-only "Original enquiry" panel
+  (`requirement` + a generic `capturedFields` dump), and a History tab
+  listing every `LeadStatusHistory` row newest-first — satisfying this
+  session's "qualifying a lead writes a visible history entry"
+  acceptance item. Added `lib/datetime-local.ts` to bridge the native
+  `datetime-local` input (bare local string) and the API's ISO instants
+  for "Next follow-up". Added a **Leads** sidebar entry, placed first.
+  One small Zod typing fix along the way: a `.refine()` options object's
+  `path: ["email"] as const` produced a `readonly` tuple Zod's own type
+  rejects; dropped `as const` and cast the options object directly
+  instead. `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all
+  pass clean (249 tests, unchanged — UI wiring over 2.3's already-tested
+  endpoints, same as 2.5; manual coverage lives in the new
+  `docs/MANUAL-TEST-DAY2.md` instead). New routes confirmed in the build
+  output: `/leads`, `/leads/new`, `/leads/[id]`, `/leads/[id]/edit`. No
+  process was started this package; nothing to stop. Committed locally;
+  nothing pushed. Full detail in `docs/decisions.md` D39. This closes out
+  the 2.3b–2.6 scope for this session — a single combined report was
+  given after this package, and no Day 3 work (lead conversion, deals,
+  pipeline) was started, per explicit instruction.

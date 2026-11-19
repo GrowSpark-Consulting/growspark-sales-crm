@@ -79,6 +79,7 @@ export type {
   ContactResponse,
 } from './contacts.js';
 export {
+  leadCreatableFields,
   createLeadSchema,
   updateLeadSchema,
   updateLeadStatusSchema,

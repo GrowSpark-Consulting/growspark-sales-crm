@@ -1285,3 +1285,68 @@ read) was itself dated for traceability.
     2.6 instead). New routes confirmed in the build output: `/companies`,
     `/companies/new`, `/companies/[id]`, `/companies/[id]/edit`,
     `/contacts`, `/contacts/[id]`.
+- **D39** — Package 2.6 (Leads UI):
+  - **`leadCreatableFields` exported from `packages/shared/src/leads.ts`**
+    (was a module-private `const`). Needed so `apps/web`'s form-local
+    schema override for `estimatedBudget` (the same `z.coerce.number()` /
+    `useForm` generic clash as Company's `annualRevenue`, D38) could
+    rebuild an object schema from the individual field validators. Unlike
+    `createCompanySchema` (a plain `ZodObject`, fixable with `.extend()`),
+    `createLeadSchema` is wrapped in `.refine()` for the name+email-or-phone
+    rule, and `ZodEffects` has no `.extend()` — re-exporting the
+    pre-refine field map was simpler than duplicating ~13 field
+    definitions in `apps/web`.
+  - **Create and edit use two different form-local schemas, not one
+    shared one** (unlike Company/Contact, D38, which validate edits
+    against the create schema and PATCH the full field set). Leads'
+    `requirement` ("original enquiry") is create-only and read-only after
+    that — the roadmap and PRD both treat it as the lead's original
+    verbatim enquiry, never edited later — so the edit form has no
+    `requirement` field at all, and its schema (`editLeadFormSchema`) omits
+    it entirely rather than sending back whatever the create form last
+    held. Both schemas `.refine()` the same `emailOrPhoneRefine` check
+    against `leadBaseFormFields` (`leadCreatableFields` plus the
+    `estimatedBudget` override above).
+  - **Duplicate warning reuses the real `GET /leads/duplicates` endpoint**
+    (D35) — a genuine contrast with Company's blur hint (D38), which has
+    no dedicated endpoint and approximates with `GET /companies?q=`.
+    Leads already had a purpose-built, normalised exact-match endpoint
+    from the 2.3 API package, so the UI calls it directly on
+    email/phone/company-name blur; the warning banner lists each match
+    with its reason (email/phone/company name) and a link to the existing
+    lead, and never blocks the save — consistent with D29.
+  - **Status-change buttons on the lead detail page** render
+    `OPEN_LEAD_STATUSES.filter((status) => status !== lead.status)` and
+    the whole "Change status" section is omitted once
+    `lead.status === "CONVERTED"` — Converted is a Day 3 (lead-conversion)
+    feature with no button offered here at all (D29), not merely
+    disabled. Every change writes a `LeadStatusHistory` row server-side
+    (pre-existing, 2.3) and the detail page's History tab lists them
+    newest-first, satisfying the session's "qualifying a lead writes a
+    visible history entry" acceptance item.
+  - **Original-enquiry panel** renders `lead.requirement` and
+    `lead.capturedFields` (an `Object.entries` loop over whatever JSON the
+    lead was captured with) as plain read-only text — no PRD field list
+    exists for `capturedFields`' shape, so it is displayed generically
+    rather than mapped to named labels.
+  - **`lib/datetime-local.ts`** (`toDatetimeLocalValue`/
+    `fromDatetimeLocalValue`): the lead form's "Next follow-up" field is a
+    native `<input type="datetime-local">`, which reads/writes a bare
+    local string (`"2026-11-20T14:30"`) with no timezone, while the API
+    stores/returns full ISO instants. Small pair of converters isolates
+    that mismatch at the form boundary rather than scattering
+    `Date`-parsing through the component.
+  - **Zod `.refine()` second-argument typing fix**: `{ message, path:
+    ["email"] } as const` produced a `readonly ["email"]`, which Zod's
+    refine-options type rejects (it wants a mutable `PropertyKey[]`).
+    Fixed by dropping `as const` and casting the whole options object to
+    `{ message: string; path: string[] }` instead.
+  - Sidebar gained a **Leads** entry (`components/app-shell.tsx`), placed
+    first — above Companies and Contacts — since leads are the top of the
+    funnel; `Target` icon, `"/leads": "Leads"` added to `PAGE_TITLES`.
+  - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+    (249 tests, unchanged — same reasoning as D38: this package was UI
+    wiring over the already-tested 2.3 Leads API, with manual coverage in
+    `MANUAL-TEST-DAY2.md` instead of new automated tests). New routes
+    confirmed in the build output: `/leads`, `/leads/new`, `/leads/[id]`,
+    `/leads/[id]/edit`.

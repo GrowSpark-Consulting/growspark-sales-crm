@@ -8,7 +8,18 @@ function optionalTrimmed(max: number) {
   return z.string().trim().max(max).optional();
 }
 
-const leadCreatableFields = {
+/**
+ * Exported (not just module-local) so the frontend (package 2.6) can build
+ * its own form-resolver schema from these same field validators — same
+ * reasoning as Company's `companyFormSchema` (D38): `nextFollowUpAt`/
+ * `estimatedBudget` aren't coerced here, but the frontend's create vs edit
+ * forms genuinely differ in which *extra* fields they add on top of this
+ * shared set (edit excludes `requirement`/`capturedFields` entirely,
+ * matching `updateLeadSchema` below), which ruling out `.extend()` on the
+ * refined `createLeadSchema` would otherwise force into a second,
+ * hand-duplicated field list.
+ */
+export const leadCreatableFields = {
   firstName: z.string().trim().min(1, 'First name is required').max(200, 'First name is too long'),
   lastName: optionalTrimmed(200),
   email: z.string().trim().max(320, 'Email is too long').optional(),
