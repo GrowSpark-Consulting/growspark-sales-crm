@@ -395,3 +395,32 @@ is a decision made once and not re-litigated without a new entry.
     answering immediately after. Every run's full process tree was
     confirmed gone (no leftover `node.exe`, ports free) before the next run
     started.
+- **D25** — Package 1.4 notes:
+  - **Last-Admin enforcement uses a raw `SELECT ... FOR UPDATE`**
+    (`apps/api/src/modules/users/users.service.ts`,
+    `assertNotLastActiveAdmin`), not Prisma's query builder — there is no
+    builder API for row locking. Locks every currently-active Admin row for
+    the organisation (not just the target), so two concurrent
+    demote/deactivate attempts against different Admins genuinely serialize
+    at the database rather than racing; verified with a real concurrency
+    test (two Admins demoted at once, exactly one succeeds, exactly one
+    active Admin remains). The raw query casts to the Postgres enum type by
+    its mapped name, `role` (from `@@map("role")` on the `Role` enum, per
+    D15), e.g. `role = 'ADMIN'::role`.
+  - **A query-string boolean must not use `z.coerce.boolean()`** —
+    `Boolean("false")` is `true` in JS, so `z.coerce.boolean()` would accept
+    `isActive=false` and produce `true`. `packages/shared/src/common.ts`'s
+    `booleanQueryParam` instead validates against the literal strings
+    `"true"`/`"false"` and transforms explicitly.
+  - **Sort convention**: `sort=<field>:asc|desc`, validated against a perresource field whitelist (`sortQuerySchema`, `packages/shared/src/
+    common.ts`) — an unlisted field or malformed value is a 422, never
+    silently ignored or silently sorted by something else.
+  - A single `PATCH /users/:id` writes one audit row, not two, even when
+    both `name` and `role` change in the same request: `user.role_changed`
+    (with `oldRole`/`newRole` in metadata) takes priority over
+    `user.updated` when role is among the changed fields, since the brief's
+    metadata shape ("changed field names and old/new role") implies one
+    row per update, not one per field.
+  - `createTestTenant()`/`createTwoTestTenants()` (built in package 1.2c,
+    ahead of needing them) turned out to be exactly what this package's
+    last-Admin and isolation tests needed, unchanged.

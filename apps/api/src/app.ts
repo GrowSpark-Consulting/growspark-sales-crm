@@ -6,6 +6,8 @@ import { errorHandler } from './middleware/error-handler.js';
 import { enforceOriginAndContentType } from './middleware/csrf.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuthRoutes } from './modules/auth/auth.routes.js';
+import { registerUsersRoutes } from './modules/users/users.routes.js';
+import { registerAuditRoutes } from './modules/audit/audit.routes.js';
 import { resetRouteRegistry } from './lib/route-registry.js';
 import { env } from './env.js';
 
@@ -41,6 +43,8 @@ export function createApp(options: CreateAppOptions = {}): Express {
 
   registerHealthRoutes(app);
   registerAuthRoutes(app);
+  registerUsersRoutes(app);
+  registerAuditRoutes(app);
   options.extraRoutes?.(app);
 
   app.use(errorHandler);

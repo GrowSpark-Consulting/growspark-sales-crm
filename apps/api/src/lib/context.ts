@@ -19,3 +19,8 @@ export interface RequestContext {
 export function toSharedRole(role: PrismaRole): ROLES {
   return role as unknown as ROLES;
 }
+
+/** The inverse bridge — see toSharedRole for why this cast is safe. */
+export function toPrismaRole(role: ROLES): PrismaRole {
+  return role as unknown as PrismaRole;
+}
