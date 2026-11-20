@@ -69,6 +69,32 @@ an email or phone" hint fixed to only show while actually unmet. 244
 passing. Four commits, one per item; nothing pushed. Day 3 (lead
 conversion, deals, pipeline) is next.
 
+**Update, 2026-11-20, a new session — Day 3 backend underway: packages 3.1
+and 3.2 are built and committed (`3f08a38`, `f2c59e0`).** This file was not
+updated for either at the time — this update is a docs-only catch-up pass,
+done before package 3.3, requested explicitly because the gap was noticed.
+**3.1 — the lead conversion transaction**, the hardest item on the roadmap,
+built first per the brief: `POST /leads/:id/convert` turns a `QUALIFIED`
+lead into a linked-or-created Company and Contact, optionally a Deal in the
+pipeline's first open stage, all inside one `$transaction` with a
+`SELECT ... FOR UPDATE` row lock so concurrent conversions serialise rather
+than race; `GET /leads/:id/conversion-matches` suggests existing
+companies/contacts to link instead of creating new ones. **3.2 — the Deals
+API and pipeline**: full Deal CRUD, `POST /deals/:id/stage` (probability
+copied from the target stage every time, per the roadmap's D7), `POST
+/deals/:id/close` (Won/Lost, Lost requires a reason from the shared
+`LOSS_REASONS` list), `POST /deals/:id/reopen` (returns to the pipeline's
+first open stage), archive/restore (deliberately allowed even on a closed
+deal), `PUT /deals/:id/contacts`, and `GET /pipeline/{stages,summary}` (the
+summary computed entirely in Postgres SQL, not recomputed in JS). Full
+detail, including the five judgment calls approved alongside these two
+packages, is in `docs/decisions.md` D46/D47 — see §7 below for the
+package-by-package summary and §9 for the decisions index. 275 `apps/api`
+tests (up from 244) and 53 `apps/web` tests (unchanged), 328 total, all
+passing. Nothing pushed. Packages 3.3 (deals list/forms/detail UI), 3.4
+(the Kanban pipeline board), and 3.5 (the convert dialog and related tabs)
+are next.
+
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
@@ -471,7 +497,27 @@ apps/api/               Express 5 app (port 4000)
                         full CRUD + archive/restore, POST /:id/status
                         (separate from PATCH, no note), GET
                         /:id/status-history, GET /duplicates (registered
-                        before /:id), leads:read/write, records:archive
+                        before /:id), leads:read/write, records:archive;
+                        lead-conversion.service.ts (3.1, D46) — one
+                        $transaction (row-locks the lead, link-or-create
+                        Company/Contact, optional Deal, convert + history +
+                        audit), GET /:id/conversion-matches, POST
+                        /:id/convert, both leads:read/leads:write
+      deals/              deals.service.ts, deals.routes.ts (3.2, D47) —
+                        full CRUD + archive/restore (allowed on closed
+                        deals, deliberately not gated the same as the other
+                        mutations), POST /:id/stage, POST /:id/close
+                        (Won/Lost, Lost requires a LOSS_REASONS reason),
+                        POST /:id/reopen (back to the pipeline's first open
+                        stage), PUT /:id/contacts (full replace + one
+                        primary), deals:read/write, records:archive
+      pipeline/           pipeline.service.ts, pipeline.routes.ts (3.2,
+                        D47) — GET /pipeline/stages, GET /pipeline/summary
+                        (per-stage + open totals computed entirely in
+                        Postgres SQL, not recomputed in JS), deals:read
+    lib/pipeline.ts       getDefaultPipeline/getFirstOpenStage (3.1, D46 —
+                        factored out so 3.2's deals.service.ts could reuse
+                        them unchanged, not duplicate them)
     routes/health.ts     GET /health, /health/db, mirrored at /api/v1/* — now
                         registered via defineRoute too (auth: 'public'), so
                         the route-registry audit covers it like every other
@@ -512,6 +558,17 @@ apps/api/               Express 5 app (port 4000)
     auth/, users/, audit/, lib/, middleware/, shared/   one directory per
                         concern added in 1.3/1.3b/1.4 — see §7 for what each
                         proves; 33 test files, 124 tests total as of 1.4
+    leads/conversion.test.ts   (3.1, D46) — 12 tests: every conversion
+                        combination, the forced-rollback test, the two-
+                        concurrent-conversions test, cross-org isolation,
+                        the conversion-matches endpoint
+    deals/              crud.test.ts, stage-and-close.test.ts,
+                        pipeline.test.ts (3.2, D47) — 19 tests: CRUD +
+                        archive/restore, stage moves and close/reopen
+                        (including the closed-deal-is-read-only 409s and
+                        the probability-overwrite behaviour), and the
+                        pipeline summary cross-checked against an
+                        independently hand-written SQL query
 
 packages/shared/        Zod schemas + enums, consumed as a compiled package
   src/roles.ts           ROLES enum
@@ -558,6 +615,24 @@ packages/shared/        Zod schemas + enums, consumed as a compiled package
                         parsePhoneLenient (reserved, unused — future
                         website-intake path, deliberately separate from
                         the strict validator)
+  src/lead-conversion.ts (3.1, D46) convertLeadSchema (companyId/contactId
+                        optional — presence means link existing, absence
+                        means create new; createDeal + an optional deal
+                        sub-object only read when true),
+                        leadConversionResponseSchema,
+                        leadConversionMatchesResponseSchema
+  src/deals.ts           (3.2, D47) dealCreatableFields (stageId
+                        deliberately excluded — create-only, same pattern
+                        as Lead's requirement), create/update/moveStage/
+                        close/setContacts schemas, listDealsQuerySchema
+                        (status/stageId/companyId/ownerId/archived/q/sort —
+                        no contactId filter yet, see 3.3's brief),
+                        dealResponseSchema, dealContactResponseSchema
+  src/pipeline.ts        (3.2, D47) stageTypeSchema,
+                        pipelineStageResponseSchema,
+                        pipelineSummaryResponseSchema (per-stage totals +
+                        a separate open-only aggregate, all string-encoded
+                        Decimal values)
   tsconfig.watch.json     incremental build config used only by `dev`/
                         `dev:prepare` (package 1.3b, D24) — tsconfig.json
                         (build/typecheck) stays non-incremental per D12
@@ -922,6 +997,56 @@ documentation pass).** `pnpm typecheck && pnpm lint && pnpm test && pnpm
 build` all pass after every one of the four commits above, final count
 244 `apps/api` + 53 `apps/web` = 297 tests. Nothing pushed.
 
+- **Package 3.1 (`3f08a38`) — the lead conversion transaction.** The
+  hardest item on the roadmap, built first per the brief:
+  `lead-conversion.service.ts`'s `convertLead` is one `$transaction`
+  (row-locks the lead with a raw `SELECT ... FOR UPDATE`, same pattern as
+  the last-Admin rule), following the brief's five steps — refuse unless
+  the lead is `QUALIFIED` and not archived/already-converted; link or
+  create a Company; link (fill-empty-fields-only, never overwrite) or
+  create a Contact; optionally create a Deal in the pipeline's first open
+  stage with a `DealContact`/`DealStageHistory` row; convert the lead,
+  write its history, write a `LeadConversion` row, repoint its activities,
+  audit the whole thing. `GET /leads/:id/conversion-matches` (plain,
+  non-blocking) and `POST /leads/:id/convert` are the two new routes.
+  `tests/helpers/tenant.ts` now also builds a real six-stage pipeline per
+  tenant, matching the seed. 12 new tests (`tests/leads/conversion.test.ts`)
+  including a forced mid-transaction rollback and a two-concurrent-
+  conversions race. `pnpm typecheck && pnpm lint && pnpm test && pnpm
+  build` all pass (256 `apps/api` + 53 `apps/web` = 309 tests). Full detail,
+  including the "company name required to create a new company" judgment
+  call, in `docs/decisions.md` D46.
+- **Package 3.2 (`f2c59e0`) — Deals API, stage moves, close/reopen,
+  pipeline summary.** Full Deal CRUD (`deals.service.ts`/`deals.routes.ts`)
+  on top of 3.1's pipeline helpers (factored into the new, shared
+  `apps/api/src/lib/pipeline.ts`): create (company required and in-org
+  checked, owner defaults to the caller, stage defaults to the pipeline's
+  first open stage); `POST /:id/stage` (refuses a non-open target or a
+  non-open deal, copies the new stage's probability every time per the
+  roadmap's D7); `POST /:id/close` (Won/Lost, Lost requires a
+  `LOSS_REASONS` reason); `POST /:id/reopen` (back to the first open
+  stage); archive/restore (deliberately **not** blocked by the closed-deal
+  read-only rule — see D47); `PUT /:id/contacts` (full replace, one
+  primary). New `pipeline` module: `GET /pipeline/stages`, `GET
+  /pipeline/summary` (per-stage counts/totals/weighted-totals plus a
+  separate open-only aggregate, computed entirely as Postgres SQL so it
+  reconciles exactly with a hand-written SQL check, never recomputed in JS
+  over floats). 19 new tests across `tests/deals/{crud,stage-and-close,
+  pipeline}.test.ts`. `pnpm typecheck && pnpm lint && pnpm test && pnpm
+  build` all pass (275 `apps/api` + 53 `apps/web` = 328 tests). Full
+  detail, including the "reopen goes to the pipeline's first open stage"
+  and "archive/restore allowed on closed deals" judgment calls, in
+  `docs/decisions.md` D47.
+
+**Packages 3.1 and 3.2 were committed before this file (and
+`docs/decisions.md`) were updated for them — this section and D46/D47 were
+written in a docs-only catch-up pass on 2026-11-20, immediately before
+package 3.3 started, once the gap was noticed and flagged to the user.**
+Nothing about either package's actual behaviour changed in that catch-up —
+only the documentation caught up to the already-shipped, already-tested
+code. Packages 3.3 (deals list/forms/detail UI), 3.4 (the Kanban pipeline
+board), and 3.5 (the convert dialog and related tabs) are next.
+
 ## 8. Database
 
 - **Migrations applied via** `prisma migrate deploy` (root: `pnpm db:migrate`,
@@ -966,6 +1091,13 @@ build` all pass after every one of the four commits above, final count
   `crm_test` additionally carries whatever the last test run left (the schema
   tests clean up their own rows; the seed data is deliberately left in place
   to prove idempotency).
+- **No migration was added for packages 3.1 or 3.2.** Every table Day 3
+  needed — `LeadConversion`, `Deal`, `DealContact`, `DealStageHistory`,
+  `Pipeline`, `PipelineStage` — was already created in the one Day 1
+  migration (`20261118202744_init`); Day 3 is pure application-layer work
+  on top of an unchanged schema, exactly as the roadmap intended ("all
+  tables are created in the first migration, so later days add behaviour,
+  not schema churn").
 
 ## 9. Decisions index
 
@@ -1014,6 +1146,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D39 — Package 2.6: `leadCreatableFields` exported from `packages/shared` so a form-local schema override could be rebuilt without `.extend()` (`createLeadSchema` is a `ZodEffects`, not a plain `ZodObject`); create and edit use two genuinely different form-local schemas (unlike Company/Contact's one-schema-for-both, D38) because `requirement` is create-only and never editable; duplicate warning calls the real `GET /leads/duplicates` endpoint (unlike Company's blur-hint approximation); status-change buttons omit the current status and the whole section disappears once `CONVERTED` (D29 — no convert action exists yet); new `lib/datetime-local.ts` bridges the native `datetime-local` input and ISO instants; a Zod `.refine()` options object needed its `path` cast away from `as const` (`readonly ["email"]` vs. Zod's mutable `PropertyKey[]`)
 - D40–D44 — approved 2026-11-20, package 2.7 scope (D40 minimal required fields + Company's "More details" section + Lead's "Manual" source default; D41 country-code-select phone with strict E.164 validation; D42 new-record forms always open empty; D43 Contacts require email-or-phone; D44 lead History shows the actor, hint only when unmet) — **all four built 2026-11-20, see D45**
 - D45 — Package 2.7 (items 1–4, closing out D40–D44): D42's root cause confirmed from Next's own bundled docs (Cache Components hides a page with React's `Activity` instead of unmounting, effect cleanup still fires on hide) and fixed with a `useLayoutEffect` cleanup that resets create-mode forms to blank, including `ContactFormDialog` force-closing itself; D41's `packages/shared/src/phone.ts` (fixed country-code list, strict `phoneFieldSchema`, a reserved-unused `parsePhoneLenient` for future website intake) plus a `PhoneInput` component, and a found-and-fixed bug where the component mistook its own just-emitted `onChange` for an external change; D40's Company "More details" `Collapsible` (new primitive, not yet in `docs/design-system/`) and Lead's Source preselecting "Manual" by name; D43's `contacts.ts` restructured like `leads.ts` (D39) plus a service-level post-patch guard, with seven pre-existing tests fixed that created email/phone-less contacts; D44's `changedByName` join and the hint's visibility fix. 244 `apps/api` + 53 `apps/web` = 297 tests.
+- D46 — Package 3.1 (lead conversion transaction, built 2026-11-20, documented in this same-day catch-up pass before 3.3): one `$transaction` with a `SELECT ... FOR UPDATE` row lock on the lead, link-or-create Company (422 if creating one and the lead has no company name — judgment call, no placeholder name invented), link-with-fill-empty-only-or-create Contact (an existing contact's company is never overwritten), an optional Deal in the pipeline's first open stage with its `DealContact`/first `DealStageHistory` row, then convert + history + `LeadConversion` row + activity repoint + audit, all in the same transaction; `GET /leads/:id/conversion-matches` (plain, non-blocking) and `POST /leads/:id/convert`; `getDefaultPipeline`/`getFirstOpenStage` built here, reused by 3.2; `tests/helpers/tenant.ts` extended with a real six-stage pipeline per tenant
+- D47 — Package 3.2 (Deals API, stage moves, close/reopen, pipeline summary, built 2026-11-20, documented in the same catch-up pass): full Deal CRUD; `stageId` excluded from the shared update field map (create-only, like Lead's `requirement`); stage move refuses a non-open target (422) or a non-open deal (409) and copies the target stage's probability every time (roadmap D7, overwrites a manual edit by design); close requires a `LOSS_REASONS` reason for Lost; **reopen returns the deal to the pipeline's first open stage** (judgment call — the brief doesn't say which stage to land on); **archive/restore are deliberately NOT blocked by the closed-deal-is-read-only rule** (judgment call — archiving is a records-management action, not a pipeline mutation); `PUT /deals/:id/contacts` fully replaces the set with one primary; `GET /pipeline/{stages,summary}`, the summary computed entirely as Postgres SQL (`COALESCE`/`SUM`/weighted-value multiplication over `NUMERIC`, never JS floats) and cross-checked in its test against an independently hand-written SQL query — found empirically that `Prisma.Decimal` stringifies an empty stage's zero as `"0"`, not `"0.00"`
 
 ## 10. Gotchas and lessons learned
 
@@ -1137,13 +1271,17 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `tests/components/owner-select.test.tsx` (3) — the last three package
   2.4; plus package 2.7's `tests/components/lead-form.test.tsx`,
   `company-form.test.tsx`, `contact-form-dialog.test.tsx`, and
-  `phone-input.test.tsx`), and `apps/api` (`vitest run`) — **244 `apps/api`
-  tests + 53 `apps/web` tests, 297 total**, all passing as of the last run
-  this session (package 2.7, items 1–4: D42's reset-on-hide tests, D41's
-  phone-validation and `PhoneInput` composition tests, D40/D43's "More
-  details"/Source-preselect/Contact-email-or-phone tests, D44's
-  actor-name and hint-visibility tests — the full breakdown is in
-  `docs/decisions.md` D45). `apps/web` runs under jsdom (D36) with
+  `phone-input.test.tsx`), and `apps/api` (`vitest run`) — **275 `apps/api`
+  tests + 53 `apps/web` tests, 328 total**, all passing as of the last run
+  (package 3.2). Package 2.7 (items 1–4) brought the count to 244 + 53 =
+  297 (D42's reset-on-hide tests, D41's phone-validation and `PhoneInput`
+  composition tests, D40/D43's "More details"/Source-preselect/Contact-
+  email-or-phone tests, D44's actor-name and hint-visibility tests — full
+  breakdown in `docs/decisions.md` D45); package 3.1 added 12
+  (`tests/leads/conversion.test.ts` — every conversion combination, a
+  forced mid-transaction rollback, two concurrent conversions, D46) for
+  256; package 3.2 added 19 (`tests/deals/{crud,stage-and-close,
+  pipeline}.test.ts`, D47) for the current 275. `apps/web` runs under jsdom (D36) with
   `tests/setup.ts` registering RTL's `afterEach(cleanup)` (D37) —
   needed because RTL's own auto-cleanup never self-registers without
   vitest's `globals: true`, which this repo doesn't use.
@@ -1312,11 +1450,18 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   actor, with the email-or-phone hint fixed to only show while unmet
   (D44). 244 `apps/api` + 53 `apps/web` = 297 tests, four commits (one per
   item), nothing pushed. **Package 2.7 is done.**
-- **Day 3** (lead conversion, deals, pipeline) is next. Exact scope beyond
-  "lead conversion first, as its own transaction" is not yet detailed in
-  this repo — confirm with the user before building ahead of it, same rule
-  as every other package boundary. Day 6/7 (testing, stabilisation, demo)
-  remain explicitly out of scope until the build days are done.
+- **Day 3 (lead conversion, deals, pipeline) is underway.** Packages 3.1
+  (the lead conversion transaction) and 3.2 (Deals API, stage moves,
+  close/reopen, pipeline summary) are built and committed (`3f08a38`,
+  `f2c59e0`) — full detail in §7 and `docs/decisions.md` D46/D47. This
+  file was updated for both in a docs-only catch-up pass on 2026-11-20,
+  done immediately before package 3.3 started, once it was noticed the
+  docs hadn't kept pace with the two already-shipped commits. 275
+  `apps/api` + 53 `apps/web` = 328 tests, nothing pushed. **Packages 3.3
+  (deals list/forms/detail UI), 3.4 (the Kanban pipeline board), and 3.5
+  (the convert dialog and related tabs) are next.** Day 6/7 (testing,
+  stabilisation, demo) remain explicitly out of scope until the build days
+  are done.
 
 ## 14. Open questions and unverified items
 
@@ -1908,3 +2053,53 @@ log just records that a session happened and what it covered.
     session). Four commits, one per item (1–4); this documentation pass is
     a fifth. Nothing pushed. Package 2.7 is done; Day 3 (lead conversion,
     deals, pipeline) is next.
+- **2026-11-20 (new session) — packages 3.1 and 3.2 built, then a docs-only
+  catch-up pass before 3.3.** Package 3.1 (`3f08a38`): the lead conversion
+  transaction (`lead-conversion.service.ts`'s `convertLead`, one
+  `$transaction` with a `SELECT ... FOR UPDATE` row lock, link-or-create
+  Company and Contact with the fill-empty-only/never-overwrite rule, an
+  optional Deal in the pipeline's first open stage, convert + history +
+  `LeadConversion` + activity-repoint + audit), plus `GET
+  /leads/:id/conversion-matches`; `tests/helpers/tenant.ts` extended with a
+  real six-stage pipeline per tenant; 12 new tests including a forced
+  mid-transaction rollback and two concurrent conversions on the same lead.
+  Package 3.2 (`f2c59e0`): full Deals API on top of 3.1's pipeline helpers
+  (factored into the new `apps/api/src/lib/pipeline.ts`) — create, `POST
+  /:id/stage` (probability copied from the target stage every time, per the
+  roadmap's D7), `POST /:id/close` (Won/Lost, Lost requires a reason), `POST
+  /:id/reopen` (back to the first open stage), archive/restore (deliberately
+  not blocked on a closed deal), `PUT /:id/contacts`, and the new `pipeline`
+  module (`GET /pipeline/{stages,summary}`, the summary computed entirely as
+  Postgres SQL); 19 new tests. Both packages were built and committed in
+  this session with their own `pnpm typecheck && pnpm lint && pnpm test &&
+  pnpm build` verification (309 tests after 3.1, 328 after 3.2), but
+  `docs/decisions.md` and this file were **not** updated at the time — a
+  genuine gap, not an intentional deferral. Before starting package 3.3, the
+  user asked for a docs-only catch-up commit: this session re-derived both
+  packages' actual behaviour directly from the shipped code (not from
+  memory or the commit messages alone, though both commit messages turned
+  out to already contain accurate, detailed write-ups) and from the real
+  commit diffs (`git show --stat` on both), then wrote `docs/decisions.md`
+  D46 (package 3.1) and D47 (package 3.2) — including the three genuinely
+  new judgment calls confirmed by reading the actual code (converting into a
+  new company requires the lead to have a company name, 422 otherwise;
+  reopen always returns to the pipeline's first open stage; archive/restore
+  are deliberately not gated by the closed-deal-is-read-only rule) — and
+  updated this file's §1 snapshot, §5 repository map (the `leads/
+  lead-conversion.service.ts`, `deals/`, `pipeline/` modules and
+  `apps/api/src/lib/pipeline.ts`; the new `packages/shared` schema files;
+  the new test files), §7 (package-by-package entries for 3.1/3.2), §8 (a
+  note that no migration was needed — every Day 3 table already existed
+  from Day 1's schema), §9 (the D46/D47 index lines), §11 (test counts), and
+  §13 (what's next). Two of the five judgment calls the user's approval
+  message named ("a closed, fixed country-code list" and "Company's core
+  fields vs. a collapsed 'More details' section") turned out to already be
+  fully recorded — they're package 2.7's D41 and D40/D45, not new to 3.1/
+  3.2 — so no new decision entry was written for those two, only a short
+  cross-reference note at the end of D47; nothing about them was re-decided
+  or changed. No code changed in this pass; `pnpm typecheck && pnpm lint &&
+  pnpm test && pnpm build` were re-run anyway to confirm nothing had been
+  disturbed, same result as before (275 `apps/api` + 53 `apps/web` = 328).
+  One docs-only commit. Nothing pushed. Packages 3.3 (deals list/forms/
+  detail UI), 3.4 (the Kanban pipeline board), and 3.5 (the convert dialog
+  and related tabs) are next, in the same session.

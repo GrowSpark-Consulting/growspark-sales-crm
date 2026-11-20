@@ -1524,3 +1524,221 @@ documentation pass).** Closes out D40–D44.
   the Source-preselect cases, the hint-visibility case) = 297 total, all
   passing, verified after every one of the four commits, not just at the
   end.
+
+**Catch-up note (added 2026-11-20, before package 3.3 started):** D46 and D47
+below record packages 3.1 and 3.2, which were already built and committed
+(`3f08a38`, `f2c59e0`) before this file was updated for them — a genuine gap
+between the commits and this log, not a sign either package is unbuilt. Both
+entries were written from the actual shipped code (`lead-conversion.service.ts`,
+`deals.service.ts`, `pipeline.service.ts` and their routes/schemas/tests), not
+reconstructed from memory, and cross-checked against each commit's own message.
+
+- **D46** — Package 3.1 (lead conversion transaction), built and committed
+  2026-11-20 (`3f08a38`), the hardest item on the roadmap and built first, per
+  the brief. `lead-conversion.service.ts`'s `convertLead` is one
+  `$transaction` following the brief's five steps:
+  1. `SELECT ... FOR UPDATE` locks the lead row first (`tx.$queryRaw`, the
+     same raw-SQL row-lock pattern as the last-Admin rule, D25), so two
+     concurrent conversion attempts on the same lead serialise rather than
+     race. Refuses with 409 if the lead is already `archivedAt`, already
+     `CONVERTED`, or not currently `QUALIFIED`.
+  2. **Company** — links `input.companyId` if given (404 if it doesn't exist
+     in this organisation), or creates one from the lead's own
+     `companyName`/`website`/`industry`. **Judgment call**: if creating and
+     the lead has no `companyName` at all, the API refuses with 422
+     (`VALIDATION_FAILED`, path `companyId`, "This lead has no company name —
+     link an existing company instead") rather than inventing a placeholder
+     name — nothing in the brief says what a nameless auto-created company
+     should be called, and forcing the caller to pick an existing company
+     felt safer than guessing one.
+  3. **Contact** — links `input.contactId` if given and fills **only** the
+     fields that were empty (`lastName`, `email`+`emailNormalized`,
+     `phone`+`phoneNormalized`, `jobTitle`); an existing contact's
+     `companyId` is never touched, even when it's empty and a *different*
+     company was just linked on this same conversion (proven by a dedicated
+     test, `conversion.test.ts`'s "both existing" case, not just asserted in
+     a comment). Otherwise creates a new contact under the resolved company.
+  4. **Deal** (only when `input.createDeal` is true) — resolves the
+     organisation's default pipeline and its first `OPEN`-type stage
+     (`getDefaultPipeline`/`getFirstOpenStage`, built here and reused by 3.2),
+     copies that stage's probability onto the deal, creates the deal, a
+     `DealContact` row (`isPrimary: true`), and the first
+     `DealStageHistory` row (`fromStageId: null`). `deal.ownerId`, if given,
+     is checked against the organisation before use — the same cross-org FK
+     gap D34 already closed for Company/Contact/Lead's owner fields, closed
+     here too rather than left open for Deal's first appearance.
+  5. Sets the lead to `CONVERTED` with `convertedAt`, writes one
+     `LeadStatusHistory` row and one `LeadConversion` row, repoints any of
+     the lead's existing activities onto the new contact/company/deal (none
+     can exist yet — Activities is a Day 4 module — but the code is written
+     to be correct once they do, per the brief), and writes the
+     `lead.converted` audit event — all inside the same transaction.
+  - `GET /api/v1/leads/:id/conversion-matches` (`leads:read`) is a plain,
+    non-blocking read: existing companies by normalised name, existing
+    contacts by normalised email or phone, organisation-scoped, archived
+    rows excluded — offered as "link to this instead" suggestions in the
+    conversion dialog, never a gate.
+  - `POST /api/v1/leads/:id/convert` (`leads:write`) is the only route that
+    actually performs a conversion; both routes go through `defineRoute`
+    like every other route, so the registry audit covers them automatically.
+  - `tests/helpers/tenant.ts`'s `createTestTenant()` was extended to also
+    create a real `Pipeline` with the same six stages the production seed
+    uses (Qualification 10% … Lost 0%, matching D10's seeded set) — every
+    Day 3 test needs a pipeline to convert into, and it should look like real
+    seeded data, not an arbitrary one-off fixture. Purely additive (new
+    fields on the returned tenant object); no existing test needed to change.
+  - **Tests** (`apps/api/tests/leads/conversion.test.ts`, 12 new, all
+    green): new company + new contact + a deal, with every created row
+    checked directly against the database, not just the response shape;
+    existing company + new contact, no deal; both existing (the fill-empty-
+    only / company-never-overwritten case); non-`QUALIFIED` lead rejected
+    (409); already-`CONVERTED` lead rejected (409); archived lead rejected
+    (409); **`"a forced mid-transaction failure leaves nothing behind, and
+    the original lead and its history are intact"`** — a cross-organisation
+    `contactId` fails step 3 right after step 2's company already ran,
+    proving the whole transaction rolls back (no orphan company, no
+    `LeadConversion` row, the lead still `QUALIFIED` with exactly its
+    original one-row status history); **`"two concurrent conversion requests
+    on the same lead produce exactly one conversion"`** — `Promise.all` of
+    two simultaneous converts resolves to exactly one 200 and one 409, and
+    exactly one `LeadConversion` row exists afterward; Staff can convert
+    (D29's equal standing); a lead in another organisation 404s; a
+    cross-organisation `companyId`/`contactId` is rejected (404), never
+    silently linked; the matches endpoint's name/email/phone matching and
+    archived-exclusion.
+  - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+    (256 `apps/api` tests: 244 carried over + 12 new; `apps/web` unchanged at
+    53; 309 total).
+- **D47** — Package 3.2 (Deals API, stage moves, close/reopen, pipeline
+  summary), built and committed 2026-11-20 (`f2c59e0`), on top of 3.1's
+  pipeline helpers.
+  - **`dealCreatableFields`** (`packages/shared/src/deals.ts`) deliberately
+    excludes `stageId` from the shared field map used by both create and
+    update — `stageId` is a create-only convenience (pick a starting stage
+    other than the pipeline's default first-open one); every stage change
+    *after* creation goes only through the dedicated `POST /deals/:id/stage`
+    action, never a plain `PATCH`, the same "this field is create-only, not
+    reachable from update" pattern Lead's `requirement` already uses (D35).
+  - **`getDefaultPipeline`/`getFirstOpenStage` factored into
+    `apps/api/src/lib/pipeline.ts`**, out of 3.1's
+    `lead-conversion.service.ts` and reused unchanged by
+    `deals.service.ts` — "reuse shared helpers instead of duplicating them"
+    (CLAUDE.md), not two copies of the same pipeline-lookup logic. One
+    pipeline per organisation in the MVP, per the roadmap ("support one
+    configurable pipeline initially"); `getDefaultPipeline` prefers the row
+    marked `isDefault` and falls back to any pipeline for the org if that
+    flag is ever missing.
+  - **Create**: `companyId` is required and checked in-organisation
+    (404 if not); `ownerId` defaults to the calling user if omitted;
+    `stageId` defaults to the pipeline's first `OPEN` stage, or a
+    caller-chosen stage (422 if that stage isn't `OPEN` — a deal can't be
+    created directly into Won/Lost); `probability` defaults from the
+    resolved stage but is freely editable at creation. Writes the deal's
+    first `DealStageHistory` row (`fromStageId: null`) in the same
+    transaction as the create, exactly like a lead-conversion-created deal
+    does (3.1).
+  - **Stage move** (`POST /deals/:id/stage`): refuses a non-`OPEN` target
+    stage with 422 ("use close to mark it Won or Lost") and refuses
+    outright on a deal that isn't currently `OPEN` with 409 ("a closed deal
+    is read-only — reopen it first," `assertDealIsOpen`). **Copies the new
+    stage's probability onto the deal on every move**, per the roadmap's own
+    D7 decision ("probability is copied from the stage on every stage
+    change and can be edited per deal") — this overwrites a probability the
+    user had manually edited on the deal; that's the roadmap's documented
+    behaviour, not a bug to guard against.
+  - **Close** (`POST /deals/:id/close`): `WON` or `LOST`; `LOST` requires a
+    `lostReason` from the shared `LOSS_REASONS` enum (`lossReasonSchema`,
+    D15) — validated by the schema's own `.refine()`, a 422 before the
+    service even runs. Moves the deal into whichever `PipelineStage` has
+    `type` matching the close outcome (lowest `position`, in case more than
+    one existed — none do today, but the query doesn't assume uniqueness),
+    sets `probability` to 100 (Won) or 0 (Lost), sets `closedAt`, and writes
+    the stage-history row and a `deal.won`/`deal.lost` audit event, all in
+    one transaction. If an organisation somehow has no matching WON/LOST
+    stage configured, this is a 500 (`INTERNAL`) — a seed-data integrity
+    problem, not something a caller's input could trigger under normal use.
+  - **Reopen** (`POST /deals/:id/reopen`, judgment call): only valid on a
+    deal that isn't currently `OPEN` (409 "this deal is already open"
+    otherwise); returns the deal to the pipeline's **first `OPEN` stage**
+    (not wherever it was before closing — nothing is recorded about that),
+    with that stage's probability, clearing `closedAt`/`lostReason`/
+    `lostNote` and writing a fresh stage-history row. The brief says reopen
+    must exist but doesn't say which stage it should land on; "back to the
+    start of the pipeline" was simpler and more predictable than trying to
+    recall or infer wherever the deal was before it closed.
+  - **Closed-deal read-only boundary, and its one deliberate exception
+    (judgment call)**: `PATCH /deals/:id`, `POST /deals/:id/stage`, and
+    `PUT /deals/:id/contacts` all refuse with 409 on a non-`OPEN` deal
+    ("a closed deal is read-only except for reopen" — `assertDealIsOpen`,
+    one shared check used by all three). **Archive and restore are
+    deliberately NOT gated by this check** — `archiveDeal`/`restoreDeal`
+    only look at `archivedAt`, never at `status`, so a Won or Lost deal can
+    still be archived or restored exactly like an open one. The roadmap's
+    "a closed deal is read-only except for reopen" is read here as "the
+    deal's pipeline/commercial fields are frozen," not "nothing can ever
+    touch this row again" — archiving is a records-management action (D3,
+    "staff may archive and restore business records," already applies
+    uniformly to every resource in this app), not a pipeline mutation, so
+    excluding it from the closed-deal lock was judged the more consistent
+    reading, not an oversight.
+  - **`PUT /deals/:id/contacts`** fully replaces the deal's contact set
+    (delete-then-recreate inside the transaction, not a diff/patch) and
+    marks exactly one contact primary — `primaryContactId` if given and
+    present in `contactIds`, otherwise the first id in the list. Every
+    `contactId` is checked to exist in the organisation before any write
+    (404 if not, all-or-nothing).
+  - **`pipeline.service.ts`**: `GET /pipeline/stages` returns the org's
+    pipeline stages ordered by `position`. `GET /pipeline/summary` is
+    computed **entirely in Postgres** — `COALESCE`/`SUM`/the weighted-value
+    multiplication (`value * probability / 100`) all run as SQL over
+    `NUMERIC` columns, never recomputed in JavaScript over floats, per the
+    brief's own instruction that pipeline totals must reconcile exactly with
+    a hand-written SQL check. Returns a per-stage breakdown (count, total
+    value, weighted value) across **every** stage including Won/Lost — so a
+    Kanban board can show a running total on every column, not just the open
+    ones — plus a separate `open` aggregate scoped to `status: 'OPEN'`,
+    non-archived deals only.
+  - **Found empirically, not assumed**: `Prisma.Decimal` stringifies an
+    empty stage's `COALESCE`'d zero as `"0"`, not `"0.00"` — the pipeline
+    summary test's own expectations were written to match this directly,
+    confirmed by running it, rather than guessed from how Decimal values
+    look elsewhere in this app (e.g. `deal.value.toString()` on a real,
+    non-zero row does carry the full `14,2` precision).
+  - Routes: `GET`/`POST /deals`, `GET`/`PATCH /deals/:id`, `POST
+    /deals/:id/{stage,close,reopen,archive,restore}`, `PUT
+    /deals/:id/contacts` (all `deals:read`/`deals:write` or
+    `records:archive` — the same permission Companies/Contacts/Leads
+    archive/restore already use); `GET /pipeline/{stages,summary}`
+    (`deals:read`) — all via `defineRoute`, registered in `app.ts`, so the
+    route-registry audit covers them automatically like every other route in
+    this app.
+  - **Tests** (`apps/api`, 19 new, all green): `crud.test.ts` — create
+    defaults (stage/probability/owner), a missing `companyId` 422, full
+    CRUD plus archive/restore, double-archive 409, the contacts `PUT`
+    replacing the set and marking a primary, Staff permissions (D29's equal
+    standing extends to Deals), cross-organisation 404 on read and on a
+    cross-org `companyId` at create. `stage-and-close.test.ts` — a stage
+    move writes history and copies the new stage's probability (overwriting
+    a manual edit, confirming the D7 behaviour above is real, not just
+    documented); moving to a Won/Lost stage via `/stage` is refused (422);
+    closing Lost without a reason is refused (422); closing Won/Lost sets
+    probability/`closedAt`/the matching stage with history; a closed deal
+    refuses `PATCH`/`/stage`/`/close` again (409) but reopen succeeds and
+    restores write access; reopening an already-open deal is refused (409).
+    `pipeline.test.ts` — `GET /pipeline/stages` returns all six seeded
+    stages in order; `GET /pipeline/summary` is cross-checked against a
+    hand-written SQL query built *independently* in the test (a differently-
+    shaped query, not a call into the service's own function) across open,
+    closed, and archived deals spread across different stages.
+  - `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+    (275 `apps/api` tests: 256 carried over + 19 new; `apps/web` unchanged at
+    53; 328 total).
+- **On the five judgment calls named when D46/D47 were approved**: two of
+  the five ("a closed, fixed country-code list for phone entry" and "Company
+  splits core fields from a collapsed 'More details' section") are **not**
+  new to 3.1/3.2 — they're package 2.7's D41 and D40/D45 respectively,
+  already fully recorded there. They're noted here only because they were
+  named again in the same approval message as the three genuinely new 3.1/
+  3.2 calls (company-name-required-to-create, D46; reopen-to-first-open-
+  stage and archive/restore-allowed-on-closed-deals, both D47) — not because
+  anything about them changed or needed re-deciding.

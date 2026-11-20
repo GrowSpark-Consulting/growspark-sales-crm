@@ -15,7 +15,9 @@ next.
   alone).
 - The build is a **7-day plan**: Days 1–5 build, Day 6 testing, Day 7
   stabilise and demo. **Day 1 and Day 2 (including package 2.7) are both
-  done** (see below). Day 3 is next.
+  done** (see below). **Day 3 is underway**: packages 3.1 (lead conversion
+  transaction) and 3.2 (Deals API, pipeline) are built; 3.3–3.5 (deals UI,
+  Kanban board, convert dialog) are next.
 - A **staging deployment is planned for around Day 4** — see "Day 4" below.
 - Single developer, nothing reviewed by anyone else: correctness over
   speed, and every package stops for review before the next one starts.
@@ -119,18 +121,33 @@ specific package you're about to work on.
   actor, with its email-or-phone hint now only showing while actually
   unmet. **244 `apps/api` + 53 `apps/web` = 297 automated tests pass.**
   Full detail in `docs/decisions.md` D45 and `docs/PROJECT-STATE.md` §7.
+- **Day 3 is underway. Packages 3.1 and 3.2 are built and committed**
+  (`3f08a38`, `f2c59e0`): **3.1** is the lead conversion transaction —
+  `POST /leads/:id/convert` links or creates a Company and Contact from a
+  `QUALIFIED` lead, optionally creates a Deal in the pipeline's first open
+  stage, all in one row-locked transaction; `GET
+  /leads/:id/conversion-matches` suggests existing records to link instead.
+  **3.2** is the Deals API and pipeline — full Deal CRUD, `POST
+  /deals/:id/stage`, `POST /deals/:id/close` (Won/Lost with a required
+  reason for Lost), `POST /deals/:id/reopen` (back to the pipeline's first
+  open stage), archive/restore (allowed even on a closed deal — a
+  deliberate choice, not an oversight), `PUT /deals/:id/contacts`, and `GET
+  /pipeline/{stages,summary}`. **275 `apps/api` + 53 `apps/web` = 328
+  automated tests pass.** Full detail in `docs/decisions.md` D46/D47 and
+  `docs/PROJECT-STATE.md` §7. Note: these two packages were committed
+  before the docs caught up to them — a gap fixed in a dedicated docs-only
+  pass on 2026-11-20, immediately before 3.3 started.
 
 ## The next work, in order
 
-### Day 3 — lead conversion, deals, pipeline
+### Day 3 — packages 3.3, 3.4, 3.5 (deals UI, Kanban board, convert dialog)
 
-This is the next work. Build the **conversion transaction first** (turning
-a Lead into a Company/Contact/Deal, the one genuinely multi-table write in
-this phase — needs a transaction with the audit row inside it, per the
-standing rule), then deals and the pipeline around it. Exact scope beyond
-that ordering isn't detailed in this repo yet — confirm with the user
-before building ahead of what's written here, same as every other package
-boundary.
+This is the next work: the Deals list/forms/detail screens, a Kanban
+pipeline board (drag-and-drop with a dropdown fallback), and the lead
+Convert dialog plus the related tabs on Company/Contact. The backend for
+all of it (3.1, 3.2) already exists — see above. Confirm exact UI scope
+with the user before building ahead of what's written here, same as every
+other package boundary.
 
 ## Day 4: staging deployment (as currently planned)
 

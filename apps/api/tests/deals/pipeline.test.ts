@@ -56,15 +56,16 @@ describe('GET /api/v1/pipeline/summary', () => {
     const app = createApp();
     const api = authed(app, token);
     const company = await createCompany(tenant, 'Pipeline Test Co');
-    const qualification = tenant.stages.find((s) => s.name === 'Qualification')!;
     const proposal = tenant.stages.find((s) => s.name === 'Proposal')!;
 
-    // Three open deals (two in Qualification, one in Proposal, each a
-    // different value/probability so the sums are not trivially equal) plus
-    // one archived deal (must be excluded) and one Won deal (must appear
-    // under its own stage, but not count toward "open").
-    const dealA = await api.post('/api/v1/deals', { name: 'A', companyId: company.id, value: 100000 });
-    const dealB = await api.post('/api/v1/deals', { name: 'B', companyId: company.id, value: 200000, probability: 20 });
+    // Three open deals (two in Qualification — the default stage, so no
+    // need to look it up — one in Proposal, each a different value/
+    // probability so the sums are not trivially equal) plus one archived
+    // deal (must be excluded) and one Won deal (must appear under its own
+    // stage, but not count toward "open"). A/B's own responses are never
+    // read afterwards — only that they exist for the SQL to find.
+    await api.post('/api/v1/deals', { name: 'A', companyId: company.id, value: 100000 });
+    await api.post('/api/v1/deals', { name: 'B', companyId: company.id, value: 200000, probability: 20 });
     const dealC = await api.post('/api/v1/deals', { name: 'C', companyId: company.id, value: 300000 });
     await api.post(`/api/v1/deals/${dealC.body.data.id}/stage`, { stageId: proposal.id });
     const dealD = await api.post('/api/v1/deals', { name: 'D', companyId: company.id, value: 400000 });
