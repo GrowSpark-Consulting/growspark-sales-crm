@@ -12,15 +12,20 @@ import {
   leadWithDuplicatesResponseSchema,
   leadDuplicatesResponseSchema,
   leadStatusHistoryListResponseSchema,
+  convertLeadSchema,
+  leadConversionResponseSchema,
+  leadConversionMatchesResponseSchema,
   type IdParam,
   type CreateLeadInput,
   type UpdateLeadInput,
   type UpdateLeadStatusInput,
   type ListLeadsQuery,
   type LeadDuplicateCheckQuery,
+  type ConvertLeadInput,
 } from '@growspark/shared';
 import { defineRoute } from '../../lib/route-registry.js';
 import * as leadsService from './leads.service.js';
+import * as leadConversionService from './lead-conversion.service.js';
 
 export function registerLeadsRoutes(app: Application): void {
   defineRoute({
@@ -138,6 +143,40 @@ export function registerLeadsRoutes(app: Application): void {
         const { id } = req.params as unknown as IdParam;
         const data = await leadsService.listLeadStatusHistory(req.ctx!, id);
         res.status(200).json(leadStatusHistoryListResponseSchema.parse({ data }));
+      } catch (err) {
+        next(err);
+      }
+    },
+  });
+
+  defineRoute({
+    app,
+    method: 'get',
+    path: '/api/v1/leads/:id/conversion-matches',
+    auth: PERMISSIONS.LEADS_READ,
+    validate: { params: idParamSchema },
+    handler: async (req, res, next) => {
+      try {
+        const { id } = req.params as unknown as IdParam;
+        const data = await leadConversionService.getLeadConversionMatches(req.ctx!, id);
+        res.status(200).json(leadConversionMatchesResponseSchema.parse({ data }));
+      } catch (err) {
+        next(err);
+      }
+    },
+  });
+
+  defineRoute({
+    app,
+    method: 'post',
+    path: '/api/v1/leads/:id/convert',
+    auth: PERMISSIONS.LEADS_WRITE,
+    validate: { params: idParamSchema, body: convertLeadSchema },
+    handler: async (req, res, next) => {
+      try {
+        const { id } = req.params as unknown as IdParam;
+        const data = await leadConversionService.convertLead(req.ctx!, id, req.body as ConvertLeadInput);
+        res.status(200).json(leadConversionResponseSchema.parse({ data }));
       } catch (err) {
         next(err);
       }

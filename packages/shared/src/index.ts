@@ -113,3 +113,5 @@ export type {
   LeadResponse,
   LeadStatusHistoryResponse,
 } from './leads.js';
+export { convertLeadSchema, leadConversionResponseSchema, leadConversionMatchesResponseSchema } from './lead-conversion.js';
+export type { ConvertLeadInput, LeadConversionResponse, LeadConversionMatchesResponse } from './lead-conversion.js';

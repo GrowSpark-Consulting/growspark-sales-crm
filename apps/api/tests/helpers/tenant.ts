@@ -1,11 +1,25 @@
 import { randomUUID } from 'node:crypto';
 import { hash } from '@node-rs/argon2';
 import { prisma } from '../../src/db/prisma.js';
-import type { User, Organization, LeadSource } from '../../src/generated/prisma/client.js';
+import type { User, Organization, LeadSource, Pipeline, PipelineStage } from '../../src/generated/prisma/client.js';
 
 /** Fixed, dev-only passwords — fine to hard-code, these never touch a real database. */
 export const TEST_ADMIN_PASSWORD = 'Correct-Horse-Admin-1';
 export const TEST_STAFF_PASSWORD = 'Correct-Horse-Staff-1';
+
+/**
+ * Mirrors the real seed's stage list exactly (apps/api/prisma/seed-lib.ts,
+ * D10) — Day 3's conversion/deal tests need a real pipeline with the same
+ * shape production data has, not an arbitrary test fixture.
+ */
+const PIPELINE_STAGES = [
+  { name: 'Qualification', position: 1, probability: 10, type: 'OPEN' as const },
+  { name: 'Needs Analysis', position: 2, probability: 25, type: 'OPEN' as const },
+  { name: 'Proposal', position: 3, probability: 50, type: 'OPEN' as const },
+  { name: 'Negotiation', position: 4, probability: 75, type: 'OPEN' as const },
+  { name: 'Won', position: 5, probability: 100, type: 'WON' as const },
+  { name: 'Lost', position: 6, probability: 0, type: 'LOST' as const },
+];
 
 export interface TestTenant {
   organization: Organization;
@@ -14,6 +28,9 @@ export interface TestTenant {
   staffUser: User;
   staffPassword: string;
   leadSource: LeadSource;
+  pipeline: Pipeline;
+  /** Ordered by position, same order as PIPELINE_STAGES (and the real seed). */
+  stages: PipelineStage[];
 }
 
 /**
@@ -51,6 +68,24 @@ export async function createTestTenant(namePrefix = 'Test Org'): Promise<TestTen
     }),
   ]);
 
+  const pipeline = await prisma.pipeline.create({
+    data: { organizationId: organization.id, name: 'Sales Pipeline', isDefault: true },
+  });
+  const stages = await Promise.all(
+    PIPELINE_STAGES.map((stage) =>
+      prisma.pipelineStage.create({
+        data: {
+          organizationId: organization.id,
+          pipelineId: pipeline.id,
+          name: stage.name,
+          position: stage.position,
+          probability: stage.probability,
+          type: stage.type,
+        },
+      }),
+    ),
+  );
+
   return {
     organization,
     adminUser,
@@ -58,6 +93,8 @@ export async function createTestTenant(namePrefix = 'Test Org'): Promise<TestTen
     staffUser,
     staffPassword: TEST_STAFF_PASSWORD,
     leadSource,
+    pipeline,
+    stages,
   };
 }
 
