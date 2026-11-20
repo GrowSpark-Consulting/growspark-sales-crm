@@ -372,6 +372,7 @@ export async function listLeadStatusHistory(
   const rows = await prisma.leadStatusHistory.findMany({
     where: { ...scoped(ctx), leadId },
     orderBy: { createdAt: 'desc' },
+    include: { changedBy: { select: { name: true } } },
   });
   return rows.map((row) => ({
     id: row.id,
@@ -379,6 +380,7 @@ export async function listLeadStatusHistory(
     fromStatus: row.fromStatus,
     toStatus: row.toStatus,
     changedById: row.changedById,
+    changedByName: row.changedBy.name,
     createdAt: row.createdAt.toISOString(),
   }));
 }

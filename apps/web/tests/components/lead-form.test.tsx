@@ -176,3 +176,25 @@ describe("LeadForm source preselect (D40: default to 'Manual', never force an ex
     expect(trigger.textContent).not.toContain("Manual");
   });
 });
+
+describe("LeadForm email-or-phone hint (D44: only visible while the rule is actually unmet)", () => {
+  beforeEach(() => {
+    stubFetch();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the hint when both email and phone are blank, and hides it once either is filled", async () => {
+    renderWithClient(
+      <LeadForm mode="create" onSubmit={vi.fn()} submitLabel="Add lead" pendingLabel="Adding…" onCancel={vi.fn()} />,
+    );
+
+    await waitFor(() => expect(screen.getByLabelText("Email")).toBeTruthy());
+    expect(screen.getByText("Provide an email or a phone number.")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "asha@example.com" } });
+    await waitFor(() => expect(screen.queryByText("Provide an email or a phone number.")).toBeNull());
+  });
+});

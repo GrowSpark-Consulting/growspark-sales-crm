@@ -108,4 +108,22 @@ describe('Lead status workflow (D29)', () => {
     expect(res.body.data.map((h: { toStatus: string }) => h.toStatus)).toEqual(['QUALIFIED', 'CONTACTED']);
     expect(res.body.data.every((h: { note?: unknown }) => !('note' in h))).toBe(true);
   });
+
+  it('D44: GET /api/v1/leads/:id/status-history includes the actor\'s name on every row', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+    const leadId = await createLead(api, tenant.leadSource.id, 'status6@example.com');
+
+    await api.post(`/api/v1/leads/${leadId}/status`, { status: 'QUALIFIED' });
+
+    const res = await request(app)
+      .get(`/api/v1/leads/${leadId}/status-history`)
+      .set('Cookie', sessionCookieHeader(token));
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].changedById).toBe(tenant.adminUser.id);
+    expect(res.body.data[0].changedByName).toBe('Test Admin');
+  });
 });

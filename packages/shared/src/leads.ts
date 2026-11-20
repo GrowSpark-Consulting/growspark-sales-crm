@@ -161,6 +161,9 @@ export const leadStatusHistoryResponseSchema = z.object({
   fromStatus: leadStatusSchema.nullable(),
   toStatus: leadStatusSchema,
   changedById: z.string(),
+  // D44: the actor's name, joined at query time — no schema change, users
+  // are never hard-deleted (only deactivated, D25), so this is always set.
+  changedByName: z.string(),
   createdAt: z.string(),
 });
 export type LeadStatusHistoryResponse = z.infer<typeof leadStatusHistoryResponseSchema>;

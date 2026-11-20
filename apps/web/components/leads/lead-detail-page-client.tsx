@@ -223,7 +223,7 @@ export function LeadDetailPageClient({ leadId }: { leadId: string }) {
                         <Badge variant={leadStatusBadgeVariant(entry.toStatus)}>{leadStatusLabel(entry.toStatus)}</Badge>
                       </span>
                       <span className="text-ink-muted">
-                        {formatDate(entry.createdAt)}, {formatTime(entry.createdAt)}
+                        by {entry.changedByName} · {formatDate(entry.createdAt)}, {formatTime(entry.createdAt)}
                       </span>
                     </li>
                   ))}

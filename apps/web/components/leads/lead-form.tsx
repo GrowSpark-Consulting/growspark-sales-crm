@@ -240,7 +240,9 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
                   />
                 </FormControl>
                 <FormMessage />
-                <p className="small text-ink-muted">Provide an email or a phone number.</p>
+                {!form.watch("email")?.trim() && !form.watch("phone")?.trim() && (
+                  <p className="small text-ink-muted">Provide an email or a phone number.</p>
+                )}
               </FormItem>
             )}
           />
