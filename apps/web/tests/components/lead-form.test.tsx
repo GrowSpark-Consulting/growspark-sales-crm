@@ -14,7 +14,14 @@ function stubFetch() {
     "fetch",
     vi.fn((url: string) => {
       if (url.includes("/lead-sources")) {
-        return Promise.resolve(jsonResponse(200, { data: [{ id: "src-1", name: "Manual" }] }));
+        return Promise.resolve(
+          jsonResponse(200, {
+            data: [
+              { id: "src-1", name: "Manual" },
+              { id: "src-2", name: "Referral" },
+            ],
+          }),
+        );
       }
       if (url.includes("/users/options")) {
         return Promise.resolve(jsonResponse(200, { data: [] }));
@@ -100,9 +107,9 @@ describe("LeadForm (D42: create form must open empty every time)", () => {
       <LeadForm mode="create" onSubmit={vi.fn()} submitLabel="Add lead" pendingLabel="Adding…" onCancel={vi.fn()} />,
     );
 
-    await waitFor(() => expect(screen.getByLabelText("First name")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText("First name *")).toBeTruthy());
 
-    const firstName = screen.getByLabelText("First name") as HTMLInputElement;
+    const firstName = screen.getByLabelText("First name *") as HTMLInputElement;
     fireEvent.change(firstName, { target: { value: "Stale lead" } });
     expect(firstName.value).toBe("Stale lead");
 
@@ -126,10 +133,46 @@ describe("LeadForm (D42: create form must open empty every time)", () => {
       />,
     );
 
-    await waitFor(() => expect(screen.getByLabelText("First name")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText("First name *")).toBeTruthy());
     unmount();
 
     expect(consoleError).not.toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe("LeadForm source preselect (D40: default to 'Manual', never force an explicit choice)", () => {
+  beforeEach(() => {
+    stubFetch();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("create mode: preselects the lead source named 'Manual' once sources load", async () => {
+    renderWithClient(
+      <LeadForm mode="create" onSubmit={vi.fn()} submitLabel="Add lead" pendingLabel="Adding…" onCancel={vi.fn()} />,
+    );
+
+    const trigger = await screen.findByRole("combobox", { name: "Source *" });
+    await waitFor(() => expect(trigger.textContent).toContain("Manual"));
+  });
+
+  it("edit mode: never overrides the lead's own already-set source (not 'Manual' here)", async () => {
+    renderWithClient(
+      <LeadForm
+        mode="edit"
+        lead={{ ...sampleLead, sourceId: "src-2" }}
+        onSubmit={vi.fn()}
+        submitLabel="Save changes"
+        pendingLabel="Saving…"
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const trigger = await screen.findByRole("combobox", { name: "Source *" });
+    await waitFor(() => expect(trigger.textContent).toContain("Referral"));
+    expect(trigger.textContent).not.toContain("Manual");
   });
 });

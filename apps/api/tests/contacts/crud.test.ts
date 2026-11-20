@@ -75,7 +75,7 @@ describe('Contacts CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const res = await api.post('/api/v1/contacts', { firstName: 'Independent' });
+    const res = await api.post('/api/v1/contacts', { firstName: 'Independent', email: 'independent@example.com' });
     expect(res.status).toBe(201);
     expect(res.body.data.companyId).toBeNull();
   });
@@ -88,6 +88,7 @@ describe('Contacts CRUD', () => {
 
     const res = await api.post('/api/v1/contacts', {
       firstName: 'Orphan',
+      email: 'orphan@example.com',
       companyId: '00000000-0000-7000-8000-000000000000',
     });
     expect(res.status).toBe(404);
@@ -99,7 +100,10 @@ describe('Contacts CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/contacts', { firstName: 'Staff Created' });
+    const createRes = await api.post('/api/v1/contacts', {
+      firstName: 'Staff Created',
+      email: 'staff.created@example.com',
+    });
     expect(createRes.status).toBe(201);
     const contactId = createRes.body.data.id as string;
 
@@ -138,7 +142,10 @@ describe('Contacts CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/contacts', { firstName: 'Double Archive' });
+    const createRes = await api.post('/api/v1/contacts', {
+      firstName: 'Double Archive',
+      email: 'double-archive@example.com',
+    });
     const contactId = createRes.body.data.id as string;
 
     const notArchivedRes = await api.post(`/api/v1/contacts/${contactId}/restore`);
@@ -174,7 +181,11 @@ describe('Contacts CRUD', () => {
       data: { organizationId: tenant.organization.id, name: 'B Co', nameNormalized: 'b' },
     });
 
-    const createRes = await api.post('/api/v1/contacts', { firstName: 'Movable', companyId: companyA.id });
+    const createRes = await api.post('/api/v1/contacts', {
+      firstName: 'Movable',
+      email: 'movable@example.com',
+      companyId: companyA.id,
+    });
     const contactId = createRes.body.data.id as string;
 
     const moveRes = await api.patch(`/api/v1/contacts/${contactId}`, { companyId: companyB.id });
@@ -200,5 +211,39 @@ describe('Contacts CRUD', () => {
       phone: '+9198765432109',
     });
     expect(invalidRes.status).toBe(422);
+  });
+
+  it('D43: requires an email or a phone on create (phone-only is accepted; neither is rejected with 422)', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+
+    const phoneOnlyRes = await api.post('/api/v1/contacts', { firstName: 'Phone Only', phone: '+919876543210' });
+    expect(phoneOnlyRes.status).toBe(201);
+
+    const neitherRes = await api.post('/api/v1/contacts', { firstName: 'No Contact Method' });
+    expect(neitherRes.status).toBe(422);
+  });
+
+  it('D43: clearing email while phone stays set is allowed; clearing both is rejected (422)', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+
+    const createRes = await api.post('/api/v1/contacts', {
+      firstName: 'Both Contacts',
+      email: 'both@example.com',
+      phone: '+919876543210',
+    });
+    const contactId = createRes.body.data.id as string;
+
+    const clearEmailRes = await api.patch(`/api/v1/contacts/${contactId}`, { email: '' });
+    expect(clearEmailRes.status).toBe(200);
+    expect(clearEmailRes.body.data.email).toBeNull();
+
+    const clearBothRes = await api.patch(`/api/v1/contacts/${contactId}`, { phone: '' });
+    expect(clearBothRes.status).toBe(422);
   });
 });

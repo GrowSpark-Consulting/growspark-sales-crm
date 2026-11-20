@@ -76,6 +76,7 @@ export type {
   CompanyResponse,
 } from './companies.js';
 export {
+  contactCreatableFields,
   createContactSchema,
   updateContactSchema,
   listContactsQuerySchema,

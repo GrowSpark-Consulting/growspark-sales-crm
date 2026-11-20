@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -112,6 +112,19 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
     };
   }, [mode, form]);
 
+  // D40: preselect a "Manual" source on create rather than forcing an
+  // explicit choice — the seed always has a lead source named exactly
+  // "Manual" (apps/api/prisma/seed-lib.ts), so this matches by name, not by
+  // list position (the first/default source is actually "Website"). Only
+  // applies while nothing has been chosen yet, so it never overrides a
+  // user's own selection, and re-applies after a D42 reset-to-blank.
+  useEffect(() => {
+    if (mode !== "create") return;
+    if (form.getValues("sourceId")) return;
+    const manual = sources.find((source) => source.name === "Manual");
+    if (manual) form.setValue("sourceId", manual.id);
+  }, [mode, sources, form]);
+
   /**
    * D29: duplicates warn, never block. Unlike Companies (D38, no dedicated
    * endpoint), Leads has a real one (GET /leads/duplicates, D35) that
@@ -189,7 +202,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="firstName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>First name</FormLabel>
+                <FormLabel>First name *</FormLabel>
                 <FormControl>
                   <Input {...field} />
                 </FormControl>
@@ -202,7 +215,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="lastName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Last name (optional)</FormLabel>
+                <FormLabel>Last name</FormLabel>
                 <FormControl>
                   <Input {...field} />
                 </FormControl>
@@ -256,7 +269,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="companyName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Company name (optional)</FormLabel>
+                <FormLabel>Company name</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
@@ -275,7 +288,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="website"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Website (optional)</FormLabel>
+                <FormLabel>Website</FormLabel>
                 <FormControl>
                   <Input placeholder="e.g. https://example.com" {...field} />
                 </FormControl>
@@ -288,7 +301,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="jobTitle"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Job title (optional)</FormLabel>
+                <FormLabel>Job title</FormLabel>
                 <FormControl>
                   <Input {...field} />
                 </FormControl>
@@ -301,7 +314,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="industry"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Industry (optional)</FormLabel>
+                <FormLabel>Industry</FormLabel>
                 <FormControl>
                   <Input {...field} />
                 </FormControl>
@@ -314,7 +327,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="sourceId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Source</FormLabel>
+                <FormLabel>Source *</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger className="w-full">
@@ -338,7 +351,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="sourceDetail"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Source detail (optional)</FormLabel>
+                <FormLabel>Source detail</FormLabel>
                 <FormControl>
                   <Input placeholder="e.g. Referral / Priya Shah" {...field} />
                 </FormControl>
@@ -375,7 +388,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="ownerId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Owner (optional)</FormLabel>
+                <FormLabel>Owner</FormLabel>
                 <FormControl>
                   <OwnerSelect value={field.value ?? undefined} onValueChange={field.onChange} className="w-full" />
                 </FormControl>
@@ -388,7 +401,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="estimatedBudget"
             render={({ field: { value, onChange, ...field } }) => (
               <FormItem>
-                <FormLabel>Estimated budget (optional)</FormLabel>
+                <FormLabel>Estimated budget</FormLabel>
                 <FormControl>
                   <Input
                     type="number"
@@ -409,7 +422,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="purchaseTimeline"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Purchase timeline (optional)</FormLabel>
+                <FormLabel>Purchase timeline</FormLabel>
                 <FormControl>
                   <Input placeholder="e.g. Next quarter" {...field} />
                 </FormControl>
@@ -422,7 +435,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="nextFollowUpAt"
             render={({ field: { value, onChange, ...field } }) => (
               <FormItem>
-                <FormLabel>Next follow-up (optional)</FormLabel>
+                <FormLabel>Next follow-up</FormLabel>
                 <FormControl>
                   <Input
                     type="datetime-local"
@@ -443,7 +456,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="requirement"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Requirement (optional)</FormLabel>
+                <FormLabel>Requirement</FormLabel>
                 <FormControl>
                   <Textarea rows={3} placeholder="What does the prospect need?" {...field} />
                 </FormControl>
@@ -458,7 +471,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
           name="notes"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Notes (optional)</FormLabel>
+              <FormLabel>Notes</FormLabel>
               <FormControl>
                 <Textarea rows={3} {...field} />
               </FormControl>

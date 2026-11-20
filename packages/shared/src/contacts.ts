@@ -7,7 +7,14 @@ function optionalTrimmed(max: number) {
   return z.string().trim().max(max).optional();
 }
 
-export const createContactSchema = z.object({
+/**
+ * Exported (not just module-local) for the same reason as Lead's
+ * `leadCreatableFields` (D39): `createContactSchema` below is wrapped in
+ * `.refine()` for D43's email-or-phone rule, and `ZodEffects` has no
+ * `.partial()` — `updateContactSchema` is built from this same field map
+ * instead of `createContactSchema.partial()`.
+ */
+export const contactCreatableFields = {
   companyId: z.uuid().nullable().optional(),
   firstName: z.string().trim().min(1, 'First name is required').max(200, 'First name is too long'),
   lastName: optionalTrimmed(200),
@@ -24,10 +31,31 @@ export const createContactSchema = z.object({
   lifecycleStatus: optionalTrimmed(50),
   ownerId: z.uuid().nullable().optional(),
   notes: z.string().trim().max(5000, 'Notes are too long').optional(),
-});
+};
+
+/** D43: the same email-or-phone rule Leads already enforce (D29/D39). */
+export const contactEmailOrPhoneRefine = {
+  check: (data: { email?: string | undefined; phone?: string | undefined }) =>
+    Boolean(data.email?.trim()) || Boolean(data.phone?.trim()),
+  options: { message: 'Provide an email or a phone number', path: ['email'] as string[] },
+};
+
+export const createContactSchema = z
+  .object(contactCreatableFields)
+  .refine(contactEmailOrPhoneRefine.check, contactEmailOrPhoneRefine.options);
 export type CreateContactInput = z.infer<typeof createContactSchema>;
 
-export const updateContactSchema = createContactSchema.partial();
+/**
+ * No email-or-phone refine here — a partial update can't statically know
+ * the resulting state (e.g. a PATCH touching only `jobTitle` must stay
+ * valid). The service layer checks the *post-patch* result instead, the
+ * same pattern Lead's updateLeadSchema already uses (D35). Unlike Lead's
+ * updateLeadSchema, this does not require "at least one field provided" —
+ * that was never a rule for Contact's update schema before D43, and D43
+ * doesn't ask for it; kept as a plain `.partial()`, same behaviour as
+ * before aside from the restructuring `.refine()` above required.
+ */
+export const updateContactSchema = z.object(contactCreatableFields).partial();
 export type UpdateContactInput = z.infer<typeof updateContactSchema>;
 
 const CONTACT_SORT_FIELDS = ['firstName', 'lastName', 'createdAt', 'updatedAt'] as const;

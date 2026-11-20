@@ -12,6 +12,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { OwnerSelect } from "@/components/pickers/owner-select";
 import { stripEmptyOptionalFields } from "@/lib/form-utils";
 import { apiGet } from "@/lib/api-client";
@@ -66,6 +67,26 @@ export interface CompanyFormProps {
   submitLabel: string;
   pendingLabel: string;
   onCancel: () => void;
+}
+
+// D40: the non-core fields collapsed under "More details" — everything on
+// CompanyResponse that isn't shown in the core section above.
+const MORE_DETAILS_FIELDS = [
+  "legalName",
+  "employeeSize",
+  "annualRevenue",
+  "addressLine1",
+  "addressLine2",
+  "city",
+  "state",
+  "postalCode",
+  "country",
+  "description",
+] as const satisfies readonly (keyof CompanyResponse)[];
+
+function hasMoreDetailsValues(company: CompanyResponse | undefined): boolean {
+  if (!company) return false;
+  return MORE_DETAILS_FIELDS.some((field) => Boolean(company[field]));
 }
 
 export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCancel }: CompanyFormProps) {
@@ -145,7 +166,7 @@ export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCa
             name="name"
             render={({ field }) => (
               <FormItem className="sm:col-span-2">
-                <FormLabel>Company name</FormLabel>
+                <FormLabel>Company name *</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
@@ -178,23 +199,10 @@ export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCa
           />
           <FormField
             control={form.control}
-            name="legalName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Legal name (optional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
             name="industry"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Industry (optional)</FormLabel>
+                <FormLabel>Industry</FormLabel>
                 <FormControl>
                   <Input {...field} />
                 </FormControl>
@@ -207,7 +215,7 @@ export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCa
             name="website"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Website (optional)</FormLabel>
+                <FormLabel>Website</FormLabel>
                 <FormControl>
                   <Input placeholder="e.g. https://example.com" {...field} />
                 </FormControl>
@@ -220,7 +228,7 @@ export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCa
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Business email (optional)</FormLabel>
+                <FormLabel>Business email</FormLabel>
                 <FormControl>
                   <Input type="email" {...field} />
                 </FormControl>
@@ -233,43 +241,9 @@ export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCa
             name="phone"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Phone (optional)</FormLabel>
+                <FormLabel>Phone</FormLabel>
                 <FormControl>
                   <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="employeeSize"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Employee size (optional)</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. 51-200" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="annualRevenue"
-            render={({ field: { value, onChange, ...field } }) => (
-              <FormItem>
-                <FormLabel>Annual revenue (optional)</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    placeholder="e.g. 5000000"
-                    value={value ?? ""}
-                    onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.valueAsNumber)}
-                    {...field}
-                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -280,7 +254,7 @@ export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCa
             name="ownerId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Owner (optional)</FormLabel>
+                <FormLabel>Owner</FormLabel>
                 <FormControl>
                   <OwnerSelect value={field.value ?? undefined} onValueChange={field.onChange} className="w-full" />
                 </FormControl>
@@ -290,100 +264,154 @@ export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCa
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField
-            control={form.control}
-            name="addressLine1"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Address line 1 (optional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="addressLine2"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Address line 2 (optional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="city"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>City (optional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="state"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>State (optional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="postalCode"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Postal code (optional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="country"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Country (optional)</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
+        <Collapsible defaultOpen={hasMoreDetailsValues(company)} className="space-y-4">
+          <CollapsibleTrigger>More details</CollapsibleTrigger>
+          <CollapsibleContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="legalName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Legal name</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="employeeSize"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Employee size</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. 51-200" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="annualRevenue"
+                render={({ field: { value, onChange, ...field } }) => (
+                  <FormItem>
+                    <FormLabel>Annual revenue</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        placeholder="e.g. 5000000"
+                        value={value ?? ""}
+                        onChange={(event) =>
+                          onChange(event.target.value === "" ? undefined : event.target.valueAsNumber)
+                        }
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="addressLine1"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address line 1</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="addressLine2"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Address line 2</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="city"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>City</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="state"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>State</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="postalCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Postal code</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="country"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Country</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
-        <FormField
-          control={form.control}
-          name="description"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Description (optional)</FormLabel>
-              <FormControl>
-                <Textarea rows={4} {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Description</FormLabel>
+                  <FormControl>
+                    <Textarea rows={4} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CollapsibleContent>
+        </Collapsible>
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onCancel} disabled={submitting}>

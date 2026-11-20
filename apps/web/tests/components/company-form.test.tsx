@@ -82,9 +82,9 @@ describe("CompanyForm (D42: create form must open empty every time)", () => {
       <CompanyForm onSubmit={vi.fn()} submitLabel="Add company" pendingLabel="Adding…" onCancel={vi.fn()} />,
     );
 
-    await waitFor(() => expect(screen.getByLabelText("Company name")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText("Company name *")).toBeTruthy());
 
-    const name = screen.getByLabelText("Company name") as HTMLInputElement;
+    const name = screen.getByLabelText("Company name *") as HTMLInputElement;
     fireEvent.change(name, { target: { value: "Stale Co" } });
     expect(name.value).toBe("Stale Co");
 
@@ -107,10 +107,59 @@ describe("CompanyForm (D42: create form must open empty every time)", () => {
       />,
     );
 
-    await waitFor(() => expect(screen.getByLabelText("Company name")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText("Company name *")).toBeTruthy());
     unmount();
 
     expect(consoleError).not.toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe("CompanyForm 'More details' section (D40)", () => {
+  beforeEach(() => {
+    stubFetch();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("starts collapsed when creating (no company, nothing to show)", async () => {
+    renderWithClient(
+      <CompanyForm onSubmit={vi.fn()} submitLabel="Add company" pendingLabel="Adding…" onCancel={vi.fn()} />,
+    );
+
+    const trigger = await screen.findByRole("button", { name: "More details" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("starts collapsed when editing a company with none of the more-details fields set", async () => {
+    renderWithClient(
+      <CompanyForm
+        company={sampleCompany}
+        onSubmit={vi.fn()}
+        submitLabel="Save changes"
+        pendingLabel="Saving…"
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const trigger = await screen.findByRole("button", { name: "More details" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("starts expanded when editing a company that already has a more-details value", async () => {
+    renderWithClient(
+      <CompanyForm
+        company={{ ...sampleCompany, city: "Chennai" }}
+        onSubmit={vi.fn()}
+        submitLabel="Save changes"
+        pendingLabel="Saving…"
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const trigger = await screen.findByRole("button", { name: "More details" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
   });
 });

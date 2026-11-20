@@ -46,7 +46,7 @@ describe('contacts: organisation isolation', () => {
       .post('/api/v1/contacts')
       .set('Origin', ALLOWED_ORIGIN)
       .set('Cookie', sessionCookieHeader(token))
-      .send({ firstName: 'Cross Org', companyId: companyB.id });
+      .send({ firstName: 'Cross Org', email: 'cross-org@example.com', companyId: companyB.id });
     expect(res.status).toBe(404);
   });
 

@@ -157,7 +157,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                 name="firstName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>First name</FormLabel>
+                    <FormLabel>First name *</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -170,7 +170,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                 name="lastName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Last name (optional)</FormLabel>
+                    <FormLabel>Last name</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -183,11 +183,14 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email (optional)</FormLabel>
+                    <FormLabel>Email</FormLabel>
                     <FormControl>
                       <Input type="email" {...field} />
                     </FormControl>
                     <FormMessage />
+                    {!form.watch("email")?.trim() && !form.watch("phone")?.trim() && (
+                      <p className="small text-ink-muted">Provide an email or a phone number.</p>
+                    )}
                   </FormItem>
                 )}
               />
@@ -196,7 +199,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Phone (optional)</FormLabel>
+                    <FormLabel>Phone</FormLabel>
                     <FormControl>
                       <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />
                     </FormControl>
@@ -209,7 +212,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                 name="jobTitle"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Job title (optional)</FormLabel>
+                    <FormLabel>Job title</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -222,7 +225,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                 name="department"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Department (optional)</FormLabel>
+                    <FormLabel>Department</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -235,7 +238,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                 name="location"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Location (optional)</FormLabel>
+                    <FormLabel>Location</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -248,7 +251,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                 name="ownerId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Owner (optional)</FormLabel>
+                    <FormLabel>Owner</FormLabel>
                     <FormControl>
                       <OwnerSelect value={field.value ?? undefined} onValueChange={field.onChange} className="w-full" />
                     </FormControl>
@@ -261,7 +264,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                 name="companyId"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Company (optional)</FormLabel>
+                    <FormLabel>Company</FormLabel>
                     <FormControl>
                       {lockedCompany ? (
                         <Input value={lockedCompany.name} disabled />
@@ -289,7 +292,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Notes (optional)</FormLabel>
+                  <FormLabel>Notes</FormLabel>
                   <FormControl>
                     <Textarea rows={3} {...field} />
                   </FormControl>

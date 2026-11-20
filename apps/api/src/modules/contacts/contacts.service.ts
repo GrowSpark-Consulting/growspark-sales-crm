@@ -174,6 +174,17 @@ export async function updateContact(
     await assertCompanyInOrg(tx, ctx.orgId, input.companyId);
     await assertOwnerInOrg(tx, ctx.orgId, input.ownerId);
 
+    // D43: the same email-or-phone invariant Lead's updateLead already
+    // guards (D35) — checked here, before the write, as a clean 422 rather
+    // than relying on a database CHECK (Contact has none for this).
+    const nextEmailNormalized = input.email !== undefined ? normalizeEmail(input.email) : existing.emailNormalized;
+    const nextPhoneNormalized = input.phone !== undefined ? normalizePhone(input.phone) : existing.phoneNormalized;
+    if (!nextEmailNormalized && !nextPhoneNormalized) {
+      throw new ApiError(422, 'VALIDATION_FAILED', 'A contact needs an email or a phone number.', [
+        { path: 'email', message: 'Provide an email or a phone number' },
+      ]);
+    }
+
     const data: Prisma.ContactUpdateInput = {
       ...(input.companyId !== undefined
         ? { company: input.companyId ? { connect: { id: input.companyId } } : { disconnect: true } }

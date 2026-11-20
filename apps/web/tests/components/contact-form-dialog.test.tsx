@@ -56,9 +56,9 @@ describe("ContactFormDialog (D42: create dialog must not reappear open with stal
     const { unmount } = renderWithClient(<ContactFormDialog trigger={<button>Add contact</button>} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Add contact" }));
-    await waitFor(() => expect(screen.getByLabelText("First name")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText("First name *")).toBeTruthy());
 
-    const firstName = screen.getByLabelText("First name") as HTMLInputElement;
+    const firstName = screen.getByLabelText("First name *") as HTMLInputElement;
     fireEvent.change(firstName, { target: { value: "Stale contact" } });
     expect(firstName.value).toBe("Stale contact");
 
