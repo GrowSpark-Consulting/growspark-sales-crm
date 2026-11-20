@@ -4,6 +4,7 @@ import { prisma } from '../../db/prisma.js';
 import { ApiError } from '../../middleware/error-handler.js';
 import { scoped } from '../../lib/scoped.js';
 import { writeAudit } from '../../lib/audit.js';
+import { getDefaultPipeline, getFirstOpenStage } from '../../lib/pipeline.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 
@@ -163,19 +164,8 @@ export async function convertLead(
     // row.
     let dealId: string | null = null;
     if (input.createDeal) {
-      const pipeline =
-        (await tx.pipeline.findFirst({ where: { organizationId: ctx.orgId, isDefault: true } })) ??
-        (await tx.pipeline.findFirst({ where: { organizationId: ctx.orgId } }));
-      if (!pipeline) {
-        throw new ApiError(500, 'INTERNAL', 'No pipeline is configured for this organisation.');
-      }
-      const firstStage = await tx.pipelineStage.findFirst({
-        where: { organizationId: ctx.orgId, pipelineId: pipeline.id, type: 'OPEN' },
-        orderBy: { position: 'asc' },
-      });
-      if (!firstStage) {
-        throw new ApiError(500, 'INTERNAL', 'No open pipeline stage is configured for this organisation.');
-      }
+      const pipeline = await getDefaultPipeline(tx, ctx.orgId);
+      const firstStage = await getFirstOpenStage(tx, ctx.orgId, pipeline.id);
       if (input.deal?.ownerId) {
         const owner = await tx.user.findFirst({ where: { id: input.deal.ownerId, organizationId: ctx.orgId } });
         if (!owner) {

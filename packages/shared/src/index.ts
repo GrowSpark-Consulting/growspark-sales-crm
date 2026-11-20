@@ -115,3 +115,35 @@ export type {
 } from './leads.js';
 export { convertLeadSchema, leadConversionResponseSchema, leadConversionMatchesResponseSchema } from './lead-conversion.js';
 export type { ConvertLeadInput, LeadConversionResponse, LeadConversionMatchesResponse } from './lead-conversion.js';
+export {
+  dealStatusSchema,
+  dealCreatableFields,
+  createDealSchema,
+  updateDealSchema,
+  moveDealStageSchema,
+  closeDealSchema,
+  setDealContactsSchema,
+  listDealsQuerySchema,
+  dealResponseSchema,
+  dealsListResponseSchema,
+  dealContactResponseSchema,
+  dealContactsResponseSchema,
+} from './deals.js';
+export type {
+  DealStatus,
+  CreateDealInput,
+  UpdateDealInput,
+  MoveDealStageInput,
+  CloseDealInput,
+  SetDealContactsInput,
+  ListDealsQuery,
+  DealResponse,
+  DealContactResponse,
+} from './deals.js';
+export {
+  stageTypeSchema,
+  pipelineStageResponseSchema,
+  pipelineStagesListResponseSchema,
+  pipelineSummaryResponseSchema,
+} from './pipeline.js';
+export type { StageType, PipelineStageResponse, PipelineSummaryStage, PipelineSummaryResponse } from './pipeline.js';
