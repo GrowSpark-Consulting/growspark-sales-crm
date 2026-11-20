@@ -1853,3 +1853,90 @@ reconstructed from memory, and cross-checked against each commit's own message.
     across its own 3-test file). `pnpm typecheck && pnpm lint && pnpm test
     && pnpm build` all pass clean (279 `apps/api` + 63 `apps/web` = 342
     tests).
+- **D49** — Package 3.4 (pipeline board, `@dnd-kit/core`), built
+  2026-11-20. New dependency, approved in advance: `@dnd-kit/core@6.3.1`
+  (current npm "latest" at the time) in `apps/web` only — confirmed before
+  installing (and again on a clean `pnpm install` afterward) that it adds
+  no peer-dependency warning against this repo's `react@19.3.1`
+  (`@dnd-kit/core`'s own peer range is `react: '>=16.8.0'`). Its own
+  internal dependencies (`@dnd-kit/accessibility`, `@dnd-kit/utilities`,
+  `tslib`) came along as transitive installs of `@dnd-kit/core` itself, not
+  separately chosen — `@dnd-kit/sortable` was deliberately **not** added
+  (the approval was `@dnd-kit/core` only); its default keyboard
+  coordinate-getter, built into `@dnd-kit/core` itself, is what the
+  `KeyboardSensor` uses here, not `/sortable`'s sortable-list-aware one —
+  correct for a Kanban board, where collision detection (not list-order
+  logic) decides the drop target anyway.
+  - **Board/List toggle**: `/deals?view=board` vs. the default
+    (`list`/unset) — kept in the URL via the same `useListUrlState`
+    mechanism every other filter already uses, so a shared or bookmarked
+    link reproduces the chosen view. Switching to Board hides the 3.3 list
+    and its filter bar entirely rather than showing both at once.
+  - **Columns = the pipeline's `OPEN`-type stages only, in position
+    order**, per the brief — Won/Lost never get a column; their
+    organisation-wide totals (not per-deal cards) surface in a small
+    "Open pipeline" summary bar above the board instead, sourced from
+    `GET /pipeline/summary`'s own `open` aggregate (the same endpoint 3.2
+    already computes entirely in Postgres SQL, D47 — no new client-side
+    aggregation invented here).
+  - **Every column runs its own fixed-shape query**
+    (`{ stageId, archived: false, pageSize: MAX_PAGE_SIZE, sort:
+    "createdAt:asc" }`, no search/sort choice exposed) deliberately kept
+    simple and literal so its TanStack Query cache key is predictable and
+    referenceable by exact shape from the move-mutation's optimistic
+    update — not reusing 3.3's list-page query params (which vary with
+    user-chosen filters/sort and would make the cache key a moving
+    target). If a column's `meta.total` exceeds what fit in one page (the
+    list helper's `MAX_PAGE_SIZE`, 100, D33), a "Showing N of M — open List
+    view" note links to the 3.3 list prefiltered to that stage — no new
+    endpoint added for this, exactly as the brief specified.
+  - **One shared move-mutation** (`useMoveDealMutation`), used by both the
+    drag handler and every card's own "Move to…" dropdown — the always-
+    present fallback the brief calls for, independent of whether drag
+    itself works in the viewer's browser or input method. Follows
+    TanStack Query's own documented optimistic-update recipe: cancel the
+    two affected columns' in-flight queries, snapshot both, patch both
+    caches immediately (move the card, adjust each `meta.total`), call
+    `POST /deals/:id/stage` for real, roll back both snapshots on error
+    (with a toast), and broadly invalidate `deals` and `pipeline` on
+    settle either way — so every other view (the 3.3 list, the deal
+    detail page, the pipeline summary) reconciles with the server
+    regardless of how precise the optimistic patch was, not just the
+    board itself.
+  - **Drag mechanics**: `PointerSensor` with an 8px `activationConstraint`
+    (the standard dnd-kit mitigation so a plain click on the card's own
+    name link, or its dropdown trigger, still registers as a click rather
+    than being swallowed by drag-start) plus `KeyboardSensor` with its
+    built-in default coordinate getter; `closestCenter` for collision
+    detection (built into `@dnd-kit/core`, not a separate import). The
+    dragged deal's own data travels on the draggable itself
+    (`useDraggable({ id, data: { deal } })`), read back via
+    `event.active.data.current?.deal` in the drag-end handler — not
+    re-derived from id by searching every column's cache.
+  - **Verification limits, stated plainly, per the brief's own time-box
+    clause**: the dropdown fallback — the one explicitly required test —
+    is proven in `apps/web/tests/components/pipeline-board.test.tsx`
+    against a small stateful fake backend (the mocked deal genuinely
+    changes stage, or genuinely doesn't on a forced failure, so the same
+    assertions hold whether checked against the immediate optimistic
+    state or the post-invalidation refetched state): a successful move
+    calls `POST /deals/:id/stage` and the card ends up in the target
+    column; a failed move rolls back to the original column. Opening the
+    dropdown itself needed keyboard activation (`Enter` while focused),
+    not a plain `fireEvent.click` — Radix's menu trigger opens on
+    `pointerdown` in a real browser, which jsdom's `PointerEvent` support
+    doesn't reliably simulate; every Radix trigger also supports keyboard
+    activation, so this is a faithful alternative, not a workaround that
+    tests something different. **The actual pointer/touch drag gesture
+    itself was not, and could not be, interactively verified** — this
+    environment has no browser-automation tool (true of every UI feature
+    built in this project so far, not new to this package) and the
+    project's own dev server, already running on ports 3000/4000 under
+    the user's own session, was correctly left untouched rather than
+    started a second time to poke at manually. The implementation follows
+    `@dnd-kit/core`'s standard, documented usage exactly (the same shape
+    as its own official examples), typechecks, lints clean, and builds —
+    but "clean and reliable" drag, specifically, is for the user to
+    confirm in a real browser per the brief's own time-box clause, the
+    same way every other interactive behaviour in this project has always
+    needed a human to click through it at least once.

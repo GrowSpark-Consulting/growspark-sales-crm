@@ -109,8 +109,22 @@ stopping to ask when the brief's "list this deal's contacts" requirement
 turned out to have no corresponding read endpoint) — full detail in
 `docs/decisions.md` D48. 279 `apps/api` tests (up from 275) and 63
 `apps/web` tests (up from 53), 342 total, all passing. Nothing pushed.
-**Packages 3.4 (the Kanban pipeline board) and 3.5 (the convert dialog and
-related tabs) are next.**
+
+**Update, same session — package 3.4 (the Kanban pipeline board,
+`@dnd-kit/core`) is built.** A Board/List toggle on `/deals` (kept in the
+URL); Board shows one column per `OPEN` pipeline stage (Won/Lost never get
+a column — their totals surface in a small "Open pipeline" summary bar
+instead, from `GET /pipeline/summary`'s own `open` aggregate, D47); every
+card carries a "Move to…" dropdown — the always-present fallback — plus
+real pointer/keyboard drag via the new, exact-pinned `@dnd-kit/core@6.3.1`
+(confirmed no peer-dependency warning against `react@19.3.1` before
+installing; `@dnd-kit/sortable`/`/utilities` deliberately not added). One
+shared optimistic move-mutation backs both the dropdown and the drag
+handler. Full detail, including an honest note on what could and couldn't
+be verified without a browser in this environment, is in
+`docs/decisions.md` D49. 279 `apps/api` tests (unchanged) and 65
+`apps/web` tests (up from 63), 344 total, all passing. Nothing pushed.
+**Package 3.5 (the convert dialog and related tabs) is next.**
 
 ## 2. Hard constraints
 
@@ -387,7 +401,10 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     deals/                  (3.3, D48) deals-page-client.tsx (list:
                         search/stage/status/owner/company filters +
                         archived toggle, sortable name/value/probability/
-                        expectedCloseDate only — DEAL_SORT_FIELDS); deal-
+                        expectedCloseDate only — DEAL_SORT_FIELDS; 3.4
+                        D49 — gained a Board/List toggle kept in the URL
+                        as ?view=board, hiding the list+filter bar entirely
+                        when Board is active); deal-
                         form.tsx (one shared create/edit form; Stage is
                         create-only — updateDealSchema has no stageId key
                         at all, D47 — defaults to the pipeline's first open
@@ -410,7 +427,22 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         primary all funnel through one replaceContacts()
                         helper calling the one real PUT endpoint); close-
                         lost-dialog.tsx (submit disabled until a
-                        LOSS_REASONS reason is chosen)
+                        LOSS_REASONS reason is chosen); pipeline-board.tsx
+                        (3.4, D49) — one column per OPEN stage; each
+                        column runs its own fixed-shape useDealsList query
+                        (no filters/sort choice, so its cache key stays
+                        predictable for the optimistic move below); every
+                        card has an always-present "Move to…" dropdown
+                        plus real drag via @dnd-kit/core (PointerSensor
+                        with an 8px activation distance so the card's own
+                        link/dropdown stay clickable, KeyboardSensor with
+                        its built-in default coordinate getter,
+                        closestCenter collision detection); one shared
+                        useMoveDealMutation (optimistic cache patch across
+                        the two affected columns, snapshot + rollback on
+                        error, broad deals+pipeline invalidation on
+                        settle) backs both the dropdown and the drag
+                        handler
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx,
                         users-page-client.tsx (2.0, D31 — the Client
@@ -484,7 +516,15 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         in edit mode), close-lost-dialog.test.tsx (submit
                         disabled until a reason is chosen), deal-detail-
                         page-client.test.tsx (closed deal hides Edit/Move
-                        stage/Close actions and shows Reopen instead)
+                        stage/Close actions and shows Reopen instead);
+                        package 3.4's pipeline-board.test.tsx (D49 — a
+                        successful move via the card dropdown calls POST
+                        /deals/:id/stage and the card ends up in the
+                        target column; a failed move rolls back — both
+                        against a small stateful fake backend; opening the
+                        dropdown uses keyboard activation, not a plain
+                        click, since jsdom doesn't simulate the pointerdown
+                        Radix's trigger opens on in a real browser)
   tests/setup.ts            (2.4, D37) afterEach(cleanup) for
                         @testing-library/react — not automatic without
                         vitest's globals:true, which this repo doesn't use
@@ -774,6 +814,7 @@ packages pin exact versions, no `^`/`~` ranges, per `CLAUDE.md`).
 | apps/web | `lucide-react` | 1.76.0 | Package 1.5 — the shadcn CLI referenced it in 4 components but didn't actually install it (D26) |
 | apps/web | `vitest` | 5.1.1 | Package 1.6 — added (with explicit sign-off) so `lib/format.ts` could ship with real unit tests; same pinned version as `apps/api` (D27) |
 | apps/web | `jsdom`, `@testing-library/react`, `@testing-library/dom` | 31.0.1, 16.3.3, 10.4.2 | Package 2.3b — added for component tests (2.4); `vitest.config.mts` sets `environment: "jsdom"` globally (D36) |
+| apps/web | `@dnd-kit/core` | 6.3.1 | Package 3.4 — the pipeline board's drag and drop; confirmed no peer-dependency warning against `react@19.3.1` before installing. `@dnd-kit/sortable`/`/utilities` deliberately **not** added — approval was core only (D49) |
 | packages/shared | `zod` | 4.6.7 | |
 
 ## 7. What has been built, package by package
@@ -1124,8 +1165,63 @@ written in a docs-only catch-up pass on 2026-11-20, immediately before
 package 3.3 started, once the gap was noticed and flagged to the user.**
 Nothing about either package's actual behaviour changed in that catch-up —
 only the documentation caught up to the already-shipped, already-tested
-code. Packages 3.3 (deals list/forms/detail UI), 3.4 (the Kanban pipeline
-board), and 3.5 (the convert dialog and related tabs) are next.
+code.
+
+- **Package 3.3 (`fd8fb2b`) — Deals list, forms, detail, close dialogs.**
+  `/deals` (list — search, stage/status/owner/company filters, archived
+  toggle, server-side sort on name/value/probability/expectedCloseDate);
+  `/deals/new` and `/deals/[id]/edit` sharing one `DealForm` (Stage is
+  create-only — `updateDealSchema` has no `stageId` key at all, D47 —
+  defaults to the pipeline's first open stage and copies its probability;
+  `value`/`probability` hit the same `z.coerce.number()` gotcha as
+  Company/Lead, D38/D39); `/deals/[id]` (`RecordLayout` — key facts
+  include a client-computed Weighted value; Overview/Contacts/Stage
+  history tabs; Edit, Move stage via a `DropdownMenu`, Close as Won, Close
+  as Lost requiring a `LOSS_REASONS` reason, Reopen, and Archive/Restore,
+  all correctly gated by `deal.status` per D47, with Archive/Restore
+  deliberately not gated). Three backend additions, each checked against
+  the pre-approved allowance before being built: `GET
+  /deals/:id/stage-history` (same shape as Lead's status history, D35);
+  a `contactId` filter on `GET /deals` (via the `DealContact` join, ahead
+  of 3.5); and, after stopping to ask because it was genuinely outside the
+  pre-approved allowance, a `contacts` summary array added to
+  `dealResponseSchema` itself (one shared Prisma include reused across
+  every Deal query), closing a real gap — the brief's "list this deal's
+  contacts" had no corresponding read endpoint, only the write-and-return
+  `PUT /deals/:id/contacts`. New `ContactSelect` picker (same hand-built
+  combobox as `CompanySelect`, D37) and `apiPut` (this frontend's first
+  `PUT` route). Component tests deliberately avoid simulating a Radix
+  `Select` open/pick, consistent with every existing test in this repo.
+  `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass (279
+  `apps/api`: 275 carried over + 4 new; 63 `apps/web`: 53 carried over +
+  10 new; 342 total). Full detail in `docs/decisions.md` D48.
+- **Package 3.4 (pipeline board, `@dnd-kit/core`).** A Board/List toggle
+  on `/deals` (`?view=board`, kept in the URL); Board shows one column per
+  `OPEN` pipeline stage (Won/Lost never get a column — their totals
+  surface in a small "Open pipeline" summary bar instead, from `GET
+  /pipeline/summary`'s own `open` aggregate, D47); every card carries an
+  always-present "Move to…" dropdown plus real pointer/keyboard drag via
+  the new, exact-pinned `@dnd-kit/core@6.3.1` (confirmed no
+  peer-dependency warning against `react@19.3.1` before installing;
+  `@dnd-kit/sortable`/`/utilities` deliberately not added — approval was
+  core only). Each column runs its own fixed-shape `useDealsList` query
+  (no filters/sort choice) so its cache key stays predictable for the
+  optimistic move-mutation shared by both the dropdown and the drag
+  handler (snapshot both affected columns, patch both, roll back on
+  error, broadly invalidate `deals`+`pipeline` on settle either way). The
+  one explicitly required test (dropdown move calls the stage endpoint
+  and updates the column; a failed move rolls back) is proven against a
+  small stateful fake backend; **the actual pointer/touch drag gesture
+  itself could not be interactively verified** — no browser-automation
+  tool exists in this environment, the same limitation already true of
+  every other UI feature in this project — so "clean and reliable" drag
+  specifically is for the user to confirm in a real browser, per the
+  brief's own time-box clause. `pnpm typecheck && pnpm lint && pnpm test
+  && pnpm build` all pass (279 `apps/api`, unchanged; 65 `apps/web`: 63
+  carried over + 2 new; 344 total). Full detail in `docs/decisions.md`
+  D49.
+
+**Package 3.5 (the convert dialog and related tabs) is next.**
 
 ## 8. Database
 
@@ -1229,6 +1325,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D46 — Package 3.1 (lead conversion transaction, built 2026-11-20, documented in this same-day catch-up pass before 3.3): one `$transaction` with a `SELECT ... FOR UPDATE` row lock on the lead, link-or-create Company (422 if creating one and the lead has no company name — judgment call, no placeholder name invented), link-with-fill-empty-only-or-create Contact (an existing contact's company is never overwritten), an optional Deal in the pipeline's first open stage with its `DealContact`/first `DealStageHistory` row, then convert + history + `LeadConversion` row + activity repoint + audit, all in the same transaction; `GET /leads/:id/conversion-matches` (plain, non-blocking) and `POST /leads/:id/convert`; `getDefaultPipeline`/`getFirstOpenStage` built here, reused by 3.2; `tests/helpers/tenant.ts` extended with a real six-stage pipeline per tenant
 - D47 — Package 3.2 (Deals API, stage moves, close/reopen, pipeline summary, built 2026-11-20, documented in the same catch-up pass): full Deal CRUD; `stageId` excluded from the shared update field map (create-only, like Lead's `requirement`); stage move refuses a non-open target (422) or a non-open deal (409) and copies the target stage's probability every time (roadmap D7, overwrites a manual edit by design); close requires a `LOSS_REASONS` reason for Lost; **reopen returns the deal to the pipeline's first open stage** (judgment call — the brief doesn't say which stage to land on); **archive/restore are deliberately NOT blocked by the closed-deal-is-read-only rule** (judgment call — archiving is a records-management action, not a pipeline mutation); `PUT /deals/:id/contacts` fully replaces the set with one primary; `GET /pipeline/{stages,summary}`, the summary computed entirely as Postgres SQL (`COALESCE`/`SUM`/weighted-value multiplication over `NUMERIC`, never JS floats) and cross-checked in its test against an independently hand-written SQL query — found empirically that `Prisma.Decimal` stringifies an empty stage's zero as `"0"`, not `"0.00"`
 - D48 — Package 3.3 (Deals list, forms, detail, close dialogs): three backend additions found while building the UI — `contactId` filter on `GET /deals` (via the `DealContact` join, for 3.5's Contact Deals tab); `GET /deals/:id/stage-history` (same shape as Lead's status-history, D35); and, after stopping to ask because it was genuinely outside the pre-approved allowance, a `contacts` summary array added to `dealResponseSchema` itself (populated by one shared `dealContactsInclude` Prisma include reused across every Deal query), so the Contacts tab can read a deal's current contacts without a second round trip or a `PUT` just to list them. `DealForm` shares create/edit (Stage is create-only — `updateDealSchema` has no `stageId` key); hit the same `z.coerce.number()` gotcha as Company/Lead (D38/D39) for `value`/`probability`. `ContactSelect` (new picker, same hand-built pattern as `CompanySelect`, D37). Detail-page actions (Edit, Move stage, Close Won/Lost, Reopen) are gated by `deal.status`; Archive/Restore are not, mirroring D47's backend choice exactly. Component tests deliberately avoid simulating a Radix `Select` open/pick (no existing test in this repo does either) — "stage pre-fills probability" is proven via the create-mode default-autofill, not a simulated manual pick.
+- D49 — Package 3.4 (pipeline board, `@dnd-kit/core`): new dependency `@dnd-kit/core@6.3.1` only (confirmed no peer-dependency warning against `react@19.3.1` first; `/sortable`/`/utilities` deliberately not added); Board/List toggle on `/deals` kept in the URL; columns = `OPEN`-type pipeline stages only, Won/Lost totals shown in a summary bar from `GET /pipeline/summary`'s `open` aggregate instead (D47); each column's query uses a fixed, filter-free shape so its cache key is predictable for the optimistic move-mutation (snapshot both affected columns, patch both, roll back on error, broadly invalidate on settle) shared by the drag handler and every card's own "Move to…" dropdown fallback; `PointerSensor` uses an 8px activation distance so the card's nested link/dropdown stay clickable, `KeyboardSensor` uses `@dnd-kit/core`'s own built-in default coordinate getter (not `/sortable`'s), `closestCenter` for collision detection. The required dropdown-move test passes against a stateful fake backend; the actual drag gesture itself could not be interactively verified (no browser-automation tool in this environment) — flagged plainly rather than claimed as proven.
 
 ## 10. Gotchas and lessons learned
 
@@ -1353,9 +1450,10 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   2.4; plus package 2.7's `tests/components/lead-form.test.tsx`,
   `company-form.test.tsx`, `contact-form-dialog.test.tsx`, and
   `phone-input.test.tsx`; plus package 3.3's `deal-form.test.tsx`,
-  `close-lost-dialog.test.tsx`, `deal-detail-page-client.test.tsx`), and
-  `apps/api` (`vitest run`) — **279 `apps/api` tests + 63 `apps/web` tests,
-  342 total**, all passing as of the last run (package 3.3). Package 2.7
+  `close-lost-dialog.test.tsx`, `deal-detail-page-client.test.tsx`; plus
+  package 3.4's `pipeline-board.test.tsx`), and `apps/api` (`vitest run`)
+  — **279 `apps/api` tests + 65 `apps/web` tests, 344 total**, all passing
+  as of the last run (package 3.4). Package 2.7
   (items 1–4) brought the count to 244 + 53 =
   297 (D42's reset-on-hide tests, D41's phone-validation and `PhoneInput`
   composition tests, D40/D43's "More details"/Source-preselect/Contact-
@@ -1367,8 +1465,11 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   pipeline}.test.ts`, D47) for 275 + 53 = 328; package 3.3 added 4
   `apps/api` tests (the `contacts` summary round-trip and `contactId`
   filter folded into `crud.test.ts`, plus the new
-  `stage-history.test.ts`) and 10 `apps/web` tests (D48) for the current
-  279 + 63 = 342. `apps/web` runs under jsdom (D36) with
+  `stage-history.test.ts`) and 10 `apps/web` tests (D48) for 279 + 63 =
+  342; package 3.4 added 2 `apps/web` tests
+  (`pipeline-board.test.tsx` — a successful dropdown move and a rolled-
+  back failed one, D49) for the current 279 + 65 = 344. `apps/web` runs
+  under jsdom (D36) with
   `tests/setup.ts` registering RTL's `afterEach(cleanup)` (D37) —
   needed because RTL's own auto-cleanup never self-registers without
   vitest's `globals: true`, which this repo doesn't use.
@@ -1550,10 +1651,17 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   read a deal's current contacts before any write) was found while
   building the Contacts tab; stopped and asked per instruction; approved
   option built (a `contacts` summary on `dealResponseSchema` itself). 279
-  `apps/api` + 63 `apps/web` = 342 tests, nothing pushed. **Packages 3.4
-  (the Kanban pipeline board) and 3.5 (the convert dialog and related
-  tabs) are next, in the same session.** Day 6/7 (testing, stabilisation,
-  demo) remain explicitly out of scope until the build days are done.
+  `apps/api` + 63 `apps/web` = 342 tests, nothing pushed.
+- **Package 3.4 (the Kanban pipeline board) is built** — full detail in
+  §7 and `docs/decisions.md` D49. New dependency `@dnd-kit/core@6.3.1`
+  only, confirmed peer-clean against `react@19.3.1` before installing.
+  The required dropdown-move test passes; the actual drag gesture itself
+  could not be interactively verified in this environment (no
+  browser-automation tool) — flagged plainly, not claimed as proven. 279
+  `apps/api` (unchanged) + 65 `apps/web` = 344 tests, nothing pushed.
+  **Package 3.5 (the convert dialog and related tabs) is next, in the
+  same session.** Day 6/7 (testing, stabilisation, demo) remain
+  explicitly out of scope until the build days are done.
 
 ## 14. Open questions and unverified items
 
@@ -1614,6 +1722,15 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   (Render + Supabase, a separate `sales` schema, a first-admin command) is
   still just a plan — nothing built toward it — and the website-forwarding
   patch remains explicitly **not approved**.
+- **New from package 3.4**: the pipeline board's actual pointer/touch and
+  keyboard drag gesture has never been interactively verified in a real
+  browser — same root cause as every item above (no browser-automation
+  tool in this environment). The "Move to…" dropdown fallback (the
+  explicitly required, always-present alternative) is proven by an
+  automated test; the drag code itself follows `@dnd-kit/core`'s own
+  documented usage exactly and typechecks/builds clean, but "clean and
+  reliable," specifically, needs a human to actually drag a card at least
+  once. Worth a specific check in a future manual-test pass for Day 3.
 
 ## 15. Session log
 
@@ -2243,4 +2360,55 @@ log just records that a session happened and what it covered.
   carried over + 10 new; 342 total). One commit. Nothing pushed.
   `docs/decisions.md` D48 has the full detail. Packages 3.4 (the Kanban
   pipeline board) and 3.5 (the convert dialog and related tabs) are next,
+  in the same session.
+- **2026-11-20 (same session, continued) — package 3.4, the pipeline
+  board.** Checked and confirmed `@dnd-kit/core@6.3.1` (current npm
+  "latest") installs with no peer-dependency warning against this repo's
+  `react@19.3.1` — both on the initial `pnpm add` and again on a clean
+  `pnpm install` afterward — before writing any code; added it exact-
+  pinned, `apps/web` only, no `/sortable` or `/utilities` alongside it.
+  Built `components/deals/pipeline-board.tsx`: one column per `OPEN`
+  pipeline stage (Won/Lost never get a column; their totals show in a
+  small "Open pipeline" summary bar instead, sourced from `GET
+  /pipeline/summary`'s existing `open` aggregate, D47 — no new
+  client-side aggregation); each column runs its own deliberately simple,
+  filter-free `useDealsList` query so its cache key is predictable;
+  every card carries an always-present "Move to…" dropdown and is also a
+  real `@dnd-kit/core` draggable (`PointerSensor` with an 8px activation
+  distance so the card's nested link and dropdown trigger stay clickable;
+  `KeyboardSensor` with its own built-in default coordinate getter, not
+  `/sortable`'s; `closestCenter` collision detection). One shared
+  `useMoveDealMutation` backs both the dropdown and the drag handler —
+  TanStack Query's own documented optimistic-update recipe (cancel both
+  affected columns' queries, snapshot both, patch both caches, roll back
+  both on error with a toast, broadly invalidate `deals` and `pipeline`
+  on settle regardless of outcome). Added a Board/List toggle to
+  `/deals` (`?view=board`, kept in the URL via the existing
+  `useListUrlState` mechanism), hiding the 3.3 list and its filter bar
+  entirely when Board is selected. Wrote the one explicitly required
+  test (`pipeline-board.test.tsx`): a successful dropdown move calls
+  `POST /deals/:id/stage` and the card ends up in the target column; a
+  failed move rolls back to the original column — both proven against a
+  small stateful fake backend so the same assertions hold whether read
+  immediately (optimistic) or after the settle-time invalidation's
+  refetch resolves. Opening the dropdown in the test needed keyboard
+  activation (focus + Enter) rather than a plain `fireEvent.click` —
+  found empirically that Radix's menu trigger opens on `pointerdown` in a
+  real browser, which jsdom doesn't simulate from a plain click; keyboard
+  activation is a genuine alternative every Radix trigger supports, not a
+  workaround that tests something different. **Stated plainly, not
+  glossed over: the actual pointer/touch drag gesture itself was not, and
+  could not be, interactively verified** — this environment has no
+  browser-automation tool (true of every UI feature built in this project
+  so far), and the user's own `pnpm dev` session, already running on
+  ports 3000/4000, was correctly left untouched rather than started a
+  second time to poke at manually. The implementation follows
+  `@dnd-kit/core`'s own documented usage exactly, typechecks, lints
+  clean, and builds — but "clean and reliable" drag specifically needs
+  the user to confirm it in a real browser, per the brief's own time-box
+  clause; this was not treated as license to silently skip building it.
+  `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+  (279 `apps/api`, unchanged; 65 `apps/web`: 63 carried over + 2 new; 344
+  total). One commit. Nothing pushed. `docs/decisions.md` D49 has the
+  full detail. Package 3.5 (the convert dialog and related tabs) is next,
   in the same session.

@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, LayoutGrid, List as ListIcon } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { PipelineBoard } from "@/components/deals/pipeline-board";
 import { useDealsList } from "@/hooks/use-deals";
 import { usePipelineStages } from "@/hooks/use-pipeline";
 import { useUserOptions } from "@/hooks/use-user-options";
@@ -21,6 +22,7 @@ const DEAL_STATUSES: DealStatus[] = ["OPEN", "WON", "LOST"];
 
 export function DealsPageClient() {
   const { searchParams, page, pageSize, setParams } = useListUrlState();
+  const view = searchParams.get("view") === "board" ? "board" : "list";
 
   const q = searchParams.get("q") ?? "";
   const status = (searchParams.get("status") as DealStatus | null) ?? undefined;
@@ -114,7 +116,29 @@ export function DealsPageClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <div className="inline-flex rounded-md border border-line-strong p-0.5" role="group" aria-label="Deals view">
+          <Button
+            type="button"
+            variant={view === "list" ? "default" : "ghost"}
+            size="sm"
+            aria-pressed={view === "list"}
+            onClick={() => setParams({ view: undefined })}
+          >
+            <ListIcon className="size-4" aria-hidden="true" />
+            List
+          </Button>
+          <Button
+            type="button"
+            variant={view === "board" ? "default" : "ghost"}
+            size="sm"
+            aria-pressed={view === "board"}
+            onClick={() => setParams({ view: "board" })}
+          >
+            <LayoutGrid className="size-4" aria-hidden="true" />
+            Board
+          </Button>
+        </div>
         <Button asChild>
           <Link href="/deals/new">
             <Plus className="size-(--icon-md)" aria-hidden="true" />
@@ -123,6 +147,9 @@ export function DealsPageClient() {
         </Button>
       </div>
 
+      {view === "board" ? (
+        <PipelineBoard />
+      ) : (
       <DataTable
         columns={columns}
         rows={listQuery.data?.data ?? []}
@@ -239,6 +266,7 @@ export function DealsPageClient() {
           </div>
         }
       />
+      )}
     </div>
   );
 }
