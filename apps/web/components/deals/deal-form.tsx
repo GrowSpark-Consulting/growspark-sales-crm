@@ -33,10 +33,10 @@ const dealFormSchema = createDealSchema.extend({
 type DealFormInput = z.infer<typeof dealFormSchema>;
 
 /** Exported so a test can assert the reset target is genuinely blank (same D42 convention as Lead/Company). */
-export function dealToFormValues(deal?: DealResponse, defaultOwnerId?: string): DealFormInput {
+export function dealToFormValues(deal?: DealResponse, defaultOwnerId?: string, defaultCompanyId?: string): DealFormInput {
   return {
     name: deal?.name ?? "",
-    companyId: deal?.companyId ?? "",
+    companyId: deal?.companyId ?? defaultCompanyId ?? "",
     stageId: undefined,
     value: deal?.value !== undefined ? Number(deal.value) : undefined,
     probability: deal?.probability,
@@ -52,6 +52,8 @@ export interface DealFormProps {
   deal?: DealResponse;
   /** Create mode only: the signed-in user, so Owner defaults to "me" rather than Unassigned. */
   defaultOwnerId?: string;
+  /** Create mode only: pre-fills Company — e.g. "Add deal" from a Company's own Deals tab (3.5). Still editable. */
+  defaultCompanyId?: string;
   onSubmit: (values: CreateDealInput) => Promise<unknown>;
   submitLabel: string;
   pendingLabel: string;
@@ -66,14 +68,22 @@ export interface DealFormProps {
  * it anyway on an edit submit is harmless, the server silently strips an
  * unknown key exactly like Lead's read-only fields (D35).
  */
-export function DealForm({ deal, defaultOwnerId, onSubmit, submitLabel, pendingLabel, onCancel }: DealFormProps) {
+export function DealForm({
+  deal,
+  defaultOwnerId,
+  defaultCompanyId,
+  onSubmit,
+  submitLabel,
+  pendingLabel,
+  onCancel,
+}: DealFormProps) {
   const [bannerError, setBannerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const isEdit = Boolean(deal);
 
   const form = useForm<DealFormInput>({
     resolver: zodResolver(dealFormSchema),
-    defaultValues: dealToFormValues(deal, defaultOwnerId),
+    defaultValues: dealToFormValues(deal, defaultOwnerId, defaultCompanyId),
   });
 
   const companyId = form.watch("companyId");
@@ -105,10 +115,10 @@ export function DealForm({ deal, defaultOwnerId, onSubmit, submitLabel, pendingL
   useLayoutEffect(() => {
     if (isEdit) return;
     return () => {
-      form.reset(dealToFormValues(undefined, defaultOwnerId));
+      form.reset(dealToFormValues(undefined, defaultOwnerId, defaultCompanyId));
       setBannerError(null);
     };
-  }, [isEdit, defaultOwnerId, form]);
+  }, [isEdit, defaultOwnerId, defaultCompanyId, form]);
 
   async function handleSubmit(values: DealFormInput) {
     setBannerError(null);

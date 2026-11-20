@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import type { CreateDealInput, DealResponse } from "@growspark/shared";
@@ -15,6 +15,11 @@ export function CreateDealPageClient() {
   const queryClient = useQueryClient();
   const { data: meData } = useMe();
   const me = meData?.data;
+  const searchParams = useSearchParams();
+  // "Add deal" from a Company's own Deals tab (3.5) links here with
+  // ?companyId=, so the form opens with that company already chosen —
+  // still editable, just a sensible default.
+  const defaultCompanyId = searchParams.get("companyId") ?? undefined;
 
   const mutation = useMutation({
     mutationFn: (values: CreateDealInput) => apiPost<{ data: DealResponse }>("/api/v1/deals", values),
@@ -31,6 +36,7 @@ export function CreateDealPageClient() {
       <h2 className="h1">Add deal</h2>
       <DealForm
         defaultOwnerId={me?.user.id}
+        defaultCompanyId={defaultCompanyId}
         onSubmit={(values) => mutation.mutateAsync(values)}
         submitLabel="Add deal"
         pendingLabel="Adding…"

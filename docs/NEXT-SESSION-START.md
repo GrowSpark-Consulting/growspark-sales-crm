@@ -14,10 +14,10 @@ next.
   people (stated by the user; not independently verifiable from this repo
   alone).
 - The build is a **7-day plan**: Days 1–5 build, Day 6 testing, Day 7
-  stabilise and demo. **Day 1 and Day 2 (including package 2.7) are both
-  done** (see below). **Day 3 is underway**: packages 3.1 (lead conversion
-  transaction) and 3.2 (Deals API, pipeline) are built; 3.3–3.5 (deals UI,
-  Kanban board, convert dialog) are next.
+  stabilise and demo. **Days 1, 2, and 3 are all done** (see below). **Day
+  4** (activities, timelines, Today workspace, dashboard) is next, but not
+  yet detailed in this repo — confirm exact scope with the user before
+  starting it.
 - A **staging deployment is planned for around Day 4** — see "Day 4" below.
 - Single developer, nothing reviewed by anyone else: correctness over
   speed, and every package stops for review before the next one starts.
@@ -78,22 +78,24 @@ next.
    detailed reference; skim its table of contents (the `##` headings) and
    come back to specific sections as needed rather than reading linearly
    every time.
-4. **`docs/decisions.md`** — every approved decision, D1 through D45 (D3
+4. **`docs/decisions.md`** — every approved decision, D1 through D50 (D3
    and D5 don't exist — never assigned), append-only, each with the
    reasoning behind it. Don't re-litigate something already decided here
-   without a new entry. D40–D44 (package 2.7's scope) are now built — D45
-   records what was actually done, including two real bugs found and fixed
-   along the way.
+   without a new entry. D46–D50 cover all of Day 3 (lead conversion, the
+   Deals API, the Deals UI, the pipeline board, and the Convert dialog) —
+   D46/D47 were written in a docs-only catch-up pass after the fact (the
+   code was already built and committed first; see §7 of
+   `docs/PROJECT-STATE.md` for why), D48–D50 as each package was built.
 5. **`apps/api/prisma/SCHEMA-SUMMARY.md`** — the factual per-model
    column/index/FK/CHECK reference for the database. Read this instead of
    `schema.prisma` itself when you just need to know what a table looks
    like.
 
-Also worth a skim before starting: **`docs/DAY-1-SUMMARY.md`** and
-**`docs/DAY-2-SUMMARY.md`** — plain-language look-backs at what was built
-and how it was verified each day. Not required reading like the five
-files above, but faster than re-deriving the same picture from
-`PROJECT-STATE.md`'s session log.
+Also worth a skim before starting: **`docs/DAY-1-SUMMARY.md`**,
+**`docs/DAY-2-SUMMARY.md`**, and **`docs/DAY-3-SUMMARY.md`** — plain-
+language look-backs at what was built and how it was verified each day. Not
+required reading like the five files above, but faster than re-deriving the
+same picture from `PROJECT-STATE.md`'s session log.
 
 Only after those should you start reading application code for the
 specific package you're about to work on.
@@ -121,33 +123,43 @@ specific package you're about to work on.
   actor, with its email-or-phone hint now only showing while actually
   unmet. **244 `apps/api` + 53 `apps/web` = 297 automated tests pass.**
   Full detail in `docs/decisions.md` D45 and `docs/PROJECT-STATE.md` §7.
-- **Day 3 is underway. Packages 3.1 and 3.2 are built and committed**
-  (`3f08a38`, `f2c59e0`): **3.1** is the lead conversion transaction —
-  `POST /leads/:id/convert` links or creates a Company and Contact from a
-  `QUALIFIED` lead, optionally creates a Deal in the pipeline's first open
-  stage, all in one row-locked transaction; `GET
-  /leads/:id/conversion-matches` suggests existing records to link instead.
-  **3.2** is the Deals API and pipeline — full Deal CRUD, `POST
-  /deals/:id/stage`, `POST /deals/:id/close` (Won/Lost with a required
-  reason for Lost), `POST /deals/:id/reopen` (back to the pipeline's first
-  open stage), archive/restore (allowed even on a closed deal — a
-  deliberate choice, not an oversight), `PUT /deals/:id/contacts`, and `GET
-  /pipeline/{stages,summary}`. **275 `apps/api` + 53 `apps/web` = 328
-  automated tests pass.** Full detail in `docs/decisions.md` D46/D47 and
-  `docs/PROJECT-STATE.md` §7. Note: these two packages were committed
-  before the docs caught up to them — a gap fixed in a dedicated docs-only
-  pass on 2026-11-20, immediately before 3.3 started.
+- **Day 3 is done.** All five packages (3.1–3.5) are built and committed:
+  **3.1** is the lead conversion transaction — `POST /leads/:id/convert`
+  links or creates a Company and Contact from a `QUALIFIED` lead, optionally
+  creates a Deal in the pipeline's first open stage, all in one row-locked
+  transaction; `GET /leads/:id/conversion-matches` suggests existing
+  records to link instead. **3.2** is the Deals API and pipeline — full
+  Deal CRUD, `POST /deals/:id/stage`, `POST /deals/:id/close` (Won/Lost
+  with a required reason for Lost), `POST /deals/:id/reopen` (back to the
+  pipeline's first open stage), archive/restore (allowed even on a closed
+  deal — a deliberate choice), `PUT /deals/:id/contacts`, and `GET
+  /pipeline/{stages,summary}`. **3.3** is the Deals list/create/edit/
+  detail screens, with Close Won/Lost dialogs and a Stage history tab.
+  **3.4** is the Kanban pipeline board (`@dnd-kit/core`) — a Board/List
+  toggle, one column per open stage, drag-and-drop plus an always-present
+  "Move to…" dropdown fallback. **3.5** is the Convert dialog (three
+  Link/Create sections for Company, Contact, and Deal) plus a "Converted"
+  panel on the lead page and a Deals tab on Company/Contact. **282
+  `apps/api` + 74 `apps/web` = 356 automated tests pass.** Full detail in
+  `docs/decisions.md` D46–D50 and `docs/PROJECT-STATE.md` §7. Note: 3.1 and
+  3.2 were committed before the docs caught up to them — a gap fixed in a
+  dedicated docs-only pass before 3.3 started; 3.3–3.5 were documented as
+  each was built. `docs/MANUAL-TEST-DAY3.md` is written and ready for the
+  user to run in a real browser — not yet run by anyone, same as every
+  other manual test script in this repo (no browser-automation tool here).
 
 ## The next work, in order
 
-### Day 3 — packages 3.3, 3.4, 3.5 (deals UI, Kanban board, convert dialog)
+### Day 4 — activities, timelines, Today workspace, dashboard
 
-This is the next work: the Deals list/forms/detail screens, a Kanban
-pipeline board (drag-and-drop with a dropdown fallback), and the lead
-Convert dialog plus the related tabs on Company/Contact. The backend for
-all of it (3.1, 3.2) already exists — see above. Confirm exact UI scope
-with the user before building ahead of what's written here, same as every
-other package boundary.
+This is the next work, per the roadmap. Exact scope beyond the roadmap's own
+headline items (tasks/calls/meetings/notes linked to records, timelines on
+every record type, a "Today" view, and a dashboard with KPIs and charts) is
+not yet detailed in this repo — confirm with the user before building ahead
+of what's written here, same as every other package boundary. The roadmap
+also flags Day 4 as needing agreed metric definitions before building the
+dashboard (see the roadmap PDF's own Day 4 section) — get those confirmed
+first.
 
 ## Day 4: staging deployment (as currently planned)
 
@@ -173,9 +185,20 @@ A fuller, individually-verified version of some of these lives in
 
 - **No browser-automation tool exists in this environment.** Every manual
   browser check (console errors, hydration warnings, light/dark theme,
-  focus order, and anything in `MANUAL-TEST-DAY1.md`/`MANUAL-TEST-DAY2.md`)
-  needs the user to actually run it; don't claim to have verified any of
-  that yourself.
+  focus order, and anything in `MANUAL-TEST-DAY1.md`/`MANUAL-TEST-DAY2.md`/
+  `MANUAL-TEST-DAY3.md`) needs the user to actually run it; don't claim to
+  have verified any of that yourself.
+- **The pipeline board's actual drag-and-drop gesture (package 3.4) has
+  never been watched happen in a real browser**, for the same reason —
+  only the always-present "Move to…" dropdown fallback has an automated
+  test. The implementation follows `@dnd-kit/core`'s own documented usage
+  exactly, but "clean and reliable" drag specifically still needs a human
+  to try it at least once (`MANUAL-TEST-DAY3.md` §3.3).
+- **No component tests exist yet for the Deals list/board page
+  (`deals-page-client.tsx`) or the Company/Contact Deals tabs
+  (`deals-tab.tsx`)** — the same deliberate "manual coverage instead"
+  scope choice already made for Companies/Contacts/Leads in Day 2 (see
+  below), not an oversight specific to Day 3.
 - **The Users page's search value lives in component state, not the URL**
   (unlike Leads/Companies/Contacts, which all use `useListUrlState`) —
   refreshing `/users` loses any active search/filter/page. Not fixed, not

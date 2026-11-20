@@ -96,7 +96,11 @@ export async function convertLead(
       companyId = company.id;
       companyName = company.name;
     } else {
-      const name = lead.companyName?.trim();
+      // Package 3.5: input.companyName (the Convert dialog's editable
+      // "create new company" field) overrides the lead's own companyName —
+      // this is what lets a lead with no company name still convert, instead
+      // of dead-ending in the 422 below.
+      const name = (input.companyName ?? lead.companyName)?.trim();
       if (!name) {
         throw new ApiError(422, 'VALIDATION_FAILED', 'This lead has no company name — link an existing company instead.', [
           { path: 'companyId', message: 'Required when the lead has no company name' },

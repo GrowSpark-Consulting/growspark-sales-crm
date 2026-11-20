@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { ConvertLeadDialog } from "@/components/leads/convert-lead-dialog";
 import { formatDate, formatTime, formatPhoneForDisplay } from "@/lib/format";
 import { leadStatusBadgeVariant, leadStatusLabel, priorityBadgeVariant, priorityLabel } from "@/lib/lead-presentation";
 
@@ -97,6 +98,19 @@ export function LeadDetailPageClient({ leadId }: { leadId: string }) {
       }
       actions={
         <>
+          {/* Package 3.5: shown only when QUALIFIED and not archived; for
+              every other open status it's disabled rather than hidden, so
+              the lead's path to conversion stays visible. Hidden entirely
+              once archived or CONVERTED. */}
+          {lead.status !== "CONVERTED" && !lead.archivedAt && (
+            lead.status === "QUALIFIED" ? (
+              <ConvertLeadDialog lead={lead} trigger={<Button size="sm">Convert</Button>} />
+            ) : (
+              <Button size="sm" disabled title="Qualify the lead first">
+                Convert
+              </Button>
+            )
+          )}
           <Button variant="outline" size="sm" asChild>
             <Link href={`/leads/${lead.id}/edit`}>
               <Pencil className="size-(--icon-md)" aria-hidden="true" />
@@ -135,6 +149,34 @@ export function LeadDetailPageClient({ leadId }: { leadId: string }) {
           label: "Overview",
           content: (
             <div className="space-y-6">
+              {lead.status === "CONVERTED" && lead.conversion && (
+                <div className="rounded-lg border border-line bg-surface-sunken p-4">
+                  <p className="h3 mb-1">Converted</p>
+                  <p className="small mb-3 text-ink-muted">
+                    {lead.convertedAt ? `On ${formatDate(lead.convertedAt)}, ${formatTime(lead.convertedAt)}` : null}
+                  </p>
+                  <ul className="space-y-1 text-sm">
+                    <li>
+                      <Link href={`/companies/${lead.conversion.companyId}`} className="text-primary underline">
+                        View company
+                      </Link>
+                    </li>
+                    <li>
+                      <Link href={`/contacts/${lead.conversion.contactId}`} className="text-primary underline">
+                        View contact
+                      </Link>
+                    </li>
+                    {lead.conversion.dealId && (
+                      <li>
+                        <Link href={`/deals/${lead.conversion.dealId}`} className="text-primary underline">
+                          View deal
+                        </Link>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
               {lead.status !== "CONVERTED" && (
                 <div>
                   <p className="label mb-2 text-ink-muted">Change status</p>

@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { CompanyContactsTab } from "@/components/companies/company-contacts-tab";
+import { DealsTab } from "@/components/deals/deals-tab";
 import { formatDate, formatPhoneForDisplay } from "@/lib/format";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -141,6 +142,17 @@ export function CompanyDetailPageClient({ companyId }: { companyId: string }) {
           value: "contacts",
           label: "Contacts",
           content: <CompanyContactsTab companyId={company.id} companyName={company.name} />,
+        },
+        {
+          value: "deals",
+          label: "Deals",
+          content: (
+            <DealsTab
+              companyId={company.id}
+              addHref={`/deals/new?companyId=${company.id}`}
+              emptyLabel={`No deals yet for ${company.name}.`}
+            />
+          ),
         },
       ]}
     />

@@ -1940,3 +1940,144 @@ reconstructed from memory, and cross-checked against each commit's own message.
     confirm in a real browser per the brief's own time-box clause, the
     same way every other interactive behaviour in this project has always
     needed a human to click through it at least once.
+- **D50** — Package 3.5 (Convert dialog and related tabs), built
+  2026-11-20. Two backend additions, each matching the brief's
+  pre-approved allowance (the lead conversion summary was explicitly named
+  as allowed back in 3.3's brief; the `companyName` override was
+  explicitly called out in 3.5's own brief as "add it if the convert API
+  doesn't already accept one" — it didn't):
+  - **`companyName` on `convertLeadSchema`** (`packages/shared/src/
+    lead-conversion.ts`): only ever read when `companyId` is absent (i.e.
+    creating a new company), and overrides the lead's own `companyName` in
+    `lead-conversion.service.ts`'s `convertLead` (`(input.companyName ??
+    lead.companyName)?.trim()`). This is what lets the Convert dialog's
+    "create new company" field stay editable and required even when the
+    lead itself has no company name, rather than the lead dead-ending in
+    the service's existing 422 ("link an existing company instead," D46) —
+    the 422 itself is unchanged and still fires when *neither* the lead
+    nor the request body has a name. Three new tests
+    (`tests/leads/conversion.test.ts`): the override creates the company
+    with the typed name; the 422 still fires with neither source present;
+    and `GET /leads/:id` now returns the conversion summary described
+    next.
+  - **`conversion` on `leadResponseSchema`** (`packages/shared/src/
+    leads.ts`): `{ companyId, contactId, dealId } | null`, for the
+    Converted panel's links and conversion date. Deliberately **only
+    populated by `GET /leads/:id`** (`leads.service.ts`'s `getLead`, one
+    extra `leadConversion.findUnique({ where: { leadId } })` — cheap,
+    since a non-converted lead simply has no row), never by `GET /leads`'s
+    list rows — no list view needs it, and the list endpoint already
+    returns many rows per call, so `toLeadResponse` keeps a default
+    parameter (`conversion: LeadConversionSummary = null`) rather than
+    forcing every call site to pass one. **Found and fixed one real bug
+    while wiring this in**: `listLeads`'s `rows.map(toLeadResponse)`
+    passed array `map`'s `(value, index, array)` signature straight into
+    `toLeadResponse`'s now-two-parameter signature, silently handing the
+    row's numeric *index* to the `conversion` parameter — caught by
+    `pnpm typecheck` immediately (a real type error, not just a lint
+    nit), fixed by wrapping the call in an explicit arrow function
+    (`rows.map((lead) => toLeadResponse(lead))`) — the same class of bug
+    `useLeadStatusHistory`/other bare-function-reference map calls in this
+    codebase have so far avoided only by accident of having a
+    single-parameter signature.
+  - **`LeadDetailPageClient`'s Convert action**: a real, clickable
+    `ConvertLeadDialog` trigger only when `lead.status === 'QUALIFIED'`
+    and not archived; a plain disabled `Button` (title "Qualify the lead
+    first") for every other open status; hidden entirely once archived or
+    `CONVERTED` — matching the service's own real constraints (D46)
+    exactly, not an independent frontend guess. A new "Converted" panel at
+    the top of the Overview tab (shown once `status === 'CONVERTED'` and
+    `lead.conversion` is present) replaces the "Change status" section
+    there, with links to the company/contact/deal and the conversion date;
+    the History tab is untouched and still shows every status row,
+    including the final `-> CONVERTED` one.
+  - **`ConvertLeadDialog`** (`apps/web/components/leads/
+    convert-lead-dialog.tsx`): three sections (Company, Contact, Deal),
+    each a `ModeToggle` (Link existing / Create new) — not a Radix
+    `RadioGroup` (not installed; a two-button toggle, same pattern as the
+    3.4 Board/List toggle, needed no new primitive). Defaults are derived
+    from `GET /leads/:id/conversion-matches` once per dialog-open session:
+    a real match pre-selects "Link existing"; no match defaults to
+    "Create new" with the company name prefilled from the lead (editable,
+    and empty when the lead has none — this is exactly the gap
+    `companyName` above closes). The deal section's Stage is shown as
+    plain text (the pipeline's first open stage, from `GET
+    /pipeline/stages`) — never editable, matching `convertLeadSchema`'s
+    `deal` object, which has no `stageId` field at all.
+  - **A genuine race condition found and fixed by this package's own
+    tests, not a hypothetical**: the first draft initialised all of the
+    dialog's defaults in a `useEffect` keyed on `matchesQuery.data`
+    arriving. Because the matches lookup is a real network round trip,
+    the effect could — and in the "create-new company requires a name"
+    test, reliably did — fire *after* the user had already started typing,
+    silently overwriting their input back to blank the instant the
+    (by-then-stale) "no match found" default applied. Fixed by keeping the
+    three sections entirely unrendered while `matchesQuery.isLoading` is
+    true (a "Looking for existing matches…" message shows instead), so
+    the user has no field to type into before the one-time initialisation
+    has already run and committed. The initialisation itself was also
+    moved out of a `useEffect` entirely, onto React's own "adjust state
+    during render" pattern (`CompanySelect`/`ContactSelect`'s existing
+    convention, D37) — not to fix the race (the loading-gate above does
+    that), but because the effect's several direct `setState` calls
+    tripped this repo's `react-hooks/set-state-in-effect` lint rule; `
+    LeadForm`'s/`DealForm`'s equivalent default-prefill logic avoids this
+    rule only because it calls react-hook-form's `setValue` instead of a
+    plain `useState` setter, which the rule doesn't track.
+  - **No double-submit**: `handleSubmit` checks `if (pending) return;`
+    before anything else, and the submit button is also `disabled`
+    once `pending` is true — belt-and-suspenders, proven by a test that
+    fires two synchronous clicks and asserts exactly one `POST` reached
+    the server.
+  - **On a 409** (the lead was converted, archived, or moved off
+    `QUALIFIED` by someone else since the dialog opened, D46): the banner
+    shows the server's own message verbatim, and the lead's detail-view
+    query (`[LEADS_QUERY_KEY_ROOT, "detail", lead.id]`) is invalidated so
+    the page behind the dialog reflects the lead's real current state —
+    the dialog itself is left open rather than auto-closed, since closing
+    it would discard the error message before the user could read it.
+  - **`DealsTab`** (`apps/web/components/deals/deals-tab.tsx`): shared by
+    Company's and Contact's detail pages, reusing `GET /deals`'s
+    `companyId`/`contactId` filters (`contactId` was 3.3's own forward-
+    looking addition for exactly this, D48) — a bounded, unpaginated list
+    (`pageSize: 50`), same spirit as `CompanyContactsTab` (2.5, D38), not
+    the full `DataTable` (a handful of deals per record doesn't need its
+    own search/sort/paging; the real `/deals` list already covers that
+    case). Only Company's tab gets an "Add deal" link
+    (`/deals/new?companyId=...`), per the brief — Contact's is read-only.
+  - **`DealForm` gained `defaultCompanyId`** (create mode only): prefills
+    Company from the `?companyId=` query param `CreateDealPageClient`
+    reads via `useSearchParams()` — still editable, just a sensible
+    starting point, the same "default, never force" spirit as every other
+    prefill in this app. Needed a real `<Suspense>` boundary added to
+    `/deals/new/page.tsx` (D26's requirement for any `useSearchParams()`
+    caller), which the page didn't need before this package.
+  - **Testing**: 3 new `apps/api` tests (the `companyName` override, the
+    still-422-without-either-name case, and the `GET /leads/:id`
+    conversion-summary round-trip, folded into
+    `tests/leads/conversion.test.ts`); 9 new `apps/web` tests across two
+    new files (`convert-lead-dialog.test.tsx` — the race-condition fix
+    itself, create-new-company-requires-a-name, deal-fields-hidden-when-
+    unchecked, double-click-sends-one-request; `lead-detail-page-client.
+    test.tsx` — Convert enabled only when `QUALIFIED`, disabled for every
+    other open status, hidden once `CONVERTED` or archived, and the
+    Converted panel's three links). `pnpm typecheck && pnpm lint && pnpm
+    test && pnpm build` all pass clean (282 `apps/api`: 279 carried over +
+    3 new; 74 `apps/web`: 65 carried over + 9 new; 356 total).
+- **Environment note, not a code decision**: partway through verifying
+  this package, Docker Desktop's own engine API started returning a
+  blanket 500 Internal Server Error on every command (`docker ps`,
+  `docker exec`), independent of anything in this repo — confirmed by two
+  separate overlapping `apps/api` test runs left stacked against the same
+  `crm_test` database (an avoidable mistake: a background test run was
+  re-launched without first confirming the earlier one had actually
+  exited), which combined with an already-restarting Docker Desktop
+  process (five separate `Docker Desktop.exe` instances observed at once)
+  to wedge the engine badly enough that even a plain restart didn't clear
+  it — the user resolved it with a full machine reboot. No code, config,
+  or container was touched to work around it; verification simply waited
+  until the owner's own Docker Desktop was healthy again, then re-ran
+  cleanly. Recorded here only so a future session doesn't mistake "the
+  background test runner can be re-invoked without checking if the first
+  one finished" as safe — on this machine, with this test suite's ~50
+  isolated worker processes per run, it visibly is not.

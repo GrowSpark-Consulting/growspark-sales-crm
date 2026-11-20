@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatPhoneForDisplay } from "@/lib/format";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { ContactFormDialog } from "@/components/contacts/contact-form-dialog";
+import { DealsTab } from "@/components/deals/deals-tab";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -134,6 +135,11 @@ export function ContactDetailPageClient({ contactId }: { contactId: string }) {
               </div>
             </div>
           ),
+        },
+        {
+          value: "deals",
+          label: "Deals",
+          content: <DealsTab contactId={contact.id} emptyLabel={`No deals yet for ${fullName}.`} />,
         },
       ]}
     />

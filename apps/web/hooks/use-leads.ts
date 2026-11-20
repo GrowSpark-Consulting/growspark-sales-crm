@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { LeadResponse, LeadStatusHistoryResponse } from "@growspark/shared";
+import type { LeadResponse, LeadStatusHistoryResponse, LeadConversionMatchesResponse } from "@growspark/shared";
 import { apiGet } from "@/lib/api-client";
 
 export interface LeadsListParams {
@@ -60,5 +60,14 @@ export function useLeadStatusHistory(id: string | undefined) {
     queryKey: [LEADS_QUERY_KEY_ROOT, "status-history", id],
     queryFn: () => apiGet<{ data: LeadStatusHistoryResponse[] }>(`/api/v1/leads/${id}/status-history`),
     enabled: Boolean(id),
+  });
+}
+
+/** GET /leads/:id/conversion-matches (3.1) — suggested existing companies/contacts for the Convert dialog (3.5). Only fetched while the dialog is open. */
+export function useLeadConversionMatches(id: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: [LEADS_QUERY_KEY_ROOT, "conversion-matches", id],
+    queryFn: () => apiGet<LeadConversionMatchesResponse>(`/api/v1/leads/${id}/conversion-matches`),
+    enabled: Boolean(id) && enabled,
   });
 }

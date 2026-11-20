@@ -19,7 +19,9 @@ import { findDuplicateLeads } from '../../lib/duplicates.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Lead, Prisma } from '../../generated/prisma/client.js';
 
-function toLeadResponse(lead: Lead): LeadResponse {
+type LeadConversionSummary = { companyId: string; contactId: string; dealId: string | null } | null;
+
+function toLeadResponse(lead: Lead, conversion: LeadConversionSummary = null): LeadResponse {
   return {
     id: lead.id,
     firstName: lead.firstName,
@@ -45,6 +47,7 @@ function toLeadResponse(lead: Lead): LeadResponse {
     archivedAt: lead.archivedAt ? lead.archivedAt.toISOString() : null,
     createdAt: lead.createdAt.toISOString(),
     updatedAt: lead.updatedAt.toISOString(),
+    conversion,
   };
 }
 
@@ -119,7 +122,7 @@ export async function listLeads(ctx: RequestContext, query: ListLeadsQuery): Pro
     prisma.lead.count({ where }),
   ]);
 
-  return { data: rows.map(toLeadResponse), meta: buildPaginationMeta(query, total) };
+  return { data: rows.map((lead) => toLeadResponse(lead)), meta: buildPaginationMeta(query, total) };
 }
 
 export interface LeadMutationResult {
@@ -186,7 +189,14 @@ export async function getLead(ctx: RequestContext, id: string): Promise<LeadResp
   if (!lead) {
     throw new ApiError(404, 'NOT_FOUND', 'Lead not found');
   }
-  return toLeadResponse(lead);
+  // Package 3.5: only the detail endpoint pays for this extra lookup — a
+  // non-converted lead simply has no LeadConversion row, so this is a
+  // cheap miss for the common case, not a join every list row would carry.
+  const conversion = await prisma.leadConversion.findUnique({
+    where: { leadId: lead.id },
+    select: { companyId: true, contactId: true, dealId: true },
+  });
+  return toLeadResponse(lead, conversion ?? null);
 }
 
 export async function updateLead(

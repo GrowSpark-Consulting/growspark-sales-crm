@@ -137,6 +137,20 @@ export const leadResponseSchema = z.object({
   archivedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /**
+   * Package 3.5 (not in 3.1's original brief): what the Day 3 convert
+   * action created or linked, for the Converted panel's links. Always
+   * `null` on a lead that hasn't been converted; only ever populated by
+   * GET /leads/:id (list rows don't pay for the extra join, since no list
+   * view needs it).
+   */
+  conversion: z
+    .object({
+      companyId: z.string(),
+      contactId: z.string(),
+      dealId: z.string().nullable(),
+    })
+    .nullable(),
 });
 export type LeadResponse = z.infer<typeof leadResponseSchema>;
 

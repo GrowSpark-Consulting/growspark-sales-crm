@@ -106,6 +106,49 @@ describe('Lead conversion (Day 3, the conversion transaction)', () => {
       ['NEW', 'QUALIFIED'],
       ['QUALIFIED', 'CONVERTED'],
     ]);
+
+    // Package 3.5: GET /leads/:id now carries what the conversion created
+    // or linked, for the detail page's "Converted" panel.
+    const getRes = await api.get(`/api/v1/leads/${leadId}`);
+    expect(getRes.body.data.conversion).toEqual({ companyId, contactId, dealId });
+  });
+
+  it('GET /leads/:id returns conversion: null for a lead that has never been converted (package 3.5)', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+    const leadId = await createQualifiedLead(api, tenant);
+
+    const res = await api.get(`/api/v1/leads/${leadId}`);
+    expect(res.body.data.conversion).toBeNull();
+  });
+
+  it('companyName in the request body overrides a lead with no company name, instead of a 422 (package 3.5)', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+    // No companyName on the lead itself — would 422 without the override.
+    const leadId = await createQualifiedLead(api, tenant, { companyName: undefined });
+
+    const res = await api.post(`/api/v1/leads/${leadId}/convert`, { companyName: 'Typed In Dialog Co' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.createdCompany).toBe(true);
+
+    const company = await prisma.company.findUniqueOrThrow({ where: { id: res.body.data.companyId } });
+    expect(company.name).toBe('Typed In Dialog Co');
+  });
+
+  it('still rejects with 422 when neither the lead nor the request body has a company name (package 3.5)', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+    const leadId = await createQualifiedLead(api, tenant, { companyName: undefined });
+
+    const res = await api.post(`/api/v1/leads/${leadId}/convert`, {});
+    expect(res.status).toBe(422);
   });
 
   it('existing company + new contact, no deal', async () => {

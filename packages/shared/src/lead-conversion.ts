@@ -8,6 +8,15 @@ import { z } from 'zod';
  */
 export const convertLeadSchema = z.object({
   companyId: z.uuid().optional(),
+  /**
+   * Package 3.5 (not in 3.1's original brief): only read when `companyId`
+   * is absent (i.e. creating a new company) — overrides the lead's own
+   * `companyName`. Lets the Convert dialog's "create new company" field
+   * stay editable and required even when the lead itself has no company
+   * name, instead of dead-ending in the service's existing 422 for that
+   * case.
+   */
+  companyName: z.string().trim().min(1, 'Company name is required').max(300, 'Company name is too long').optional(),
   contactId: z.uuid().optional(),
   createDeal: z.boolean().optional(),
   deal: z

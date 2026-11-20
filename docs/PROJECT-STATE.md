@@ -124,7 +124,27 @@ handler. Full detail, including an honest note on what could and couldn't
 be verified without a browser in this environment, is in
 `docs/decisions.md` D49. 279 `apps/api` tests (unchanged) and 65
 `apps/web` tests (up from 63), 344 total, all passing. Nothing pushed.
-**Package 3.5 (the convert dialog and related tabs) is next.**
+
+**Update, same session — package 3.5 (Convert dialog and related tabs) is
+built — Day 3 is now complete.** Two backend additions, both pre-approved
+by the brief: a `companyName` override on `convertLeadSchema` (lets a
+lead with no company name still convert, via the dialog's editable
+"create new company" field) and a `conversion` summary on
+`leadResponseSchema`, populated only by `GET /leads/:id`, for the
+Converted panel's links and date. `LeadDetailPageClient`'s Convert action
+is a real trigger only when `QUALIFIED` and not archived, disabled
+elsewhere, hidden once `CONVERTED` or archived. The new
+`ConvertLeadDialog` (three Link/Create toggles — Company, Contact, Deal)
+had a genuine race condition in its first draft — an async matches lookup
+could silently overwrite text the user had already typed — found and
+fixed by this package's own tests, not caught by inspection. `DealsTab`
+(Company and Contact detail pages) and `DealForm`'s new
+`defaultCompanyId` close the loop back to Deals. Full detail, including a
+recorded environment incident (a wedged Docker Desktop, unrelated to any
+code change, resolved by the user rebooting their machine) in
+`docs/decisions.md` D50. 282 `apps/api` tests (up from 279) and 74
+`apps/web` tests (up from 65), 356 total, all passing. Nothing pushed.
+**Day 3 (lead conversion, deals, pipeline) is done.**
 
 ## 2. Hard constraints
 
@@ -368,7 +388,10 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         edit-company-page-client.tsx,
                         company-detail-page-client.tsx (RecordLayout,
                         Overview + Contacts tabs; phone shown via
-                        formatPhoneForDisplay, 2.7 item 2), company-contacts-tab.tsx
+                        formatPhoneForDisplay, 2.7 item 2; 3.5 D50 gained a
+                        Deals tab via the shared DealsTab, with "Add deal"
+                        prefilled via /deals/new?companyId=...),
+                        company-contacts-tab.tsx
                         (bounded, unpaginated list scoped to one company)
     contacts/               contact-form-dialog.tsx (2.5, D38 — create/edit
                         Dialog, reusable from /contacts or a Company's
@@ -381,6 +404,8 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         only-while-unmet hint as Lead's; phone field is now
                         PhoneInput, 2.7 item 2),
                         contacts-page-client.tsx, contact-detail-page-client.tsx
+                        (3.5 D50 gained a read-only Deals tab, shared
+                        DealsTab, no "Add deal" link per the brief)
     leads/                  (2.6, D39) leads-page-client.tsx (list: all 5
                         named filters + search/sort/paging, sortable
                         name/status/priority/created only); lead-form.tsx
@@ -397,7 +422,19 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         lead-detail-page-client.tsx (status buttons minus
                         current status, hidden entirely once CONVERTED;
                         read-only original-enquiry panel; History tab, now
-                        showing "by <name>" per row, 2.7 item 4 D44)
+                        showing "by <name>" per row, 2.7 item 4 D44; 3.5
+                        D50 — Convert is a real trigger only when
+                        QUALIFIED and not archived, disabled elsewhere,
+                        hidden once CONVERTED/archived; a "Converted"
+                        panel with company/contact/deal links replaces
+                        "Change status" once converted); convert-lead-
+                        dialog.tsx (3.5, D50) — three Link/Create
+                        ModeToggle sections (Company/Contact/Deal)
+                        prefilled from GET /leads/:id/conversion-matches;
+                        the whole form stays unrendered while that lookup
+                        is in flight, specifically to avoid a found-by-
+                        its-own-test race where the async result could
+                        overwrite text the user had already typed
     deals/                  (3.3, D48) deals-page-client.tsx (list:
                         search/stage/status/owner/company filters +
                         archived toggle, sortable name/value/probability/
@@ -410,7 +447,12 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         at all, D47 — defaults to the pipeline's first open
                         stage and copies its probability; value/probability
                         need the same z.coerce.number() override as
-                        Company/Lead, D38/D39); create-deal-page-client.tsx,
+                        Company/Lead, D38/D39; 3.5 D50 gained
+                        defaultCompanyId, create-mode-only, prefilled from
+                        CreateDealPageClient's ?companyId= query param);
+                        create-deal-page-client.tsx (3.5 D50 — now reads
+                        useSearchParams(), needed a real Suspense boundary
+                        added to deals/new/page.tsx, D26's rule),
                         edit-deal-page-client.tsx (refuses to render the
                         form at all for a closed deal, a backstop alongside
                         the detail page's own hidden Edit link);
@@ -442,7 +484,12 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         the two affected columns, snapshot + rollback on
                         error, broad deals+pipeline invalidation on
                         settle) backs both the dropdown and the drag
-                        handler
+                        handler; deals-tab.tsx (3.5, D50) — shared by
+                        Company's and Contact's detail pages, a bounded
+                        pageSize:50 list via GET /deals's companyId/
+                        contactId filters (contactId was 3.3's own
+                        forward-looking addition for exactly this); only
+                        Company's usage passes addHref
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx,
                         users-page-client.tsx (2.0, D31 — the Client
@@ -470,7 +517,10 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         CompanySelect
     use-contacts.ts         (2.5, D38) useContactsList(params), useContact(id)
     use-leads.ts            (2.6, D39) useLeadsList(params), useLead(id),
-                        useLeadStatusHistory(id)
+                        useLeadStatusHistory(id); useLeadConversionMatches
+                        (3.5, D50) — GET /leads/:id/conversion-matches,
+                        gated by a caller-supplied `enabled` so it only
+                        fetches while the Convert dialog is open
     use-lead-sources.ts     (2.6, D39) GET /lead-sources, for the Source select
     use-deals.ts            (3.3, D48) useDealsList(params), useDeal(id),
                         useDealStageHistory(id)
@@ -524,7 +574,18 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         against a small stateful fake backend; opening the
                         dropdown uses keyboard activation, not a plain
                         click, since jsdom doesn't simulate the pointerdown
-                        Radix's trigger opens on in a real browser)
+                        Radix's trigger opens on in a real browser);
+                        package 3.5's convert-lead-dialog.test.tsx (D50 —
+                        the race-condition fix itself: no company match
+                        defaults to Create new and blocks submit until a
+                        name is typed; deal fields vanish once "Create a
+                        deal" is toggled off; a double-click on submit
+                        sends exactly one request) and lead-detail-page-
+                        client.test.tsx (D50 — Convert is enabled only
+                        when QUALIFIED, shown-but-disabled for every other
+                        open status, hidden once CONVERTED or archived,
+                        and the Converted panel's three links resolve to
+                        the right hrefs)
   tests/setup.ts            (2.4, D37) afterEach(cleanup) for
                         @testing-library/react — not automatic without
                         vitest's globals:true, which this repo doesn't use
@@ -600,11 +661,24 @@ apps/api/               Express 5 app (port 4000)
                         (separate from PATCH, no note), GET
                         /:id/status-history, GET /duplicates (registered
                         before /:id), leads:read/write, records:archive;
-                        lead-conversion.service.ts (3.1, D46) — one
-                        $transaction (row-locks the lead, link-or-create
-                        Company/Contact, optional Deal, convert + history +
-                        audit), GET /:id/conversion-matches, POST
-                        /:id/convert, both leads:read/leads:write
+                        getLead (3.5, D50) now also fetches the lead's
+                        LeadConversion row (one extra, cheap findUnique —
+                        null for a non-converted lead) and passes it to
+                        toLeadResponse's new second parameter, defaulted
+                        to null so every other call site is unaffected —
+                        found a real bug fixing this: listLeads's
+                        `rows.map(toLeadResponse)` had been passing
+                        Array.map's numeric index straight into that new
+                        parameter, caught by pnpm typecheck, fixed with an
+                        explicit arrow wrapper; lead-conversion.service.ts
+                        (3.1, D46) — one $transaction (row-locks the lead,
+                        link-or-create Company/Contact, optional Deal,
+                        convert + history + audit), GET
+                        /:id/conversion-matches, POST /:id/convert, both
+                        leads:read/leads:write; convertLead (3.5, D50) now
+                        accepts an optional companyName override, read
+                        only when creating a new company, so a lead with
+                        no company name can still convert
       deals/              deals.service.ts, deals.routes.ts (3.2, D47) —
                         full CRUD + archive/restore (allowed on closed
                         deals, deliberately not gated the same as the other
@@ -669,7 +743,11 @@ apps/api/               Express 5 app (port 4000)
     leads/conversion.test.ts   (3.1, D46) — 12 tests: every conversion
                         combination, the forced-rollback test, the two-
                         concurrent-conversions test, cross-org isolation,
-                        the conversion-matches endpoint
+                        the conversion-matches endpoint; 3 more (3.5, D50)
+                        — the companyName override creates the company
+                        with that name, the 422 still fires with neither
+                        source present, GET /leads/:id's conversion
+                        summary round-trip
     deals/              crud.test.ts, stage-and-close.test.ts,
                         pipeline.test.ts (3.2, D47) — 19 tests: CRUD +
                         archive/restore, stage moves and close/reopen
@@ -718,7 +796,11 @@ packages/shared/        Zod schemas + enums, consumed as a compiled package
                         D39 — apps/web rebuilds a form-local schema from it);
                         phone field now phoneFieldSchema (2.7 item 2,
                         D41/D45); leadStatusHistoryResponseSchema gained
-                        changedByName (2.7 item 4, D44/D45)
+                        changedByName (2.7 item 4, D44/D45);
+                        leadResponseSchema gained `conversion:
+                        {companyId,contactId,dealId} | null` (3.5, D50 —
+                        only ever populated by GET /leads/:id, never by
+                        the list endpoint)
   src/phone.ts           (2.7 item 2, D41/D45) COUNTRY_CALLING_CODES
                         (fixed, closed list, default +91), toE164,
                         matchCountryCallingCode, isValidPhoneNumber (+91 =
@@ -730,7 +812,10 @@ packages/shared/        Zod schemas + enums, consumed as a compiled package
   src/lead-conversion.ts (3.1, D46) convertLeadSchema (companyId/contactId
                         optional — presence means link existing, absence
                         means create new; createDeal + an optional deal
-                        sub-object only read when true),
+                        sub-object only read when true; 3.5 D50 added
+                        companyName, read only when companyId is absent,
+                        overriding the lead's own companyName so a
+                        nameless lead can still convert),
                         leadConversionResponseSchema,
                         leadConversionMatchesResponseSchema
   src/deals.ts           (3.2, D47) dealCreatableFields (stageId
@@ -1220,8 +1305,31 @@ code.
   && pnpm build` all pass (279 `apps/api`, unchanged; 65 `apps/web`: 63
   carried over + 2 new; 344 total). Full detail in `docs/decisions.md`
   D49.
+- **Package 3.5 (Convert dialog and related tabs) — Day 3 is now
+  complete.** `companyName` added to `convertLeadSchema` (read only when
+  creating a new company, overriding the lead's own — the Convert
+  dialog's "create new company" field stays editable and required even
+  for a lead with no company name, instead of the existing 422); `GET
+  /leads/:id` gained a `conversion` summary (found and fixed a real bug
+  while wiring it in — `listLeads`'s bare `rows.map(toLeadResponse)` was
+  passing the array index into the new parameter, caught by `pnpm
+  typecheck`). Lead detail's Convert action is a real trigger only when
+  `QUALIFIED` and not archived, disabled elsewhere, hidden once
+  `CONVERTED`/archived, with a new "Converted" panel (links + date)
+  replacing "Change status". `ConvertLeadDialog` (three Link/Create
+  `ModeToggle` sections) prefills from `GET
+  /leads/:id/conversion-matches`; **a genuine race condition was found by
+  this package's own tests** — the first draft could silently overwrite
+  text the user had already typed once the async matches arrived — fixed
+  by keeping the form unrendered until the lookup settles. `DealsTab`
+  (Company's and Contact's detail pages) and `DealForm`'s new
+  `defaultCompanyId` close the loop back to Deals. `pnpm typecheck &&
+  pnpm lint && pnpm test && pnpm build` all pass (282 `apps/api`: 279
+  carried over + 3 new; 74 `apps/web`: 65 carried over + 9 new; 356
+  total). Full detail in `docs/decisions.md` D50.
 
-**Package 3.5 (the convert dialog and related tabs) is next.**
+**Day 3 (lead conversion, deals, pipeline) is done.** Day 4 is not yet
+detailed in this repo.
 
 ## 8. Database
 
@@ -1326,6 +1434,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D47 — Package 3.2 (Deals API, stage moves, close/reopen, pipeline summary, built 2026-11-20, documented in the same catch-up pass): full Deal CRUD; `stageId` excluded from the shared update field map (create-only, like Lead's `requirement`); stage move refuses a non-open target (422) or a non-open deal (409) and copies the target stage's probability every time (roadmap D7, overwrites a manual edit by design); close requires a `LOSS_REASONS` reason for Lost; **reopen returns the deal to the pipeline's first open stage** (judgment call — the brief doesn't say which stage to land on); **archive/restore are deliberately NOT blocked by the closed-deal-is-read-only rule** (judgment call — archiving is a records-management action, not a pipeline mutation); `PUT /deals/:id/contacts` fully replaces the set with one primary; `GET /pipeline/{stages,summary}`, the summary computed entirely as Postgres SQL (`COALESCE`/`SUM`/weighted-value multiplication over `NUMERIC`, never JS floats) and cross-checked in its test against an independently hand-written SQL query — found empirically that `Prisma.Decimal` stringifies an empty stage's zero as `"0"`, not `"0.00"`
 - D48 — Package 3.3 (Deals list, forms, detail, close dialogs): three backend additions found while building the UI — `contactId` filter on `GET /deals` (via the `DealContact` join, for 3.5's Contact Deals tab); `GET /deals/:id/stage-history` (same shape as Lead's status-history, D35); and, after stopping to ask because it was genuinely outside the pre-approved allowance, a `contacts` summary array added to `dealResponseSchema` itself (populated by one shared `dealContactsInclude` Prisma include reused across every Deal query), so the Contacts tab can read a deal's current contacts without a second round trip or a `PUT` just to list them. `DealForm` shares create/edit (Stage is create-only — `updateDealSchema` has no `stageId` key); hit the same `z.coerce.number()` gotcha as Company/Lead (D38/D39) for `value`/`probability`. `ContactSelect` (new picker, same hand-built pattern as `CompanySelect`, D37). Detail-page actions (Edit, Move stage, Close Won/Lost, Reopen) are gated by `deal.status`; Archive/Restore are not, mirroring D47's backend choice exactly. Component tests deliberately avoid simulating a Radix `Select` open/pick (no existing test in this repo does either) — "stage pre-fills probability" is proven via the create-mode default-autofill, not a simulated manual pick.
 - D49 — Package 3.4 (pipeline board, `@dnd-kit/core`): new dependency `@dnd-kit/core@6.3.1` only (confirmed no peer-dependency warning against `react@19.3.1` first; `/sortable`/`/utilities` deliberately not added); Board/List toggle on `/deals` kept in the URL; columns = `OPEN`-type pipeline stages only, Won/Lost totals shown in a summary bar from `GET /pipeline/summary`'s `open` aggregate instead (D47); each column's query uses a fixed, filter-free shape so its cache key is predictable for the optimistic move-mutation (snapshot both affected columns, patch both, roll back on error, broadly invalidate on settle) shared by the drag handler and every card's own "Move to…" dropdown fallback; `PointerSensor` uses an 8px activation distance so the card's nested link/dropdown stay clickable, `KeyboardSensor` uses `@dnd-kit/core`'s own built-in default coordinate getter (not `/sortable`'s), `closestCenter` for collision detection. The required dropdown-move test passes against a stateful fake backend; the actual drag gesture itself could not be interactively verified (no browser-automation tool in this environment) — flagged plainly rather than claimed as proven.
+- D50 — Package 3.5 (Convert dialog and related tabs), closing out Day 3: `companyName` added to `convertLeadSchema` (read only when creating a new company, overrides the lead's own name — lets a nameless lead still convert instead of dead-ending in the existing 422); `conversion` added to `leadResponseSchema`, populated only by `GET /leads/:id` (found and fixed a real bug while wiring this in — `listLeads`'s bare `rows.map(toLeadResponse)` was passing the array index into the new second parameter, caught by `pnpm typecheck`); Convert on the lead detail page is a real trigger only when `QUALIFIED` and not archived, disabled elsewhere, hidden once `CONVERTED`/archived, with a new "Converted" panel (company/contact/deal links + date) replacing "Change status"; `ConvertLeadDialog`'s three Link/Create `ModeToggle` sections prefill from `GET /leads/:id/conversion-matches`; **a genuine race condition found by this package's own tests** — the first draft initialised defaults in a `useEffect` keyed on the async matches arriving, which could silently overwrite text the user had already started typing — fixed by keeping the form entirely unrendered until the matches lookup settles, and separately moved the initialisation off `useEffect` onto the "adjust state during render" pattern (D37) to satisfy this repo's `react-hooks/set-state-in-effect` lint rule; no-double-submit via a `pending` guard checked first in the handler, proven by a two-synchronous-clicks test; `DealsTab` (shared by Company's and Contact's detail pages, via `GET /deals`'s `companyId`/`contactId` filters) and `DealForm`'s new create-mode-only `defaultCompanyId` (from `CreateDealPageClient`'s `?companyId=` param, which needed a `<Suspense>` boundary added to `deals/new/page.tsx`, D26's rule) close the loop back to Deals.
 
 ## 10. Gotchas and lessons learned
 
@@ -1437,6 +1546,34 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   prop change. The tracker must only ever move in response to the
   *external* prop actually changing — never from the component's own
   emit — see D45 for the exact before/after.
+- **An async `useEffect`-driven "initialise defaults once data loads"
+  pattern races with the user, not just with React's own render timing.**
+  `ConvertLeadDialog`'s first draft set its Company/Contact/Deal defaults
+  in a `useEffect` keyed on `GET /leads/:id/conversion-matches`'s response
+  arriving. Because that's a real network round trip, a user who started
+  typing in the gap between "dialog opened" and "matches finished
+  loading" had their input silently overwritten the instant the (by-then-
+  stale) default applied — found by this package's own test, not by
+  inspection (D50). The fix wasn't a debounce or a "has the user touched
+  this" flag — it was simpler: keep the editable fields entirely
+  unrendered until the async lookup settles, so there is no field for the
+  user to type into before the one-time default-setting has already run.
+  If a future dialog/form needs defaults from an async lookup, give it the
+  same "nothing editable until the lookup settles" shape rather than
+  trying to detect the user's intent after the fact.
+- **Running the same `pnpm --filter api exec vitest run` invocation twice
+  without confirming the first one had actually exited stacked two full
+  test suites (≈50 isolated worker processes each) against the same
+  `crm_test` database at once.** Combined with Docker Desktop already
+  being mid-restart on this machine, it wedged the Docker engine badly
+  enough that even `docker ps` returned a blanket 500 from Docker's own
+  API, and a plain Docker Desktop restart didn't clear it — the user
+  resolved it with a full machine reboot. No code, config, or container
+  was touched to work around it (see `docs/decisions.md` D50's closing
+  note for the full account). Lesson: when a background test run reports
+  a timeout and gets moved to the background, treat it as still running —
+  check its actual output before launching the same command again, don't
+  assume the timeout meant it died.
 
 ## 11. Testing
 
@@ -1451,9 +1588,11 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `company-form.test.tsx`, `contact-form-dialog.test.tsx`, and
   `phone-input.test.tsx`; plus package 3.3's `deal-form.test.tsx`,
   `close-lost-dialog.test.tsx`, `deal-detail-page-client.test.tsx`; plus
-  package 3.4's `pipeline-board.test.tsx`), and `apps/api` (`vitest run`)
-  — **279 `apps/api` tests + 65 `apps/web` tests, 344 total**, all passing
-  as of the last run (package 3.4). Package 2.7
+  package 3.4's `pipeline-board.test.tsx`; plus package 3.5's
+  `convert-lead-dialog.test.tsx` and `lead-detail-page-client.test.tsx`),
+  and `apps/api` (`vitest run`) — **282 `apps/api` tests + 74 `apps/web`
+  tests, 356 total**, all passing as of the last run (package 3.5,
+  closing out Day 3). Package 2.7
   (items 1–4) brought the count to 244 + 53 =
   297 (D42's reset-on-hide tests, D41's phone-validation and `PhoneInput`
   composition tests, D40/D43's "More details"/Source-preselect/Contact-
@@ -1468,8 +1607,12 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `stage-history.test.ts`) and 10 `apps/web` tests (D48) for 279 + 63 =
   342; package 3.4 added 2 `apps/web` tests
   (`pipeline-board.test.tsx` — a successful dropdown move and a rolled-
-  back failed one, D49) for the current 279 + 65 = 344. `apps/web` runs
-  under jsdom (D36) with
+  back failed one, D49) for 279 + 65 = 344; package 3.5 added 3 `apps/api`
+  tests (the `companyName` override, the still-422 case, and the
+  conversion-summary round-trip, all folded into
+  `tests/leads/conversion.test.ts`) and 9 `apps/web` tests
+  (`convert-lead-dialog.test.tsx`, `lead-detail-page-client.test.tsx`,
+  D50) for the current 282 + 74 = 356. `apps/web` runs under jsdom (D36) with
   `tests/setup.ts` registering RTL's `afterEach(cleanup)` (D37) —
   needed because RTL's own auto-cleanup never self-registers without
   vitest's `globals: true`, which this repo doesn't use.
@@ -2412,3 +2555,75 @@ log just records that a session happened and what it covered.
   total). One commit. Nothing pushed. `docs/decisions.md` D49 has the
   full detail. Package 3.5 (the convert dialog and related tabs) is next,
   in the same session.
+- **2026-11-20 (same session, continued) — package 3.5, Convert dialog
+  and related tabs, closing out Day 3.** Backend first: `companyName`
+  added to `convertLeadSchema` (read only when creating a new company,
+  overriding the lead's own `companyName`) and wired into
+  `lead-conversion.service.ts` so a lead with no company name can still
+  convert via the dialog's typed-in name, instead of dead-ending in the
+  existing 422; a `conversion` summary (`{companyId, contactId, dealId} |
+  null`) added to `leadResponseSchema`, populated only by `GET
+  /leads/:id`'s `getLead` (one extra, cheap `leadConversion.findUnique` —
+  `null` for a non-converted lead). Found and fixed a real bug while
+  wiring the latter in: `listLeads`'s `rows.map(toLeadResponse)` had been
+  passing `Array.map`'s `(value, index, array)` signature straight into
+  `toLeadResponse`'s new second parameter, silently handing the row's
+  numeric index to `conversion` — caught immediately by `pnpm typecheck`
+  (a real type error), fixed with an explicit arrow wrapper.
+  `LeadDetailPageClient`'s Convert action is now a real `ConvertLeadDialog`
+  trigger only when `status === 'QUALIFIED'` and not archived, a plain
+  disabled button (title "Qualify the lead first") for every other open
+  status, and hidden entirely once archived or `CONVERTED` — matching the
+  service's own real constraints, not an independent frontend guess. A new
+  "Converted" panel (links to company/contact/deal + the conversion date)
+  replaces "Change status" at the top of the Overview tab once converted;
+  the History tab is untouched. Built `ConvertLeadDialog`: three
+  Link/Create `ModeToggle` sections (Company, Contact, Deal — a two-button
+  toggle, not a Radix `RadioGroup`, no new primitive needed), defaults
+  derived once per dialog-open from `GET /leads/:id/conversion-matches`.
+  **Found a genuine race condition via this package's own test, not by
+  inspection**: the first draft set defaults in a `useEffect` keyed on the
+  matches response arriving — since that's a real network round trip, a
+  user who started typing before it resolved had their input silently
+  overwritten the instant the (by-then-stale) "no match" default applied.
+  Fixed by keeping the three sections entirely unrendered while the
+  matches lookup is in flight, so there is no field to type into before
+  the one-time initialisation has already committed; separately moved
+  that initialisation off `useEffect` entirely onto React's own "adjust
+  state during render" pattern (`CompanySelect`/`ContactSelect`'s existing
+  convention, D37), since the effect's several direct `setState` calls
+  had tripped this repo's `react-hooks/set-state-in-effect` lint rule
+  (not the cause of the race — the loading-gate fixed that — just a
+  separate, genuine lint violation found at the same time).  No-double-
+  submit via a `pending` guard checked first in `handleSubmit`, proven by
+  a test firing two synchronous clicks. Built `DealsTab` (shared by
+  Company's and Contact's detail pages, via `GET /deals`'s
+  `companyId`/`contactId` filters — `contactId` was 3.3's own forward-
+  looking addition for exactly this) and gave `DealForm` a create-mode-only
+  `defaultCompanyId`, read from `CreateDealPageClient`'s new `?companyId=`
+  query param (which needed a real `<Suspense>` boundary added to
+  `deals/new/page.tsx`, D26's rule, since the page didn't read
+  `useSearchParams()` before this).
+  
+  **A real environment incident happened mid-verification, unrelated to
+  any code change**: a background `apps/api` test run was re-launched
+  without first confirming an earlier one had actually exited, stacking
+  two full ~50-worker test suites against the same `crm_test` database at
+  once; combined with Docker Desktop already being mid-restart on this
+  machine, the Docker engine itself got wedged badly enough that even
+  `docker ps` returned a blanket 500 from Docker's own API, and a plain
+  Docker Desktop restart didn't clear it. Stopped and asked the user
+  rather than guessing or touching any process/container; the user
+  resolved it with a full machine reboot, after which `docker ps` and the
+  Postgres container were immediately healthy again and verification
+  completed cleanly on the first clean run. No workaround was applied to
+  the code or environment — the fix was entirely "wait for a healthy
+  Docker, then re-run." Full account in `docs/decisions.md` D50's closing
+  note and a new gotcha in §10.
+  
+  `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all pass clean
+  (282 `apps/api`: 279 carried over + 3 new; 74 `apps/web`: 65 carried
+  over + 9 new; 356 total). One commit. Nothing pushed.
+  `docs/decisions.md` D50 has the full detail. **Day 3 (lead conversion,
+  deals, pipeline) is done.** Day 4 is not yet detailed in this repo —
+  confirm scope with the user before starting it.
