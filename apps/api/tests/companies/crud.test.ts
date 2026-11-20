@@ -178,4 +178,20 @@ describe('Companies CRUD', () => {
     const res = await api.post('/api/v1/companies/00000000-0000-7000-8000-000000000000/archive');
     expect(res.status).toBe(404);
   });
+
+  it('D41: accepts a valid E.164 +91 phone, and rejects one with 11+ digits (422)', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+
+    const validRes = await api.post('/api/v1/companies', { name: 'Valid Phone Co', phone: '+919876543210' });
+    expect(validRes.status).toBe(201);
+
+    const invalidRes = await api.post('/api/v1/companies', {
+      name: 'Too Many Digits Co',
+      phone: '+9198765432109',
+    });
+    expect(invalidRes.status).toBe(422);
+  });
 });

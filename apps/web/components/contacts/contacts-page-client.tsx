@@ -14,6 +14,7 @@ import { useContactsList, CONTACTS_QUERY_KEY_ROOT } from "@/hooks/use-contacts";
 import { useUserOptions } from "@/hooks/use-user-options";
 import { useListUrlState } from "@/hooks/use-list-url-state";
 import { apiPost } from "@/lib/api-client";
+import { formatPhoneForDisplay } from "@/lib/format";
 import type { ContactResponse } from "@growspark/shared";
 
 const ANY = "ANY";
@@ -76,7 +77,7 @@ export function ContactsPageClient() {
     {
       key: "phone",
       header: "Phone",
-      render: (contact) => <span className="text-ink-muted">{contact.phone ?? "—"}</span>,
+      render: (contact) => <span className="text-ink-muted">{formatPhoneForDisplay(contact.phone) ?? "—"}</span>,
     },
     {
       key: "owner",

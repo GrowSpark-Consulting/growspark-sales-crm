@@ -42,6 +42,17 @@ export {
 } from './audit.js';
 export type { ListAuditEventsQuery, AuditEventResponse } from './audit.js';
 export { normalizeEmail, normalizePhone, normalizeCompanyName } from './normalize.js';
+export {
+  COUNTRY_CALLING_CODES,
+  DEFAULT_COUNTRY_CALLING_CODE,
+  matchCountryCallingCode,
+  isValidPhoneNumber,
+  isValidManualEntryPhone,
+  toE164,
+  phoneFieldSchema,
+  parsePhoneLenient,
+} from './phone.js';
+export type { CountryCallingCode } from './phone.js';
 export { LEAD_STATUSES, leadStatusSchema, OPEN_LEAD_STATUSES, openLeadStatusSchema } from './lead-statuses.js';
 export type { LeadStatus, OpenLeadStatus } from './lead-statuses.js';
 export { PRIORITIES, prioritySchema } from './priorities.js';

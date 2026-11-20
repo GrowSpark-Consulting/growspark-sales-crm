@@ -72,7 +72,7 @@ describe('Leads CRUD', () => {
 
     const res = await api.post('/api/v1/leads', {
       firstName: 'Phone Only',
-      phone: '9876543210',
+      phone: '+919876543210',
       sourceId: tenant.leadSource.id,
     });
     expect(res.status).toBe(201);
@@ -154,7 +154,7 @@ describe('Leads CRUD', () => {
     const createRes = await api.post('/api/v1/leads', {
       firstName: 'Both Contacts',
       email: 'both@example.com',
-      phone: '9876543210',
+      phone: '+919876543210',
       sourceId: tenant.leadSource.id,
     });
     const leadId = createRes.body.data.id as string;
@@ -260,5 +260,26 @@ describe('Leads CRUD', () => {
 
     const res = await api.get('/api/v1/leads/00000000-0000-7000-8000-000000000000');
     expect(res.status).toBe(404);
+  });
+
+  it('D41: accepts a valid E.164 +91 phone, and rejects one with 11+ digits (422)', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+
+    const validRes = await api.post('/api/v1/leads', {
+      firstName: 'Valid Phone',
+      phone: '+919876543210',
+      sourceId: tenant.leadSource.id,
+    });
+    expect(validRes.status).toBe(201);
+
+    const invalidRes = await api.post('/api/v1/leads', {
+      firstName: 'Too Many Digits',
+      phone: '+9198765432109',
+      sourceId: tenant.leadSource.id,
+    });
+    expect(invalidRes.status).toBe(422);
   });
 });

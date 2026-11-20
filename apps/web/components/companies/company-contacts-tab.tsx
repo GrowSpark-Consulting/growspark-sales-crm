@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ContactFormDialog } from "@/components/contacts/contact-form-dialog";
 import { useContactsList } from "@/hooks/use-contacts";
+import { formatPhoneForDisplay } from "@/lib/format";
 
 /**
  * The Companies brief ("a company page shows its contacts and can add a
@@ -66,7 +67,7 @@ export function CompanyContactsTab({ companyId, companyName }: { companyId: stri
                   </TableCell>
                   <TableCell className="text-ink-muted">{contact.jobTitle ?? "—"}</TableCell>
                   <TableCell className="text-ink-muted">{contact.email ?? "—"}</TableCell>
-                  <TableCell className="text-ink-muted">{contact.phone ?? "—"}</TableCell>
+                  <TableCell className="text-ink-muted">{formatPhoneForDisplay(contact.phone) ?? "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

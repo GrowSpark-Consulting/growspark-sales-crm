@@ -13,7 +13,7 @@ import { useCompaniesList, COMPANIES_QUERY_KEY_ROOT } from "@/hooks/use-companie
 import { useUserOptions } from "@/hooks/use-user-options";
 import { useListUrlState } from "@/hooks/use-list-url-state";
 import { apiPost } from "@/lib/api-client";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatPhoneForDisplay } from "@/lib/format";
 import type { CompanyResponse } from "@growspark/shared";
 
 const ANY = "ANY";
@@ -71,7 +71,7 @@ export function CompaniesPageClient() {
     {
       key: "phone",
       header: "Phone",
-      render: (company) => <span className="text-ink-muted">{company.phone ?? "—"}</span>,
+      render: (company) => <span className="text-ink-muted">{formatPhoneForDisplay(company.phone) ?? "—"}</span>,
     },
     {
       key: "email",

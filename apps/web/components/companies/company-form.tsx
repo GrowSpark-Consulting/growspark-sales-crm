@@ -8,6 +8,7 @@ import Link from "next/link";
 import { createCompanySchema, type CreateCompanyInput, type CompanyResponse } from "@growspark/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -234,7 +235,7 @@ export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCa
               <FormItem>
                 <FormLabel>Phone (optional)</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g. 98400 12345" {...field} />
+                  <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />
                 </FormControl>
                 <FormMessage />
               </FormItem>

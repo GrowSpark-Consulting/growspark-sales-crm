@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { pageQuerySchema, paginationMetaSchema, sortQuerySchema, booleanQueryParam } from './common.js';
 import { duplicateMatchSchema } from './duplicates.js';
+import { phoneFieldSchema } from './phone.js';
 
 function optionalTrimmed(max: number) {
   return z.string().trim().max(max).optional();
@@ -11,7 +12,9 @@ export const createContactSchema = z.object({
   firstName: z.string().trim().min(1, 'First name is required').max(200, 'First name is too long'),
   lastName: optionalTrimmed(200),
   email: z.string().trim().max(320, 'Email is too long').optional(),
-  phone: optionalTrimmed(50),
+  // D41: country-code-select + number composed client-side into a single
+  // canonical E.164 string; validated strictly here for manual CRM entry.
+  phone: phoneFieldSchema.optional(),
   jobTitle: optionalTrimmed(200),
   department: optionalTrimmed(200),
   location: optionalTrimmed(200),

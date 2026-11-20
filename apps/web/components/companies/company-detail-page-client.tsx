@@ -15,7 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { CompanyContactsTab } from "@/components/companies/company-contacts-tab";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatPhoneForDisplay } from "@/lib/format";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -102,7 +102,7 @@ export function CompanyDetailPageClient({ companyId }: { companyId: string }) {
       keyFields={[
         { label: "Owner", value: ownerName ?? "Unassigned" },
         { label: "Industry", value: company.industry },
-        { label: "Phone", value: company.phone },
+        { label: "Phone", value: formatPhoneForDisplay(company.phone) },
         { label: "Email", value: company.email },
       ]}
       tabs={[

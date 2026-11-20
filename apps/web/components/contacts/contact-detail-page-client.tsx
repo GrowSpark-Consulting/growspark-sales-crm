@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { formatPhoneForDisplay } from "@/lib/format";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { ContactFormDialog } from "@/components/contacts/contact-form-dialog";
 
@@ -116,7 +117,7 @@ export function ContactDetailPageClient({ contactId }: { contactId: string }) {
           ),
         },
         { label: "Job title", value: contact.jobTitle },
-        { label: "Phone", value: contact.phone },
+        { label: "Phone", value: formatPhoneForDisplay(contact.phone) },
         { label: "Email", value: contact.email },
         { label: "Owner", value: ownerName ?? "Unassigned" },
       ]}

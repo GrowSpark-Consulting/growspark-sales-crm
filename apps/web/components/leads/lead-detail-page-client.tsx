@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
-import { formatDate, formatTime } from "@/lib/format";
+import { formatDate, formatTime, formatPhoneForDisplay } from "@/lib/format";
 import { leadStatusBadgeVariant, leadStatusLabel, priorityBadgeVariant, priorityLabel } from "@/lib/lead-presentation";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -150,7 +150,7 @@ export function LeadDetailPageClient({ leadId }: { leadId: string }) {
 
               <div className="grid gap-4 rounded-lg border border-line bg-surface p-4 sm:grid-cols-2">
                 <Field label="Email" value={lead.email} />
-                <Field label="Phone" value={lead.phone} />
+                <Field label="Phone" value={formatPhoneForDisplay(lead.phone)} />
                 <Field label="Company name" value={lead.companyName} />
                 <Field
                   label="Website"

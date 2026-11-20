@@ -2,6 +2,25 @@
 // docs/design-system/README.md ("Numbers: Indian digit grouping... 4,82,000.
 // Use a compact form (48.2 L, 1.2 Cr) for big KPI numbers.").
 
+import { matchCountryCallingCode } from "@growspark/shared";
+
+/**
+ * D41: displays a stored canonical E.164 phone number ("+919840012345") in a
+ * readable, grouped form ("+91 98400 12345"), never the raw E.164 string.
+ * An unrecognised prefix (legacy pre-D41 data, or a format this app's fixed
+ * country-code list doesn't cover) is shown as-is rather than mangled.
+ */
+export function formatPhoneForDisplay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const match = matchCountryCallingCode(value);
+  if (!match) return value;
+  const national = value.slice(match.code.length);
+  if (match.code === "+91" && national.length === 10) {
+    return `${match.code} ${national.slice(0, 5)} ${national.slice(5)}`;
+  }
+  return `${match.code} ${national}`;
+}
+
 const RUPEE = "₹";
 const LAKH = 100_000;
 const CRORE = 10_000_000;

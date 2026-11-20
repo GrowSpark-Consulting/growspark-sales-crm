@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { pageQuerySchema, paginationMetaSchema, sortQuerySchema, booleanQueryParam } from './common.js';
 import { duplicateMatchSchema } from './duplicates.js';
+import { phoneFieldSchema } from './phone.js';
 
 function optionalTrimmed(max: number) {
   return z.string().trim().max(max).optional();
@@ -12,7 +13,9 @@ export const createCompanySchema = z.object({
   industry: optionalTrimmed(200),
   website: optionalTrimmed(2000),
   email: z.string().trim().max(320, 'Email is too long').optional(),
-  phone: optionalTrimmed(50),
+  // D41: country-code-select + number composed client-side into a single
+  // canonical E.164 string; validated strictly here for manual CRM entry.
+  phone: phoneFieldSchema.optional(),
   employeeSize: optionalTrimmed(100),
   annualRevenue: z.coerce.number().nonnegative('Annual revenue cannot be negative').optional(),
   addressLine1: optionalTrimmed(300),

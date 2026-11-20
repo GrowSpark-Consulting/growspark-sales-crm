@@ -18,6 +18,7 @@ import { CONTACTS_QUERY_KEY_ROOT } from "@/hooks/use-contacts";
 import { useCompany } from "@/hooks/use-companies";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -197,7 +198,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                   <FormItem>
                     <FormLabel>Phone (optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. 98400 12345" {...field} />
+                      <PhoneInput value={field.value} onChange={field.onChange} onBlur={field.onBlur} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

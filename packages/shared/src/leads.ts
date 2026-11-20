@@ -3,6 +3,7 @@ import { pageQuerySchema, paginationMetaSchema, sortQuerySchema, booleanQueryPar
 import { duplicateMatchSchema } from './duplicates.js';
 import { leadStatusSchema, openLeadStatusSchema } from './lead-statuses.js';
 import { prioritySchema } from './priorities.js';
+import { phoneFieldSchema } from './phone.js';
 
 function optionalTrimmed(max: number) {
   return z.string().trim().max(max).optional();
@@ -23,7 +24,9 @@ export const leadCreatableFields = {
   firstName: z.string().trim().min(1, 'First name is required').max(200, 'First name is too long'),
   lastName: optionalTrimmed(200),
   email: z.string().trim().max(320, 'Email is too long').optional(),
-  phone: optionalTrimmed(50),
+  // D41: country-code-select + number composed client-side into a single
+  // canonical E.164 string; validated strictly here for manual CRM entry.
+  phone: phoneFieldSchema.optional(),
   companyName: optionalTrimmed(300),
   website: optionalTrimmed(2000),
   jobTitle: optionalTrimmed(200),

@@ -185,4 +185,20 @@ describe('Contacts CRUD', () => {
     expect(detachRes.status).toBe(200);
     expect(detachRes.body.data.companyId).toBeNull();
   });
+
+  it('D41: accepts a valid E.164 +91 phone, and rejects one with 11+ digits (422)', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+
+    const validRes = await api.post('/api/v1/contacts', { firstName: 'Valid Phone', phone: '+919876543210' });
+    expect(validRes.status).toBe(201);
+
+    const invalidRes = await api.post('/api/v1/contacts', {
+      firstName: 'Too Many Digits',
+      phone: '+9198765432109',
+    });
+    expect(invalidRes.status).toBe(422);
+  });
 });
