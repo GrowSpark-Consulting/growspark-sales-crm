@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -33,7 +33,8 @@ const companyFormSchema = createCompanySchema.extend({
   annualRevenue: z.number().nonnegative("Annual revenue cannot be negative").optional(),
 });
 
-function companyToFormValues(company?: CompanyResponse): CreateCompanyInput {
+/** Exported so a test can assert the cleanup's reset target is genuinely blank (D42). */
+export function companyToFormValues(company?: CompanyResponse): CreateCompanyInput {
   return {
     name: company?.name ?? "",
     legalName: company?.legalName ?? "",
@@ -75,6 +76,21 @@ export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCa
     resolver: zodResolver(companyFormSchema),
     defaultValues: companyToFormValues(company),
   });
+
+  // D42: see the identical comment in lead-form.tsx — with cacheComponents
+  // enabled, Next.js hides a navigated-away-from page with React's Activity
+  // instead of unmounting it, so form state persists across a revisit unless
+  // explicitly reset. Effect cleanup still fires on hide, exactly like a real
+  // unmount, so this resets the *create* form (no `company` prop) to blank
+  // every time, regardless of why the user left.
+  useLayoutEffect(() => {
+    if (company) return;
+    return () => {
+      form.reset(companyToFormValues());
+      setDuplicates([]);
+      setBannerError(null);
+    };
+  }, [company, form]);
 
   /**
    * D29: duplicates warn, never block. There is no standalone duplicate-check

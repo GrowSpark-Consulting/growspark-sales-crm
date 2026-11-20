@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -50,7 +50,8 @@ const editLeadFormSchema = z.object(leadBaseFormFields).refine(emailOrPhoneRefin
 
 type LeadFormValues = CreateLeadInput;
 
-function leadToFormValues(lead?: LeadResponse): LeadFormValues {
+/** Exported so a test can assert the cleanup's reset target is genuinely blank (D42). */
+export function leadToFormValues(lead?: LeadResponse): LeadFormValues {
   return {
     firstName: lead?.firstName ?? "",
     lastName: lead?.lastName ?? "",
@@ -92,6 +93,23 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
     resolver: zodResolver(mode === "create" ? createLeadFormSchema : editLeadFormSchema),
     defaultValues: leadToFormValues(lead),
   });
+
+  // D42: with cacheComponents enabled, Next.js hides a navigated-away-from
+  // page using React's Activity ("hidden" mode) instead of unmounting it, so
+  // useState/react-hook-form values persist when the user returns — Activity
+  // still runs effect cleanup on hide, exactly like a real unmount (Next.js's
+  // own "Preserving UI state across navigations" guide). A create form must
+  // always open blank, regardless of whether the user submitted, cancelled,
+  // or navigated away mid-draft, so this unconditionally resets to blank on
+  // every hide, not just after a successful submit.
+  useLayoutEffect(() => {
+    if (mode !== "create") return;
+    return () => {
+      form.reset(leadToFormValues());
+      setDuplicates([]);
+      setBannerError(null);
+    };
+  }, [mode, form]);
 
   /**
    * D29: duplicates warn, never block. Unlike Companies (D38, no dedicated

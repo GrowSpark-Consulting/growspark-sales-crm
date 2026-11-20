@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -33,7 +33,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { OwnerSelect } from "@/components/pickers/owner-select";
 import { CompanySelect } from "@/components/pickers/company-select";
 
-function contactToFormValues(contact: ContactResponse | undefined, lockedCompanyId: string | undefined): CreateContactInput {
+/** Exported so a test can assert the cleanup's reset target is genuinely blank (D42). */
+export function contactToFormValues(contact: ContactResponse | undefined, lockedCompanyId: string | undefined): CreateContactInput {
   return {
     companyId: lockedCompanyId ?? contact?.companyId ?? undefined,
     firstName: contact?.firstName ?? "",
@@ -99,6 +100,23 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
       setBannerError(handleApiFormError(error, form));
     },
   });
+
+  // D42: with cacheComponents enabled, Next.js hides a navigated-away-from
+  // page with React's Activity instead of unmounting it, so an open dialog's
+  // `open`/draft state survives and the dialog can reappear already-open
+  // with stale values on a later revisit — effect cleanup still fires on
+  // hide, exactly like a real unmount (Next.js's "Preserving UI state across
+  // navigations" guide), so this forces the dialog closed and, when
+  // creating, blanks the draft, every time the page is navigated away from.
+  useLayoutEffect(() => {
+    return () => {
+      setOpen(false);
+      if (!isEdit) {
+        form.reset(contactToFormValues(undefined, lockedCompany?.id));
+        setBannerError(null);
+      }
+    };
+  }, [isEdit, lockedCompany?.id, form]);
 
   function onOpenChange(next: boolean) {
     setOpen(next);
