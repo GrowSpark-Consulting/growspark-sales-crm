@@ -14,7 +14,8 @@ next.
   people (stated by the user; not independently verifiable from this repo
   alone).
 - The build is a **7-day plan**: Days 1–5 build, Day 6 testing, Day 7
-  stabilise and demo. **Day 1 and Day 2 are both done** (see below).
+  stabilise and demo. **Day 1 and Day 2 (including package 2.7) are both
+  done** (see below). Day 3 is next.
 - A **staging deployment is planned for around Day 4** — see "Day 4" below.
 - Single developer, nothing reviewed by anyone else: correctness over
   speed, and every package stops for review before the next one starts.
@@ -75,11 +76,12 @@ next.
    detailed reference; skim its table of contents (the `##` headings) and
    come back to specific sections as needed rather than reading linearly
    every time.
-4. **`docs/decisions.md`** — every approved decision, D1 through D44 (D3
+4. **`docs/decisions.md`** — every approved decision, D1 through D45 (D3
    and D5 don't exist — never assigned), append-only, each with the
    reasoning behind it. Don't re-litigate something already decided here
-   without a new entry. **D40–D44 are approved but not yet built** — read
-   them carefully, they are this session's starting work.
+   without a new entry. D40–D44 (package 2.7's scope) are now built — D45
+   records what was actually done, including two real bugs found and fixed
+   along the way.
 5. **`apps/api/prisma/SCHEMA-SUMMARY.md`** — the factual per-model
    column/index/FK/CHECK reference for the database. Read this instead of
    `schema.prisma` itself when you just need to know what a table looks
@@ -101,77 +103,34 @@ specific package you're about to work on.
   automatically verified. `docs/MANUAL-TEST-DAY1.md` exists but this repo
   has no record of anyone having actually run it — don't assume it has or
   hasn't been; ask if it matters for what you're about to do.
-- **Day 2 (packages 2.0–2.6) is done.** Companies, Contacts, and Leads
+- **Day 2 (packages 2.0–2.7) is done.** Companies, Contacts, and Leads
   each have a full backend (CRUD, archive/restore, duplicate detection)
   and a full UI (list with server-side search/filter/sort/paging, create/
-  edit, detail with tabs, archive/restore). 249 automated tests pass
-  (219 `apps/api` + 30 `apps/web`). The user ran
+  edit, detail with tabs, archive/restore). The user ran
   `docs/MANUAL-TEST-DAY2.md` in a real browser on **2026-11-20** and
-  confirmed all five named acceptance items passed.
-- **Five refinements were approved the same day, as package 2.7's scope,
-  but nothing against them is built yet** — see immediately below.
+  confirmed all five named acceptance items passed, which surfaced five
+  refinements approved the same day as package 2.7 (D40–D44) —
+  **package 2.7 is now built**: minimal required fields with `*` labelling
+  and a collapsed "More details" section on Company; a structured,
+  validated E.164 phone input (country-code select + number) on all three
+  forms; new-record forms that always open blank (the Cache Components
+  root cause is confirmed, not guessed — see D45); Contacts requiring an
+  email or a phone, same as Leads; and the lead History tab naming the
+  actor, with its email-or-phone hint now only showing while actually
+  unmet. **244 `apps/api` + 53 `apps/web` = 297 automated tests pass.**
+  Full detail in `docs/decisions.md` D45 and `docs/PROJECT-STATE.md` §7.
 
 ## The next work, in order
 
-### 1. Package 2.7 — implement D40 through D44 (`docs/decisions.md`)
+### Day 3 — lead conversion, deals, pipeline
 
-Read the full D40–D44 entries before starting; this is a summary, not a
-replacement for them.
-
-- **D40 — minimal required fields.** Company needs only a name. Contact
-  needs a first name plus an email or a phone. Lead needs a first name
-  plus an email or a phone, plus a source (preselect a "Manual" source
-  rather than forcing a choice — check whether a source actually named
-  "Manual" exists in the seed data; if not, that's a question for the
-  user, not something to invent). Lead priority defaults to Medium.
-  Everything else becomes genuinely optional. Forms mark required fields
-  with `*` and drop the `(optional)` suffix everywhere (the current
-  convention is the opposite — flip it consistently across all three
-  forms). Company's create/edit form additionally needs a collapsed
-  "More details" section for the non-core fields.
-- **D41 — structured phone input.** Country-code select (default `+91`)
-  plus a plain number field, replacing the current single free-text phone
-  field on Company/Contact/Lead forms. `+91` = exactly 10 digits starting
-  6–9; other codes = 7–15 digits. Store as E.164 in the existing `phone`
-  and normalised columns — no schema change. Duplicate matching must
-  still work across formats. Display formatted, not as raw E.164.
-  **Important**: this strict validation is for manual CRM entry only — if
-  anything shared with a future website-intake path is touched, it must
-  stay lenient and never reject an enquiry; don't let one validator serve
-  both without a mode flag.
-- **D42 — new-record forms must open empty.** Found during browser
-  testing: a fresh create form can show a previous session's leftover
-  values. Probable cause (not yet confirmed) is Next.js 16 Cache
-  Components retaining client state across a navigation that looks
-  unchanged. Confirm the actual mechanism before fixing it — don't paper
-  over it with a workaround that doesn't address the root cause.
-- **D43 — Contacts require an email or a phone.** Same rule Leads already
-  enforce (D29); add it to `createContactSchema` and the contact form's
-  validation, same shape as the lead form's `emailOrPhoneRefine` (2.6,
-  D39).
-- **D44 — two small Leads UI fixes.** Lead History rows must show who made
-  each change (check first whether `LeadStatusHistory` already records an
-  actor column — it should, given every other audited table here does;
-  if it doesn't, that's a schema question, stop and ask). The lead form's
-  "provide an email or a phone number" hint must only show while the rule
-  is actually unmet, not permanently once one has been filled in.
-
-After building, update `docs/MANUAL-TEST-DAY2.md` wherever these changes
-affect its steps (required-field markers, the phone input's new shape,
-the "forms open empty" behaviour, Contacts' new validation, the History
-tab's actor column). Run the full verification
-(`pnpm typecheck && pnpm lint && pnpm test && pnpm build`), commit, and
-update `PROJECT-STATE.md`/`decisions.md` same as every other package.
-
-### 2. Day 3 — lead conversion, deals, pipeline
-
-Starts only after 2.7 is done, verified, and reported. Build the
-**conversion transaction first** (turning a Lead into a Company/Contact/
-Deal, the one genuinely multi-table write in this phase — needs a
-transaction with the audit row inside it, per the standing rule), then
-deals and the pipeline around it. Exact scope beyond that ordering isn't
-detailed in this repo yet — confirm with the user before building ahead of
-what's written here, same as every other package boundary.
+This is the next work. Build the **conversion transaction first** (turning
+a Lead into a Company/Contact/Deal, the one genuinely multi-table write in
+this phase — needs a transaction with the audit row inside it, per the
+standing rule), then deals and the pipeline around it. Exact scope beyond
+that ordering isn't detailed in this repo yet — confirm with the user
+before building ahead of what's written here, same as every other package
+boundary.
 
 ## Day 4: staging deployment (as currently planned)
 
@@ -195,8 +154,6 @@ Not yet started. As currently planned (per the user, 2026-11-19):
 A fuller, individually-verified version of some of these lives in
 `docs/PROJECT-STATE.md` §14 — this is the short list to act on.
 
-- **Package 2.7 (D40–D44 above) is the immediate next work** — not an
-  "open item" in the loose sense, a named, approved, unbuilt package.
 - **No browser-automation tool exists in this environment.** Every manual
   browser check (console errors, hydration warnings, light/dark theme,
   focus order, and anything in `MANUAL-TEST-DAY1.md`/`MANUAL-TEST-DAY2.md`)
@@ -206,11 +163,14 @@ A fuller, individually-verified version of some of these lives in
   (unlike Leads/Companies/Contacts, which all use `useListUrlState`) —
   refreshing `/users` loses any active search/filter/page. Not fixed, not
   blocking, just inconsistent with the newer pages.
-- **No component tests exist yet for the Companies/Contacts/Leads screens**
-  built in 2.4–2.6 (only the shared building blocks — `DataTable`,
-  `SearchInput`, `OwnerSelect` — have them). Deliberate Day 2 scope choice
-  (manual coverage instead); add key-flow tests for these screens on
-  Day 6, per the roadmap, not before unless asked.
+- **No component tests exist yet for the Companies/Contacts/Leads list and
+  detail screens** built in 2.4–2.6 (`companies-page-client.tsx`,
+  `contacts-page-client.tsx`, `leads-page-client.tsx`, and the three
+  detail-page clients). Deliberate Day 2 scope choice (manual coverage
+  instead); add key-flow tests for these screens on Day 6, per the
+  roadmap, not before unless asked. (Package 2.7 did add component tests
+  for `LeadForm`, `CompanyForm`, `ContactFormDialog`, and `PhoneInput` —
+  this bullet is narrower than it used to be, not resolved.)
 - **The company-name duplicate hint (package 2.5) reuses the plain `?q=`
   list search**, not a dedicated endpoint like Leads has — it can miss a
   genuine duplicate that doesn't share a contiguous substring with the

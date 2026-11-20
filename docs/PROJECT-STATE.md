@@ -46,6 +46,29 @@ pushed. Packages 2.4–2.6 (the corresponding frontend UI for leads/
 companies/contacts) have not been started and are not detailed in this
 repo yet.
 
+**Update, 2026-11-20, a new session**: Day 2's remaining frontend work
+(packages 2.4 through 2.6) was completed in an earlier session, and the
+user then ran a full manual browser pass (`docs/MANUAL-TEST-DAY2.md`),
+confirming all five acceptance items and surfacing five real refinements
+(D40–D44). **Package 2.7 closes out D40–D44 (items 1 through 4; item 5 is
+this documentation pass)** — see §7 and `docs/decisions.md` D45 for full
+detail: new-record forms (Lead, Company, Contact) now always open blank,
+with the actual root cause (Next's Cache Components preserving state via
+React's `Activity` instead of unmounting) confirmed from Next's own
+bundled docs, not assumed; phone fields across all three resources are
+now a country-code select plus a number, composed into a strict,
+validated E.164 string server-side (`packages/shared/src/phone.ts`),
+with a lenient parser reserved and unused for a future website-intake
+path; required fields are trimmed to the PRD's actual minimum and
+labelled with `*` (Company's non-core fields moved under a new collapsed
+"More details" section; Lead's Source now preselects "Manual"); Contacts
+require an email or a phone, the same rule Leads already had; and the
+Lead History tab now names who made each change, with its own "provide
+an email or phone" hint fixed to only show while actually unmet. 244
+`apps/api` tests (up from 219) and 53 `apps/web` tests (up from 30), all
+passing. Four commits, one per item; nothing pushed. Day 3 (lead
+conversion, deals, pipeline) is next.
+
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
@@ -256,7 +279,14 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         confirm-action-dialog.tsx (moved here from
                         components/users/, always generic) (all 2.4, D37);
                         textarea.tsx (2.5, D38 — same Field treatment as
-                        Input, no shadcn-generated one existed)
+                        Input, no shadcn-generated one existed);
+                        phone-input.tsx (2.7 item 2, D41/D45) — country-code
+                        Select + number Input composed into/out of one
+                        canonical E.164 string, used by Company/Contact/Lead
+                        wherever phone appears; collapsible.tsx (2.7 item 3,
+                        D40/D45) — not yet in docs/design-system/, built
+                        from its tokens/motion rules, used so far only by
+                        Company's "More details" section
     pickers/                owner-select.tsx, company-select.tsx (2.4, D37)
                         — OwnerSelect wraps Select over GET /users/options
                         (form use only); CompanySelect is a hand-built
@@ -268,16 +298,26 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         COMPANY_SORT_FIELDS allows); company-form.tsx (2.5,
                         D38 — shared create/edit form, always validated
                         against createCompanySchema, duplicate-name hint on
-                        blur); create-company-page-client.tsx,
+                        blur; 2.7 item 1 D42 — a useLayoutEffect cleanup
+                        resets the create form to blank on every Activity
+                        hide; 2.7 item 3 D40 — core fields vs. a collapsed
+                        "More details" Collapsible, phone field is now
+                        PhoneInput); create-company-page-client.tsx,
                         edit-company-page-client.tsx,
                         company-detail-page-client.tsx (RecordLayout,
-                        Overview + Contacts tabs), company-contacts-tab.tsx
+                        Overview + Contacts tabs; phone shown via
+                        formatPhoneForDisplay, 2.7 item 2), company-contacts-tab.tsx
                         (bounded, unpaginated list scoped to one company)
     contacts/               contact-form-dialog.tsx (2.5, D38 — create/edit
                         Dialog, reusable from /contacts or a Company's
                         Contacts tab via `lockedCompany`; no
                         alternatePhone/preferredCommunicationMethod or
-                        lifecycleStatus fields — see D38/D36),
+                        lifecycleStatus fields — see D38/D36; 2.7 item 1
+                        D42 — same create-mode reset-on-hide pattern, plus
+                        force-closes the dialog itself on hide; 2.7 item 3
+                        D43 — requires an email or a phone, with the same
+                        only-while-unmet hint as Lead's; phone field is now
+                        PhoneInput, 2.7 item 2),
                         contacts-page-client.tsx, contact-detail-page-client.tsx
     leads/                  (2.6, D39) leads-page-client.tsx (list: all 5
                         named filters + search/sort/paging, sortable
@@ -285,11 +325,17 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         (shared fields via leadCreatableFields, but
                         genuinely separate create/edit schemas —
                         requirement is create-only; duplicate warning via
-                        the real GET /leads/duplicates); create-lead-page-
+                        the real GET /leads/duplicates; 2.7 item 1 D42 — same
+                        reset-on-hide pattern as Company; 2.7 item 3 D40 —
+                        Source preselects "Manual" by name on create;
+                        phone field is now PhoneInput, 2.7 item 2; 2.7 item
+                        4 D44 — the email-or-phone hint is now conditional,
+                        not permanently visible); create-lead-page-
                         client.tsx, edit-lead-page-client.tsx,
                         lead-detail-page-client.tsx (status buttons minus
                         current status, hidden entirely once CONVERTED;
-                        read-only original-enquiry panel; History tab)
+                        read-only original-enquiry panel; History tab, now
+                        showing "by <name>" per row, 2.7 item 4 D44)
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx,
                         users-page-client.tsx (2.0, D31 — the Client
@@ -329,7 +375,9 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         with request id (D26)
     format.ts               formatINR/formatINRCompact/formatDate/formatTime
                         — Indian grouping + L/Cr compaction, "19 Nov 2026",
-                        "2:30 PM" (D27)
+                        "2:30 PM" (D27); formatPhoneForDisplay (2.7 item 2,
+                        D41/D45) — a stored E.164 phone grouped for reading
+                        ("+91 98400 12345"), never shown raw
     form-utils.ts           (2.5, D38) stripEmptyOptionalFields — strips
                         ""-valued keys from a form payload before POST/
                         PATCH, so "left blank" means null/omitted, not a
@@ -484,12 +532,32 @@ packages/shared/        Zod schemas + enums, consumed as a compiled package
   src/duplicates.ts      duplicateMatchSchema — { id, reason } (2.1, D33)
   src/lead-sources.ts    leadSourceResponseSchema + list response (2.1, D33)
   src/companies.ts       create/update/listQuery/response schemas,
-                        `{ data, duplicates }` mutation envelope (2.2, D34)
-  src/contacts.ts        same shape as companies.ts, for contacts (2.2, D34)
+                        `{ data, duplicates }` mutation envelope (2.2, D34);
+                        phone field now phoneFieldSchema, not free text
+                        (2.7 item 2, D41/D45)
+  src/contacts.ts        create/update/listQuery/response schemas (2.2,
+                        D34); restructured in 2.7 item 3 (D43/D45) — an
+                        exported contactCreatableFields map plus a refined
+                        createContactSchema (email-or-phone, ZodEffects has
+                        no .partial(), so updateContactSchema is built from
+                        the same field map directly, same pattern as
+                        leads.ts's D39 split); phone field now
+                        phoneFieldSchema (2.7 item 2)
   src/leads.ts           create/update/status/listQuery/response schemas,
                         duplicate-check query, status-history schema
                         (2.3, D35); leadCreatableFields exported (2.6,
-                        D39 — apps/web rebuilds a form-local schema from it)
+                        D39 — apps/web rebuilds a form-local schema from it);
+                        phone field now phoneFieldSchema (2.7 item 2,
+                        D41/D45); leadStatusHistoryResponseSchema gained
+                        changedByName (2.7 item 4, D44/D45)
+  src/phone.ts           (2.7 item 2, D41/D45) COUNTRY_CALLING_CODES
+                        (fixed, closed list, default +91), toE164,
+                        matchCountryCallingCode, isValidPhoneNumber (+91 =
+                        10 digits starting 6-9, else 7-15 digits),
+                        phoneFieldSchema (strict, manual entry),
+                        parsePhoneLenient (reserved, unused — future
+                        website-intake path, deliberately separate from
+                        the strict validator)
   tsconfig.watch.json     incremental build config used only by `dev`/
                         `dev:prepare` (package 1.3b, D24) — tsconfig.json
                         (build/typecheck) stays non-incremental per D12
@@ -807,6 +875,53 @@ not something to investigate.
   pnpm test && pnpm build` all pass (249 tests, unchanged — UI wiring over
   already-tested 2.3 endpoints). Full detail in `docs/decisions.md` D39.
 
+- **Package 2.7 item 1 (`569b27d`) — D42, new-record forms always open
+  empty.** Root cause confirmed (not assumed) from Next's own bundled docs:
+  `cacheComponents: true` plus `/leads/new`/`/companies/new` building as
+  fully static routes means Next's Cache Components hides a navigated-away-
+  from page with React's `Activity` instead of unmounting it, so form state
+  survives a revisit — but effect cleanup still fires on hide, exactly like
+  unmount. Fixed with a `useLayoutEffect` whose cleanup unconditionally
+  resets the form to blank, scoped to create mode only, in `LeadForm`,
+  `CompanyForm`, and `ContactFormDialog` (which also force-closes itself on
+  hide, since Activity can preserve an open dialog's stale draft too). 11
+  new `apps/web` tests. Full detail in `docs/decisions.md` D45.
+- **Package 2.7 item 2 (`f8a5e9f`) — D41, structured E.164 phone input.**
+  New `packages/shared/src/phone.ts` (country-code list default +91,
+  strict per-country validation, `phoneFieldSchema`, a reserved-but-unused
+  `parsePhoneLenient` for a future website-intake path); new
+  `PhoneInput`/`formatPhoneForDisplay` wired into all three forms and every
+  phone display site. Found and fixed a real bug in `PhoneInput`'s first
+  draft: it updated its own change-tracker inside `emit`, mistaking a
+  same-render echo of its own `onChange` for an external change and
+  stomping the just-typed digit — fixed to only ever update the tracker
+  from the external prop, matching `CompanySelect`'s actual mechanism
+  (D37). Updated two pre-existing API tests that posted a non-E.164 phone
+  directly. Full detail in `docs/decisions.md` D45.
+- **Package 2.7 item 3 (`abb10fb`) — D40 + D43, minimal required fields.**
+  Every required field across Company/Contact/Lead now shows `*`; every
+  "(optional)" suffix dropped. Company gets a new collapsed "More details"
+  section (new `Collapsible` primitive) for its non-core fields, expanded
+  automatically on edit only when it already has a value in one of them.
+  Lead's Source now preselects the seed's "Manual" source by name on
+  create. Contacts now require an email or a phone (`contacts.ts`
+  restructured the same way `leads.ts` was for D39; `contacts.service.ts`
+  gained the same post-patch guard `leads.service.ts` has). Found and fixed
+  seven pre-existing tests that created a contact via the API with neither
+  email nor phone. Full detail in `docs/decisions.md` D45.
+- **Package 2.7 item 4 (`1dfbeb7`) — D44, lead history shows the actor;
+  hint only when unmet.** `leadStatusHistoryResponseSchema` gained
+  `changedByName` (joined at query time, no schema change); the lead
+  detail page's History tab now reads "by `<name>`". The lead form's
+  "provide an email or phone" hint is now conditional, matching the
+  pattern already built correctly for Contact in item 3. Full detail in
+  `docs/decisions.md` D45.
+
+**Package 2.7 is now done (items 1–4 built and verified; item 5 is this
+documentation pass).** `pnpm typecheck && pnpm lint && pnpm test && pnpm
+build` all pass after every one of the four commits above, final count
+244 `apps/api` + 53 `apps/web` = 297 tests. Nothing pushed.
+
 ## 8. Database
 
 - **Migrations applied via** `prisma migrate deploy` (root: `pnpm db:migrate`,
@@ -897,7 +1012,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D37 — Package 2.4: `DataTable`/`RecordLayout`/`OwnerSelect`/`CompanySelect`/`useListUrlState` built; `DataTable` wired into a real Companies list page; row-opens-record via a real `Link` in the first column, not row click handling; `OwnerSelect` kept to form use, list-page owner filter is a separate plain `Select` (different semantics: "no filter" vs "owner = nobody"); `CompanySelect` hand-built (no Combobox primitive installed); two `useEffect`s in `CompanySelect` rewritten as render-time state adjustments to satisfy `react-hooks/set-state-in-effect`; `ConfirmActionDialog` moved to `components/ui/`; added `apps/web/tests/setup.ts` for RTL's `afterEach(cleanup)` (not automatic without vitest `globals: true`)
 - D38 — Package 2.5: real PRD/schema conflict on Contact's "alternate phone"/"preferred communication method" (not in the schema) — stopped, asked, dropped both; Companies use full create/edit pages, Contacts use a Dialog (different field counts and reuse contexts); both forms validate against the *create* schema even in edit mode, submitting the full field set as PATCH; `z.coerce.number()`'s `unknown` input type (Zod v4) broke a plain `useForm<CreateCompanyInput>` — fixed with a form-local schema overriding just that one field to a non-coercing validator; duplicate hint on company-name blur reuses the plain list `q` search (no dedicated endpoint, unlike Leads); new `Textarea` and `stripEmptyOptionalFields` (blank optional fields must become `null`/omitted, not a literal `""`)
 - D39 — Package 2.6: `leadCreatableFields` exported from `packages/shared` so a form-local schema override could be rebuilt without `.extend()` (`createLeadSchema` is a `ZodEffects`, not a plain `ZodObject`); create and edit use two genuinely different form-local schemas (unlike Company/Contact's one-schema-for-both, D38) because `requirement` is create-only and never editable; duplicate warning calls the real `GET /leads/duplicates` endpoint (unlike Company's blur-hint approximation); status-change buttons omit the current status and the whole section disappears once `CONVERTED` (D29 — no convert action exists yet); new `lib/datetime-local.ts` bridges the native `datetime-local` input and ISO instants; a Zod `.refine()` options object needed its `path` cast away from `as const` (`readonly ["email"]` vs. Zod's mutable `PropertyKey[]`)
-- **D40–D44 — approved 2026-11-20, package 2.7 scope, NOT YET BUILT** (full detail in `decisions.md`, after D39): D40 — minimal HubSpot-style required fields (Company: name only; Contact/Lead: name + email-or-phone; Lead also needs a source, default to a "Manual" source rather than forcing a choice; priority defaults Medium; forms mark required fields with `*`, drop every `(optional)` suffix; Company form gets a collapsed "More details" section). D41 — phone fields become a country-code select (default +91) + number, `+91` = exactly 10 digits starting 6–9, other codes 7–15 digits, stored as E.164 in the existing columns (no schema change), duplicate matching across formats, display formatted — strict validation for manual entry only, the future website-intake path must stay lenient and never reject. D42 — new-record forms must always open empty (found persisting old values in browser testing; probable cause is Cache Components state retention — not yet confirmed). D43 — Contacts get the same email-or-phone requirement Leads already have. D44 — lead History rows must show who made the change; the lead form's email-or-phone hint must only show while the rule is actually unmet.
+- D40–D44 — approved 2026-11-20, package 2.7 scope (D40 minimal required fields + Company's "More details" section + Lead's "Manual" source default; D41 country-code-select phone with strict E.164 validation; D42 new-record forms always open empty; D43 Contacts require email-or-phone; D44 lead History shows the actor, hint only when unmet) — **all four built 2026-11-20, see D45**
+- D45 — Package 2.7 (items 1–4, closing out D40–D44): D42's root cause confirmed from Next's own bundled docs (Cache Components hides a page with React's `Activity` instead of unmounting, effect cleanup still fires on hide) and fixed with a `useLayoutEffect` cleanup that resets create-mode forms to blank, including `ContactFormDialog` force-closing itself; D41's `packages/shared/src/phone.ts` (fixed country-code list, strict `phoneFieldSchema`, a reserved-unused `parsePhoneLenient` for future website intake) plus a `PhoneInput` component, and a found-and-fixed bug where the component mistook its own just-emitted `onChange` for an external change; D40's Company "More details" `Collapsible` (new primitive, not yet in `docs/design-system/`) and Lead's Source preselecting "Manual" by name; D43's `contacts.ts` restructured like `leads.ts` (D39) plus a service-level post-patch guard, with seven pre-existing tests fixed that created email/phone-less contacts; D44's `changedByName` join and the hint's visibility fix. 244 `apps/api` + 53 `apps/web` = 297 tests.
 
 ## 10. Gotchas and lessons learned
 
@@ -988,6 +1104,27 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   deactivate-while-signed-in scenario in §10) needs a normal window *plus*
   an incognito/private window — two genuinely separate cookie stores — not
   two tiled views of the same window.
+- **With `cacheComponents: true`, a navigated-away-from page is hidden with
+  React's `Activity`, not unmounted — `useState`/react-hook-form state
+  survives a revisit, confirmed directly from Next's own bundled docs
+  (`node_modules/next/dist/docs/01-app/02-guides/migrating-to-cache-
+  components.md` → "UI state preservation"; `preserving-ui-state.md` →
+  "Forms, inputs, and state").** Effect cleanup still fires on hide though
+  — exactly like a real unmount — so a `useLayoutEffect` whose cleanup
+  resets what needs resetting is the documented, correct fix (D42, D45),
+  not a workaround. A build's own route list (`pnpm build`'s `○ (Static)`
+  markers) tells you which routes are actually subject to this: static
+  routes get held in the Client Cache across navigation; genuinely dynamic
+  ones may not.
+- **"Adjust state during render" (the pattern `CompanySelect` already uses,
+  D37) breaks if the component updates its OWN tracker at the same moment
+  it calls the external `onChange`.** `PhoneInput`'s first draft did this
+  and stomped a just-typed digit back to the previous value on every
+  keystroke, because its own just-emitted change (not yet echoed back by
+  the parent on this same render) looked identical to a genuine external
+  prop change. The tracker must only ever move in response to the
+  *external* prop actually changing — never from the component's own
+  emit — see D45 for the exact before/after.
 
 ## 11. Testing
 
@@ -998,12 +1135,15 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `tests/components/data-table.test.tsx` (7),
   `tests/components/search-input.test.tsx` (4),
   `tests/components/owner-select.test.tsx` (3) — the last three package
-  2.4), and `apps/api` (`vitest run`) — 219 `apps/api` tests + 30
-  `apps/web` tests, 249 total, all passing as of the last run this session
-  (package 2.6 — unchanged from 2.4/2.5 since 2.5 and 2.6 were pure UI
-  wiring over already-tested 2.2/2.3 endpoints, with manual coverage in
-  `docs/MANUAL-TEST-DAY2.md` instead of new automated tests, per the
-  brief). `apps/web` runs under jsdom (D36) with
+  2.4; plus package 2.7's `tests/components/lead-form.test.tsx`,
+  `company-form.test.tsx`, `contact-form-dialog.test.tsx`, and
+  `phone-input.test.tsx`), and `apps/api` (`vitest run`) — **244 `apps/api`
+  tests + 53 `apps/web` tests, 297 total**, all passing as of the last run
+  this session (package 2.7, items 1–4: D42's reset-on-hide tests, D41's
+  phone-validation and `PhoneInput` composition tests, D40/D43's "More
+  details"/Source-preselect/Contact-email-or-phone tests, D44's
+  actor-name and hint-visibility tests — the full breakdown is in
+  `docs/decisions.md` D45). `apps/web` runs under jsdom (D36) with
   `tests/setup.ts` registering RTL's `afterEach(cleanup)` (D37) —
   needed because RTL's own auto-cleanup never self-registers without
   vitest's `globals: true`, which this repo doesn't use.
@@ -1159,26 +1299,24 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   Companies/Contacts/Leads. The user ran `docs/MANUAL-TEST-DAY2.md` in a
   real browser on **2026-11-20** and confirmed all five named acceptance
   items passed.
-- **That same browser pass surfaced five approved-but-not-yet-built
-  refinements — D40 through D44** (`docs/decisions.md`, after D39):
-  trimming every form down to the PRD's actual minimum required fields
-  (D40); structured, validated phone input with E.164 storage, strict for
-  manual entry only and explicitly **not** for a future website-intake path
-  (D41); new-record forms opening with stale values instead of blank,
-  probably a Cache Components state-retention issue, not yet root-caused
-  (D42); Contacts getting the same email-or-phone requirement Leads already
-  have (D43); and two small Leads UI fixes — showing who made each status
-  change, and only showing the email-or-phone hint while it's actually
-  unmet (D44). **A fresh session should start from
-  `docs/NEXT-SESSION-START.md`**, which has these as package 2.7, the next
-  work item, in that exact order — do not start Day 3 before 2.7 is done
-  and re-verified.
-- **Day 3** (lead conversion, deals, pipeline) comes after package 2.7.
-  Exact scope beyond "lead conversion first, as its own transaction" is not
-  yet detailed in this repo — confirm with the user before building ahead
-  of it, same rule as every other package boundary. Day 6/7 (testing,
-  stabilisation, demo) remain explicitly out of scope until the build days
-  are done.
+- **That same browser pass surfaced five approved refinements — D40
+  through D44 — and package 2.7 (items 1 through 4) now builds all of
+  them** (`docs/decisions.md` D45 has the full detail): trimming every
+  form down to the PRD's actual minimum required fields, with a `*` on
+  what's actually required and a new collapsed "More details" section on
+  Company (D40); structured, validated phone input with E.164 storage,
+  strict for manual entry only (D41); new-record forms now always open
+  blank, with the Cache Components root cause confirmed from Next's own
+  docs, not left as a guess (D42); Contacts now require an email or a
+  phone, the same as Leads (D43); and the lead History tab now names the
+  actor, with the email-or-phone hint fixed to only show while unmet
+  (D44). 244 `apps/api` + 53 `apps/web` = 297 tests, four commits (one per
+  item), nothing pushed. **Package 2.7 is done.**
+- **Day 3** (lead conversion, deals, pipeline) is next. Exact scope beyond
+  "lead conversion first, as its own transaction" is not yet detailed in
+  this repo — confirm with the user before building ahead of it, same rule
+  as every other package boundary. Day 6/7 (testing, stabilisation, demo)
+  remain explicitly out of scope until the build days are done.
 
 ## 14. Open questions and unverified items
 
@@ -1225,7 +1363,13 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `SearchInput`, and `OwnerSelect` — the shared building blocks — have
   them, D37); this was a deliberate scope choice for Day 2 (manual
   coverage via `MANUAL-TEST-DAY2.md` instead), not an oversight, but add
-  key-flow tests for these screens on Day 6 per the roadmap. The
+  key-flow tests for these screens on Day 6 per the roadmap. **Partially
+  addressed in package 2.7**: `LeadForm`, `CompanyForm`,
+  `ContactFormDialog`, and `PhoneInput` now have real component tests
+  (D45) — but the list/detail pages (`companies-page-client.tsx`,
+  `contacts-page-client.tsx`, `leads-page-client.tsx`, and the three
+  detail-page clients) still have none; this bullet still applies to
+  those. The
   company-name duplicate hint (2.5, D38) reuses the plain `?q=` list
   search rather than a dedicated endpoint, so it may miss a genuine
   duplicate that doesn't share a contiguous substring with the typed name
@@ -1717,3 +1861,50 @@ log just records that a session happened and what it covered.
   after all doc edits — all pass, 249 tests unchanged (docs-only, no
   source files touched). No process was started this session; nothing to
   stop. One commit, docs only; nothing pushed.
+- **2026-11-20 (new session) — package 2.7, items 1 through 4, D40–D44
+  built and verified; this entry (item 5) is the documentation pass.**
+  Read the full required reading order first (`CLAUDE.md`,
+  `NEXT-SESSION-START.md`, this file, `decisions.md`, `SCHEMA-SUMMARY.md`,
+  both day summaries, the design-system README) and confirmed
+  understanding before starting, per the owner's explicit instruction. Per
+  the owner's session-specific instruction, did **not** stop for review
+  after each item — ran full verification and committed after each one,
+  stopping only if something couldn't be fully verified or needed a
+  decision; nothing did.
+  - **Item 1 (D42, `569b27d`)**: root-caused, not assumed — read Next's own
+    bundled Cache Components docs directly rather than guessing, confirmed
+    `/leads/new`/`/companies/new` build as fully static routes (so they're
+    exactly the kind `Activity` preserves), and fixed with the pattern
+    those docs themselves recommend.
+  - **Item 2 (D41, `f8a5e9f`)**: built the phone architecture, then found a
+    real bug in `PhoneInput`'s first draft via its own test suite before
+    committing — not caught by typecheck or lint, only by actually running
+    the new tests. Fixed properly (matching `CompanySelect`'s real
+    mechanism, not just copying its shape) rather than patched around.
+    Updated two pre-existing tests that the stricter validation correctly
+    started rejecting.
+  - **Item 3 (D40 + D43, `abb10fb`)**: settled the "does a lead source
+    named exactly 'Manual' exist" question the previous session had
+    flagged as needing to ask, by reading `seed-lib.ts` directly — it does,
+    so no question was needed. Found seven pre-existing tests (six in one
+    file, one in another the first grep pass missed) that the new
+    Contacts email-or-phone rule correctly started rejecting, and fixed
+    each to keep testing what it actually tests.
+  - **Item 4 (D44, `1dfbeb7`)**: confirmed `LeadStatusHistory.changedById`
+    already existed (not assumed) before adding the join; fixed Lead's
+    permanently-visible hint using the same pattern already built
+    correctly for Contact's brand-new equivalent in item 3.
+  - **Item 5 (this entry)**: updated `docs/MANUAL-TEST-DAY2.md` for all
+    four items (new §1.2a, §1.5a, and a "Package 2.7" block in the
+    acceptance checklist; fixed several steps that would otherwise now
+    fail under the stricter validation, e.g. a contact created with no
+    email/phone); updated `docs/decisions.md` (new D45, closing out
+    D40–D44 with what was actually built, including the two real bugs
+    found); updated this file (§1, §5, §7, §9, §10, §11, §13, §14, this
+    entry).
+  - Final verification after every commit: `pnpm typecheck && pnpm lint &&
+    pnpm test && pnpm build` all pass, final count 244 `apps/api` + 53
+    `apps/web` = 297 tests (up from 219 + 30 = 249 at the start of this
+    session). Four commits, one per item (1–4); this documentation pass is
+    a fifth. Nothing pushed. Package 2.7 is done; Day 3 (lead conversion,
+    deals, pipeline) is next.

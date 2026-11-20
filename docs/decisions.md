@@ -1410,3 +1410,117 @@ treat their presence in this file as evidence the behaviour exists.**
   "provide an email or a phone number" hint should only be visible while
   that rule is actually unmet, not pinned under the Email field
   permanently regardless of whether one has since been filled in.
+
+**D45 — Package 2.7, built 2026-11-20 (items 1–4; item 5 is this
+documentation pass).** Closes out D40–D44.
+
+- **Item 1 (D42) — root cause confirmed, not assumed.** `next.config.ts`
+  has `cacheComponents: true`, and `/leads/new`/`/companies/new` build as
+  fully static routes (confirmed in `pnpm build`'s own route list, `○`). Next's
+  own bundled docs (`node_modules/next/dist/docs/01-app/02-guides/
+  migrating-to-cache-components.md` → "UI state preservation", and
+  `preserving-ui-state.md` → "Forms, inputs, and state") say directly: with
+  Cache Components, Next.js hides a navigated-away-from page using React's
+  `Activity` ("hidden" mode) instead of unmounting it, so `useState`/
+  react-hook-form state survives a revisit — but effect cleanup still fires
+  on hide, exactly like a real unmount. Fixed with exactly the pattern those
+  docs recommend: a `useLayoutEffect` whose **cleanup** (not its setup)
+  unconditionally resets the form to blank defaults, scoped to create mode
+  only (`LeadForm`'s `mode === "create"`, `CompanyForm`'s `!company`).
+  `ContactFormDialog` (a dialog, not a page) gets the same treatment plus
+  force-closing the dialog itself on hide, since Activity can also preserve
+  `open: true` with a stale draft, making the dialog reappear already-open
+  on a revisit. `leadToFormValues`/`companyToFormValues`/`contactToFormValues`
+  were exported (previously module-private) so tests can assert the reset
+  target is genuinely blank. True Activity hide/show (same instance, no
+  real unmount) cannot be simulated in this environment — this React build
+  does not export `Activity` publicly yet, and there is no browser-
+  automation tool here — so the new tests use `unmount()` as the nearest
+  available proxy for the identical cleanup callback Activity invokes, not
+  a full reproduction; flagged as such rather than overclaimed.
+- **Item 2 (D41) — phone architecture.** `packages/shared/src/phone.ts`:
+  a fixed, closed `COUNTRY_CALLING_CODES` list (default `+91`; a dozen
+  common codes — a judgment call, not a complete E.164 list, same spirit
+  as D10's seeded pipeline stages); `isValidPhoneNumber` (`+91` = exactly
+  10 digits starting 6–9, every other code = 7–15 digits, no further
+  shape rule); `phoneFieldSchema` (strict, for the three manual-entry
+  create/update schemas — `""` still valid, it's how every optional field
+  here already represents "not provided"); `parsePhoneLenient` (reserved,
+  unused — for the not-yet-built website intake path, deliberately a
+  *separate* function from the strict validator, not a shared one gated by
+  a mode flag, so the intake path can never accidentally inherit the
+  strict rule). The wire contract is unchanged: `phone` is still a single
+  string field end to end — the frontend's new `PhoneInput`
+  (`components/ui/phone-input.tsx`) composes a country-code `Select` and a
+  plain number `Input` into one canonical E.164 string before it ever
+  reaches a schema; `normalizePhone` (lenient, pre-existing, D33) needed no
+  change, since a clean E.164 string already normalises correctly. A real
+  bug was found and fixed while testing `PhoneInput`: its first draft
+  updated its own "last seen value" tracker inside `emit` (the same moment
+  it called `onChange`), which made a same-render echo of its own just-
+  emitted value indistinguishable from a genuine external prop change —
+  stomping the just-typed digit back to blank on every keystroke whenever
+  the parent doesn't echo the prop back synchronously (true of this
+  project's own react-hook-form usage, not just the unit test that caught
+  it). Fixed by only ever updating that tracker from the external `value`
+  prop, never from `emit` — matching `CompanySelect`'s actual working
+  mechanism (D37) exactly, not just its surface shape. Two pre-existing API
+  tests (`tests/leads/crud.test.ts`) that posted a bare, non-E.164 phone
+  string directly were updated to send valid E.164, since that's what a
+  real client — the frontend — now always sends.
+- **Item 3 (D40 + D43).** Company already required only `name` (no schema
+  change); the real work was labelling (`*` on every required field,
+  "(optional)" dropped everywhere — optional is now the unmarked default)
+  and a new `Collapsible` (`components/ui/collapsible.tsx` — not yet in
+  `docs/design-system/`, built from its tokens/motion rules per the
+  README's own "build it from these tokens, then send it back" closing
+  note) holding Company's non-core fields under "More details": collapsed
+  on create, and on edit only opens automatically when the company already
+  has a value in one of those fields (a judgment call on exactly which
+  fields count as "core" vs. "more details" — name/industry/website/email/
+  phone/owner stayed visible; legal name/employee size/annual revenue/
+  address/description moved under the fold). Lead's Source field now
+  preselects the lead source named **"Manual"** (confirmed against
+  `apps/api/prisma/seed-lib.ts` — the seed always creates one by that exact
+  name, settling the question `NEXT-SESSION-START.md` flagged, without
+  needing to ask) via a `useEffect` matched by name, not list position (the
+  seed's first/default-sorted source is actually "Website"); guarded so it
+  only applies in create mode and only while nothing has been chosen yet,
+  so it never overrides an explicit pick and correctly re-applies after a
+  D42 reset-to-blank. For D43, `packages/shared/src/contacts.ts` was
+  restructured the same way `leads.ts` already was for D39 — an exported
+  `contactCreatableFields` map plus a refined `createContactSchema`
+  (`ZodEffects` has no `.partial()`, so `updateContactSchema` is built from
+  the same field map directly; deliberately **not** given Lead's extra "at
+  least one field" requirement, since that was never a rule here and D43
+  doesn't ask for one). `contacts.service.ts`'s `updateContact` gained the
+  same post-patch email-or-phone guard `leads.service.ts` already has
+  (D35) — Contact has no database CHECK for this, so it's a clean
+  application-level 422, not a mapped Prisma error. Found, while adding
+  this, that **seven** pre-existing test call sites created a contact via
+  the API with neither email nor phone (six in `tests/contacts/crud.test.ts`,
+  one in `tests/contacts/isolation.test.ts` — a raw `supertest` POST the
+  first grep pass missed because it didn't go through the `authed()`
+  helper) — each given a plausible email so the test keeps exercising what
+  it actually tests, not tripping the new rule incidentally.
+- **Item 4 (D44).** `leadStatusHistoryResponseSchema` gained
+  `changedByName`, populated by joining `changedBy: { select: { name:
+  true } }` in `listLeadStatusHistory` — `LeadStatusHistory.changedById`
+  was already `NOT NULL` with a real FK (confirmed before touching
+  anything, not assumed), and users are never hard-deleted (only
+  deactivated, D25), so no nullable was needed. The lead detail page's
+  History tab now reads "by `<name>` · `<date>`, `<time>`". The lead form's
+  permanently-visible hint became conditional on `form.watch("email")`/
+  `form.watch("phone")` both being blank — the same pattern Contact's
+  brand-new equivalent hint was built with correctly from the start in
+  item 3 (first-time-right vs. retrofit are different situations, even
+  though both end up with the same conditional-hint code shape).
+- **Testing summary across the whole package**: 244 `apps/api` tests (25
+  new: phone validation and E.164-rejection across all three resources,
+  Contact's email-or-phone create/update cases, the status-history actor
+  assertion) + 53 `apps/web` tests (23 new: the D42 reset-target and
+  cleanup-doesn't-throw tests per form/dialog, `PhoneInput`'s own
+  composition behaviour, the "More details" open/closed-by-default cases,
+  the Source-preselect cases, the hint-visibility case) = 297 total, all
+  passing, verified after every one of the four commits, not just at the
+  end.

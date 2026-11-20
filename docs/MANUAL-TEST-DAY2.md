@@ -43,23 +43,53 @@ re-check a sample of them here, not just on Day 1's three pages.
    above the table).
 2. URL changes to `http://localhost:3000/companies/new`, heading **"Add
    company"**.
-3. Fill in:
-   - **Company name**: `Example Foods Pvt Ltd`
-   - **Industry (optional)**: `Manufacturing`
-   - **Business email (optional)**: `hello@examplefoods.test`
-   - **Phone (optional)**: `98400 12345`
-4. Click **Add company** (the submit button at the bottom right).
-5. **Expected**: a green success toast appears bottom-right reading
+3. **Expected (D40 — minimal required fields)**: only **Company name**
+   carries a `*`; every other visible label has no `*` and no "(optional)"
+   suffix — optional is now the unmarked default. The only fields visible
+   by default are: Company name, Industry, Website, Business email, Phone,
+   Owner. Below them is a collapsed row reading **"More details"** with a
+   right-pointing chevron — Legal name, Employee size, Annual revenue, the
+   address fields, and Description are **not** visible until you click it.
+4. Click **More details**. **Expected**: it expands (chevron rotates down)
+   to reveal Legal name, Employee size, Annual revenue, Address line 1/2,
+   City, State, Postal code, Country, and Description.
+5. Fill in:
+   - **Company name \***: `Example Foods Pvt Ltd`
+   - **Industry**: `Manufacturing`
+   - **Business email**: `hello@examplefoods.test`
+   - **Phone**: see §1.2a below before filling this in.
+6. Click **Add company** (the submit button at the bottom right).
+7. **Expected**: a green success toast appears bottom-right reading
    "Example Foods Pvt Ltd was added.", and you land on
    `http://localhost:3000/companies/<some-id>` — the new company's detail
    page, heading **"Example Foods Pvt Ltd"**.
+
+### 1.2a The phone field (D41 — country code + number, not free text)
+
+1. Look at the **Phone** field on the form you're on. **Expected**: it is
+   now two controls side by side — a country-code dropdown (defaulting to
+   **+91**) and a plain number box (placeholder "e.g. 98400 12345"), not one
+   free-text box.
+2. Leave the country code at **+91** and type `98400 12345` (with the
+   space) into the number box.
+3. Save the company, then reopen its detail page. **Expected**: the Phone
+   field in the key-facts strip reads **"+91 98400 12345"** (grouped and
+   readable) — never a raw `+919840012345` with no spaces.
+4. Edit the company again, open the Phone field. **Expected**: the country
+   code shows **+91** and the number box shows `9840012345` (the number
+   split back out correctly from what you saved).
+5. Try an invalid number: change the number box to `123` (too short) and
+   save. **Expected**: an inline error under Phone, and the save is
+   blocked. Change it to 11 digits (e.g. `98400123456`) — same result,
+   blocked. Change it to a valid 10-digit number starting 6–9 and save
+   successfully.
 
 ### 1.3 Duplicate hint on company name (warn only, never blocks)
 
 1. Go back to **Companies** in the sidebar, click **Add company** again.
 2. In **Company name**, type `Example Foods` (a close variant of the one
    you just created), then click into a different field (e.g. click
-   **Industry (optional)**) so the Company name field loses focus.
+   **Industry**) so the Company name field loses focus.
 3. **Expected**: a warning-coloured banner appears under the Company name
    field, starting "**This might already exist.**", listing "Example Foods
    Pvt Ltd" as a clickable link.
@@ -107,11 +137,31 @@ re-check a sample of them here, not just on Day 1's three pages.
    **Edit** there).
 2. URL: `http://localhost:3000/companies/<id>/edit`, heading starts "Edit
    Example Foods Pvt Ltd".
-3. Change **Industry (optional)** to `Food Processing`, click **Save
-   changes**.
-4. **Expected**: toast "Example Foods Pvt Ltd was updated.", and you land
+3. **Expected (D40 — "More details" opens expanded on edit when it has
+   values)**: if this company has nothing in Legal name/Employee size/
+   Annual revenue/Address/Description, "More details" opens **collapsed**;
+   if it has any one of those filled in, it opens **expanded**
+   automatically, with no click needed. Confirm whichever applies to this
+   company.
+4. Change **Industry** to `Food Processing`, click **Save changes**.
+5. **Expected**: toast "Example Foods Pvt Ltd was updated.", and you land
    back on the company's detail page with Industry now showing "Food
    Processing" in the key-fields strip under the title.
+
+### 1.5a New-record forms always open empty (D42)
+
+1. Go to `http://localhost:3000/companies/new`. Type something into
+   **Company name** (e.g. `Abandoned Draft`), but do **not** submit.
+2. Click **Companies** in the sidebar (navigating away without saving).
+3. Click **Add company** again.
+   **Expected**: the form is **completely blank** — no trace of
+   "Abandoned Draft". If you still see it, that's the exact bug D42 fixed;
+   report it.
+4. Repeat the same check on `http://localhost:3000/leads/new` (type a
+   First name, navigate away via the sidebar, come back) and on **Add
+   contact** (type a First name in the dialog, close it with Escape or the
+   overlay — not Save — reopen **Add contact**). Both must also open
+   blank.
 
 ### 1.6 Company detail page: tabs, and adding contacts (acceptance item)
 
@@ -127,17 +177,26 @@ re-check a sample of them here, not just on Day 1's three pages.
 5. **Expected**: a dialog titled **"Add contact"** opens, with the
    description "Linked to Example Foods Pvt Ltd." and the **Company**
    field showing "Example Foods Pvt Ltd" as plain, greyed-out text (not
-   editable — it's locked to this company).
-6. Fill in **First name**: `Asha`, **Last name (optional)**: `Rao`,
-   **Email (optional)**: `asha.rao@examplefoods.test`. Click **Add
-   contact** (the dialog's submit button).
-7. **Expected**: toast "Asha Rao was added.", dialog closes, and "Asha Rao"
+   editable — it's locked to this company). **First name** carries a `*`;
+   every other field (Last name, Email, Phone, Job title, Department,
+   Location, Owner) does not.
+6. **D43 check**: fill in only **First name**: `No Contact Info`, leave
+   both Email and Phone blank, click **Add contact**.
+   **Expected**: the dialog does **not** close; a small grey hint reads
+   "Provide an email or a phone number." under Email, and an inline error
+   appears once you try to submit. Fill in either Email or Phone and the
+   hint disappears immediately (D44-style: only visible while the rule is
+   actually unmet).
+7. Now fill in **First name**: `Asha`, **Last name**: `Rao`, **Email**:
+   `asha.rao@examplefoods.test`. Click **Add contact** (the dialog's submit
+   button).
+8. **Expected**: toast "Asha Rao was added.", dialog closes, and "Asha Rao"
    now appears in the Contacts tab's table.
-8. Repeat steps 4–7 for a second contact: **First name**: `Deepak`, **Last
-   name**: `Shah`, **Email**: `deepak.shah@examplefoods.test`.
-9. **Expected (the acceptance item)**: both **Asha Rao** and **Deepak
-   Shah** are now listed in the company's Contacts tab, each as a link.
-10. Click **Asha Rao**'s name in that table.
+9. Repeat steps 4, 7–8 for a second contact: **First name**: `Deepak`,
+   **Last name**: `Shah`, **Email**: `deepak.shah@examplefoods.test`.
+10. **Expected (the acceptance item)**: both **Asha Rao** and **Deepak
+    Shah** are now listed in the company's Contacts tab, each as a link.
+11. Click **Asha Rao**'s name in that table.
     **Expected**: you land on `http://localhost:3000/contacts/<id>`, her
     own detail page, and the **Company** key field near the top shows
     "Example Foods Pvt Ltd" as a link back to the company you just came
@@ -173,22 +232,25 @@ re-check a sample of them here, not just on Day 1's three pages.
 3. Click **Add contact** (top right).
 4. **Expected**: the same dialog as before, but this time its description
    reads "A contact can optionally belong to a company." and the
-   **Company (optional)** field is a real search box, not locked text.
-5. Type `First name`: `Priya`, leave Company blank, click **Add contact**.
+   **Company** field is a real search box, not locked text.
+5. Type **First name**: `Priya`, **Phone**: a valid +91 number (country
+   code already defaults to +91 — see §1.2a), leave Company blank, click
+   **Add contact**.
 6. **Expected**: toast, dialog closes, "Priya" appears in the list with no
    company.
 
 ### 2.2 The async company picker
 
 1. Click **Add contact** again.
-2. Click into the **Company (optional)** field and type `Example`.
+2. Click into the **Company** field and type `Example`.
 3. **Expected**: after a brief pause (it waits for you to stop typing
    before searching), a dropdown list appears under the field showing
    "Example Foods Pvt Ltd".
 4. Click that result.
 5. **Expected**: the field now shows "Example Foods Pvt Ltd" as plain text
    inside the search box.
-6. Fill **First name**: `Test Linked Contact`, submit.
+6. Fill **First name**: `Test Linked Contact`, **Email**:
+   `test.linked@example.com`, submit.
 7. Open this new contact's detail page (click its name in the list) and
    confirm the **Company** key field shows "Example Foods Pvt Ltd" as a
    link.
@@ -207,39 +269,55 @@ same mechanics, same expectations, just for Contacts instead of Companies.
 
 1. Click **Leads** in the sidebar. URL: `http://localhost:3000/leads`.
 2. Click **Add lead** (top right).
-3. Leave **First name** filled in (e.g. `Ravi`) but leave **both** Email
-   and Phone empty. Click **Add lead**.
+3. **Expected (D40 labelling)**: **First name** and **Source** carry a `*`;
+   every other field (Last name, Company name, Website, Job title,
+   Industry, Source detail, Priority, Owner, Estimated budget, Purchase
+   timeline, Next follow-up, Requirement, Notes) does not.
+4. **Expected (D44 — hint only shown while unmet)**: with both Email and
+   Phone still blank, a small grey hint under Email reads "Provide an
+   email or a phone number." Type anything into either field and the hint
+   disappears immediately — it should never stay visible once the rule is
+   satisfied.
+5. Clear both again (so neither has a value) and leave **First name**
+   filled in (e.g. `Ravi`). Click **Add lead**.
    **Expected**: the form does **not** submit; an inline red error appears
    under the **Email** field reading "Provide an email or a phone number."
-4. Fill in **Phone**: `9876543210` only (still no email). Click **Add
-   lead** again.
+6. Fill in **Phone**: a valid +91 number (country code defaults to +91 —
+   see §1.2a for the two-part phone field) only, still no email. Click
+   **Add lead** again.
    **Expected**: this time it submits successfully — a phone alone is
    enough. Toast "Ravi was added.", and you land on the new lead's detail
    page.
-5. Go back to **Leads** → **Add lead** and try submitting with **First
+7. Go back to **Leads** → **Add lead** and try submitting with **First
    name** left blank entirely (but a valid email filled in).
    **Expected**: inline error under **First name**.
 
-### 3.2 Required field: Source
+### 3.2 Source defaults to "Manual" (D40 — never forces an explicit choice)
 
-1. On the Add lead form, note the **Source** dropdown (placeholder "Select
-   a source"). Fill in First name and Email, but leave Source unselected,
-   and submit.
-   **Expected**: inline error under Source (it's required — every lead
-   needs a source).
-2. Pick any source from the dropdown (e.g. "Website" or "Referral") and
-   submit successfully.
+1. On a fresh **Add lead** form, look at **Source** *before* clicking
+   anything in it.
+   **Expected**: it already shows **"Manual"** — not a blank "Select a
+   source" placeholder. You were never forced to make an explicit choice.
+2. Open the dropdown and confirm **Manual** is one of several real options
+   (e.g. Website, Referral, LinkedIn, Event, Cold outreach, Import) — it's
+   just the one preselected by default, not the only one available.
+3. Pick a different source (e.g. "Referral"), fill in First name and
+   Email, and submit successfully — confirm the lead saved with
+   "Referral", not "Manual" (check its detail page).
+4. Open **Add lead** again fresh. **Expected**: Source is back to
+   "Manual" by default — your earlier change on a *different* lead did not
+   persist as a new default.
 
 ### 3.3 Duplicate warning banner (acceptance item — never blocks)
 
-1. Note the email address of the lead you created in §3.1 step 4 (or
+1. Note the email address of the lead you created in §3.1 step 6 (or
    create one now with a known email, e.g. `duplicate-test@example.com`,
    plus any phone).
 2. Go to **Leads** → **Add lead**.
 3. Fill **First name**: `Second Lead`, **Email**: the **same** email
-   address as an existing lead (e.g. `duplicate-test@example.com`), pick
-   any **Source**, then click into another field so the Email field loses
-   focus.
+   address as an existing lead (e.g. `duplicate-test@example.com`), leave
+   **Source** at its "Manual" default, then click into another field so
+   the Email field loses focus.
 4. **Expected**: a warning banner appears above the form fields, starting
    "**This might already exist.**", with a line "Matching email" that is a
    clickable link to the original lead's detail page (opens in a new tab).
@@ -294,10 +372,12 @@ same mechanics, same expectations, just for Contacts instead of Companies.
    (everything except the current status).
 5. Click the **History** tab.
    **Expected**: a list showing at least one row: **New → Qualified**,
-   with a timestamp. This is the "visible history entry" the acceptance
-   item asks for.
+   with a timestamp, **and now also "by <your name>"** (e.g. "by Test
+   Admin") on the same row (D44 — the actor, not just the from/to statuses
+   and a timestamp).
 6. Change the status one more time (e.g. to **Contacted**) and check the
-   History tab again — it should now show **two** rows, newest first.
+   History tab again — it should now show **two** rows, newest first, each
+   still showing who made that particular change.
 7. Scroll down the Overview tab to the **"Original enquiry"** section
    (grey background, below the main field grid). It shows **Requirement**
    and, if present, **"Other captured answers"**.
@@ -327,6 +407,31 @@ dialog, toast, disappears/reappears with the Active/Archived filter).
       tab.
 - [ ] **§1.7 / §3.6**: archived records disappear from the default list
       and reappear after Restore, for Companies, Contacts, and Leads.
+
+### Package 2.7 (D40–D44), re-verified this round
+
+- [ ] **§1.2 / §1.6 / §3.1**: every required field is marked `*`; no field
+      anywhere still says "(optional)".
+- [ ] **§1.2**: Company's "More details" section is collapsed by default on
+      create, and on edit only opens automatically when it already has a
+      value in one of its fields (§1.5 step 3).
+- [ ] **§1.2a**: the Phone field is a country-code select (defaulting
+      +91) plus a number box everywhere it appears (Company, Contact,
+      Lead); an invalid number (wrong length, wrong starting digit for
+      +91) is rejected; a saved number displays grouped
+      ("+91 98400 12345"), never as raw digits.
+- [ ] **§1.5a**: a fresh Add company / Add lead / Add contact always opens
+      blank, even right after visiting it, abandoning a draft, and coming
+      back.
+- [ ] **§1.6 step 6 / §2.1**: Contacts now require an email or a phone,
+      the same rule Leads already had.
+- [ ] **§3.2**: Lead's Source defaults to "Manual" without any click
+      needed, and never overrides a source you explicitly picked.
+- [ ] **§3.1 / §1.6 step 6**: the "provide an email or a phone" hint is
+      visible only while the rule is actually unmet, on both the Lead form
+      and the Contact dialog.
+- [ ] **§3.5 step 5**: each History row names who made that status change,
+      not just the from/to statuses and a timestamp.
 
 ## 5. Design-system spot-check (re-run from Day 1, on these new screens)
 

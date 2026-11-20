@@ -112,6 +112,16 @@ them next session:
   after one is filled in, instead of only showing while the rule is actually
   unmet (D44).
 
+**Update, same calendar date, a later session: all five of the above
+(package 2.7, items 1–4) are now built and verified** — see
+`docs/decisions.md` D45 and `docs/PROJECT-STATE.md` §7 for what was
+actually done, including two real bugs found and fixed while building it
+(the Cache Components root cause behind D42, confirmed from Next's own
+docs rather than left as a guess; and a real state-tracking bug in the new
+phone input, found by its own test suite before it shipped). 244
+`apps/api` + 53 `apps/web` = 297 tests. Item 5 (this kind of documentation
+pass) is what produced this note.
+
 Separately, every session that built UI also did what verification it
 could **without** a browser (no browser-automation tool is available in
 this environment): `curl`/direct API calls to prove endpoints return the
