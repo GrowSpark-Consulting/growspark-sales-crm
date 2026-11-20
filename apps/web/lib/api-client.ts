@@ -91,3 +91,8 @@ export function apiPost<T>(path: string, data?: unknown): Promise<T> {
 export function apiPatch<T>(path: string, data: unknown): Promise<T> {
   return apiFetch<T>(path, { method: "PATCH", body: JSON.stringify(data) });
 }
+
+/** Package 3.3: the deal-contacts endpoint is the first PUT route in this app. */
+export function apiPut<T>(path: string, data: unknown): Promise<T> {
+  return apiFetch<T>(path, { method: "PUT", body: JSON.stringify(data) });
+}

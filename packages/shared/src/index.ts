@@ -124,10 +124,13 @@ export {
   closeDealSchema,
   setDealContactsSchema,
   listDealsQuerySchema,
+  dealContactSummarySchema,
   dealResponseSchema,
   dealsListResponseSchema,
   dealContactResponseSchema,
   dealContactsResponseSchema,
+  dealStageHistoryResponseSchema,
+  dealStageHistoryListResponseSchema,
 } from './deals.js';
 export type {
   DealStatus,
@@ -137,8 +140,10 @@ export type {
   CloseDealInput,
   SetDealContactsInput,
   ListDealsQuery,
+  DealContactSummary,
   DealResponse,
   DealContactResponse,
+  DealStageHistoryResponse,
 } from './deals.js';
 export {
   stageTypeSchema,

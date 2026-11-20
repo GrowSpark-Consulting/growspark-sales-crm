@@ -71,10 +71,30 @@ export const listDealsQuerySchema = pageQuerySchema.extend({
   status: dealStatusSchema.optional(),
   stageId: z.uuid().optional(),
   companyId: z.uuid().optional(),
+  /**
+   * Package 3.3 (not in 3.2's original brief): needed so a Contact's detail
+   * page can show "deals this contact is on", the same way companyId
+   * already supports a Company's Deals tab. Filters via the DealContact
+   * join table (a deal can have several contacts), not a direct column.
+   */
+  contactId: z.uuid().optional(),
   ownerId: z.uuid().optional(),
   archived: booleanQueryParam.optional(),
 });
 export type ListDealsQuery = z.infer<typeof listDealsQuerySchema>;
+
+/**
+ * Package 3.3 (not in 3.2's original brief): a deal's linked contacts,
+ * named so the Contacts tab can list them without a second round trip per
+ * contact. Read-only summary — adding/removing/re-marking primary still
+ * only ever happens through PUT /deals/:id/contacts.
+ */
+export const dealContactSummarySchema = z.object({
+  contactId: z.string(),
+  contactName: z.string(),
+  isPrimary: z.boolean(),
+});
+export type DealContactSummary = z.infer<typeof dealContactSummarySchema>;
 
 export const dealResponseSchema = z.object({
   id: z.string(),
@@ -96,6 +116,7 @@ export const dealResponseSchema = z.object({
   archivedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  contacts: z.array(dealContactSummarySchema),
 });
 export type DealResponse = z.infer<typeof dealResponseSchema>;
 
@@ -111,3 +132,21 @@ export const dealContactResponseSchema = z.object({
 export type DealContactResponse = z.infer<typeof dealContactResponseSchema>;
 
 export const dealContactsResponseSchema = z.object({ data: z.array(dealContactResponseSchema) });
+
+/**
+ * Package 3.3 (not in 3.2's original brief): GET /deals/:id/stage-history,
+ * the same shape and reasoning as Lead's status-history (D35) — newest
+ * first, with the actor's name joined at query time.
+ */
+export const dealStageHistoryResponseSchema = z.object({
+  id: z.string(),
+  dealId: z.string(),
+  fromStageId: z.string().nullable(),
+  toStageId: z.string(),
+  changedById: z.string(),
+  changedByName: z.string(),
+  createdAt: z.string(),
+});
+export type DealStageHistoryResponse = z.infer<typeof dealStageHistoryResponseSchema>;
+
+export const dealStageHistoryListResponseSchema = z.object({ data: z.array(dealStageHistoryResponseSchema) });

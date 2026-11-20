@@ -122,9 +122,14 @@ describe('Deals CRUD', () => {
     const api = authed(app, token);
     const company = await createCompany(tenant);
     const contactA = await prisma.contact.create({ data: { organizationId: tenant.organization.id, firstName: 'A' } });
-    const contactB = await prisma.contact.create({ data: { organizationId: tenant.organization.id, firstName: 'B' } });
+    const contactB = await prisma.contact.create({
+      data: { organizationId: tenant.organization.id, firstName: 'B', lastName: 'Two' },
+    });
     const createRes = await api.post('/api/v1/deals', { name: 'Contacts Deal', companyId: company.id });
     const dealId = createRes.body.data.id as string;
+    // A freshly created deal has no contacts yet — the GET response's
+    // summary array is genuinely empty, not merely absent (package 3.3).
+    expect(createRes.body.data.contacts).toEqual([]);
 
     const putRes = await api.put(`/api/v1/deals/${dealId}/contacts`, {
       contactIds: [contactA.id, contactB.id],
@@ -135,11 +140,44 @@ describe('Deals CRUD', () => {
     const primary = putRes.body.data.find((c: { contactId: string }) => c.contactId === contactB.id);
     expect(primary.isPrimary).toBe(true);
 
+    // GET /deals/:id's own `contacts` summary (package 3.3) reflects the
+    // same state, including the joined contact name, without a second
+    // round trip per contact.
+    const getRes = await api.get(`/api/v1/deals/${dealId}`);
+    expect(getRes.body.data.contacts).toHaveLength(2);
+    const summaryB = getRes.body.data.contacts.find((c: { contactId: string }) => c.contactId === contactB.id);
+    expect(summaryB.contactName).toBe('B Two');
+    expect(summaryB.isPrimary).toBe(true);
+    const summaryA = getRes.body.data.contacts.find((c: { contactId: string }) => c.contactId === contactA.id);
+    expect(summaryA.isPrimary).toBe(false);
+
     // Replacing again drops the old set entirely.
     const secondPutRes = await api.put(`/api/v1/deals/${dealId}/contacts`, { contactIds: [contactA.id] });
     expect(secondPutRes.status).toBe(200);
     expect(secondPutRes.body.data).toHaveLength(1);
     expect(secondPutRes.body.data[0].contactId).toBe(contactA.id);
+
+    const getAfterSecondPut = await api.get(`/api/v1/deals/${dealId}`);
+    expect(getAfterSecondPut.body.data.contacts).toHaveLength(1);
+    expect(getAfterSecondPut.body.data.contacts[0].contactId).toBe(contactA.id);
+  });
+
+  it('GET /deals?contactId= filters to deals that contact is linked to', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const app = createApp();
+    const api = authed(app, token);
+    const company = await createCompany(tenant);
+    const contact = await prisma.contact.create({ data: { organizationId: tenant.organization.id, firstName: 'Linked' } });
+    const linkedDeal = await api.post('/api/v1/deals', { name: 'Linked Deal', companyId: company.id });
+    const unlinkedDeal = await api.post('/api/v1/deals', { name: 'Unlinked Deal', companyId: company.id });
+    await api.put(`/api/v1/deals/${linkedDeal.body.data.id}/contacts`, { contactIds: [contact.id] });
+
+    const res = await api.get(`/api/v1/deals?contactId=${contact.id}`);
+    expect(res.status).toBe(200);
+    const ids = res.body.data.map((d: { id: string }) => d.id);
+    expect(ids).toContain(linkedDeal.body.data.id);
+    expect(ids).not.toContain(unlinkedDeal.body.data.id);
   });
 
   it('Staff can create, edit, and archive deals (D29 equal standing)', async () => {

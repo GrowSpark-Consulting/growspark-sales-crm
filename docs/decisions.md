@@ -1742,3 +1742,114 @@ reconstructed from memory, and cross-checked against each commit's own message.
   3.2 calls (company-name-required-to-create, D46; reopen-to-first-open-
   stage and archive/restore-allowed-on-closed-deals, both D47) — not because
   anything about them changed or needed re-deciding.
+- **D48** — Package 3.3 (Deals list, forms, detail, close dialogs), built
+  2026-11-20. Three backend additions found necessary while building the
+  UI, each flagged against the 3.3 brief's pre-approved allowance before
+  being built (the fourth — a lead conversion summary on `GET /leads/:id`
+  — was deliberately deferred to 3.5, where it's actually consumed, not
+  built speculatively now):
+  - **`contactId` filter on `GET /deals`** (`packages/shared/src/deals.ts`'s
+    `listDealsQuerySchema`): filters via the `DealContact` join table
+    (`dealContacts: { some: { contactId } }`) — a deal has no direct
+    `contactId` column, unlike `companyId`. Not used by 3.3 itself; added
+    now because 3.5's Contact "Deals" tab will need it and the one-line
+    schema/service change was trivial alongside the rest of this package.
+  - **`GET /deals/:id/stage-history`** (`dealStageHistoryResponseSchema`,
+    `listDealStageHistory` in `deals.service.ts`): the Stage history tab's
+    data source, same shape and reasoning as Lead's status-history (D35) —
+    newest first, with the actor's name joined at query time
+    (`changedBy.name`), ids for `fromStageId`/`toStageId` rather than
+    names (the frontend already holds the pipeline's stage list from `GET
+    /pipeline/stages` and maps ids to names itself, so the history
+    endpoint doesn't need to duplicate that join).
+  - **A real gap found while building the Contacts tab, stopped and asked
+    per instruction** (not covered by the three pre-approved additions):
+    the brief asks the Contacts tab to *list* a deal's contacts, but the
+    only existing route, `PUT /deals/:id/contacts`, only ever returns the
+    state *after* a write — there was no way to read a deal's current
+    contacts on first page load. Asked; approved option: extend
+    `dealResponseSchema` itself with a read-only `contacts:
+    { contactId, contactName, isPrimary }[]` summary (mirrors the
+    lead-conversion-summary allowance's own shape), populated by a `Prisma
+    include` (`dealContactsInclude`, joining `DealContact.contact.{firstName,
+    lastName}`) added to every query that builds a `DealResponse` — create,
+    get, update, move-stage, close, reopen, archive, restore, and the list
+    endpoint all return the same, always-accurate `contacts` array; a
+    freshly created deal correctly returns `contacts: []`, not an absent
+    field. `apps/web`'s `DealContactsTab` reads this field directly off the
+    `deal` object it already has — no second round trip, no `useQueries`
+    fan-out over individual contact ids (the alternative considered and
+    rejected when the gap was first found).
+  - **`DealForm`** (`apps/web/components/deals/deal-form.tsx`): one shared
+    create/edit form, same "validate against the create schema even when
+    editing" convention as Company/Contact (D38) — `updateDealSchema` has
+    no `stageId` key at all (D47: stage changes only ever go through `POST
+    /deals/:id/stage`), so the Stage `Select` is rendered **only in create
+    mode**; submitting it anyway in edit mode would be harmless (an unknown
+    key is silently stripped, same as Lead's read-only fields, D35), but
+    hiding it is more honest about what editing can actually change.
+    `value`/`probability` needed the same `z.coerce.number()` →
+    non-coercing-override fix as Company's `annualRevenue` (D38) and Lead's
+    `estimatedBudget` (D39) — the third time this exact Zod v4 gotcha has
+    been hit, not a new discovery. Create mode defaults Stage to the
+    pipeline's first `OPEN` stage once stages load and copies its
+    probability onto the Probability field (same "preselect a sensible
+    default, never override an explicit pick" pattern as Lead's Source,
+    D40/D45) — changing Stage before submit re-copies the new stage's
+    probability the same way `moveDealStage` does probability as an
+    auto-filled *suggestion* once, which the user may then freely edit,
+    matching exactly what the API itself does on a real stage move (D47).
+  - **`ContactSelect`** (`apps/web/components/pickers/contact-select.tsx`):
+    a new async combobox picker, the same hand-built pattern as
+    `CompanySelect` (D37) — no second Combobox/Command primitive added for
+    one picker. Takes an optional `companyId` to narrow the search (used
+    by the Contacts tab, scoped to the deal's own company) but does not
+    require the match to belong to that company — a deal's contacts are
+    not schema-restricted to its own company's contacts either, so the
+    picker doesn't invent a restriction the API doesn't enforce.
+  - **`DealContactsTab`**: add/remove/make-primary all go through one
+    `replaceContacts(contactIds, primaryContactId)` helper that always
+    calls the one real mutation, `PUT /deals/:id/contacts` (full replace,
+    D47) — there is no partial add/remove endpoint, so the tab computes
+    the next full list client-side (current contacts plus or minus one,
+    or the same list with a different `primaryContactId`) before every
+    call. Hidden entirely behind the same `status !== 'OPEN'` closed-deal
+    check the rest of the detail page actions use (D47) — contact changes
+    on a closed deal are blocked in the UI exactly as they already are at
+    the API.
+  - **`apiPut`** added to `apps/web/lib/api-client.ts` — the first `PUT`
+    route this app's frontend has needed; same shape as the existing
+    `apiPost`/`apiPatch`.
+  - **Detail page actions, closed-deal gating**: Edit, Move stage (a
+    `DropdownMenu` listing the pipeline's other `OPEN` stages — not a
+    persistent `Select`, since this is a one-shot action, not a stored
+    selection), Close as Won (`ConfirmActionDialog`, a plain confirm), and
+    Close as Lost (`CloseLostDialog`, new — a reason from `LOSS_REASONS` is
+    required before its submit button enables) are all hidden once
+    `deal.status !== 'OPEN'`; Reopen appears only then. **Archive/Restore
+    are shown regardless of status** — the UI mirrors D47's own backend
+    choice exactly, not an independent frontend decision.
+  - **Weighted value is computed client-side**
+    (`Number(deal.value) * deal.probability / 100`) for the key-facts strip
+    display only — the authoritative weighted-value arithmetic for the
+    *pipeline* (summed across many deals) still happens entirely in
+    Postgres (`pipeline.service.ts`, D47); this is a single-deal display
+    convenience, not a second source of truth for anything aggregated.
+  - **Testing**: component tests avoid simulating a Radix `Select`
+    dropdown's open/pick interaction — consistent with every existing test
+    in this repo (`lead-form.test.tsx`'s Source-preselect test only ever
+    asserts the trigger's *displayed* text, never opens it) — so "stage
+    change pre-fills probability" is tested via the create-mode *default*
+    autofill (the same code path `onValueChange` would also run), not a
+    simulated manual pick; "Lost dialog cannot submit without a reason" is
+    tested by opening the dialog (Radix `Dialog`, not `Select` — no
+    established avoidance pattern for that one) and asserting the footer
+    button's `disabled` property directly (no `@testing-library/jest-dom`
+    in this repo, D37, so no `toBeDisabled()` matcher). 10 new `apps/web`
+    tests (`deal-form.test.tsx`, `close-lost-dialog.test.tsx`,
+    `deal-detail-page-client.test.tsx`); 4 new `apps/api` tests (the
+    `contacts` summary round-trip, the `contactId` filter, and the
+    stage-history endpoint's ordering/actor/cross-org cases — the latter
+    across its own 3-test file). `pnpm typecheck && pnpm lint && pnpm test
+    && pnpm build` all pass clean (279 `apps/api` + 63 `apps/web` = 342
+    tests).

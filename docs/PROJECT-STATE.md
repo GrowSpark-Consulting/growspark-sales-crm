@@ -91,9 +91,26 @@ detail, including the five judgment calls approved alongside these two
 packages, is in `docs/decisions.md` D46/D47 — see §7 below for the
 package-by-package summary and §9 for the decisions index. 275 `apps/api`
 tests (up from 244) and 53 `apps/web` tests (unchanged), 328 total, all
-passing. Nothing pushed. Packages 3.3 (deals list/forms/detail UI), 3.4
-(the Kanban pipeline board), and 3.5 (the convert dialog and related tabs)
-are next.
+passing. Nothing pushed.
+
+**Update, same session — package 3.3 (Deals list, forms, detail, close
+dialogs) is built.** `/deals` (list, with search/stage/status/owner/company
+filters and an archived toggle, all server-side); `/deals/new` and
+`/deals/[id]/edit` (one shared `DealForm` — Stage is create-only, since
+`PATCH` has no `stageId` key at all, D47); `/deals/[id]` (key-facts strip —
+Company, Stage, Value, Probability, Weighted value, Expected close, Owner —
+plus Overview/Contacts/Stage history tabs and the full action set: Edit,
+Move stage, Close as Won, Close as Lost with a required reason, Reopen, and
+Archive/Restore, all correctly gated by the deal's open/closed status per
+D47). Three backend additions found necessary while building this (a
+`contactId` filter on `GET /deals`; `GET /deals/:id/stage-history`; and a
+`contacts` summary array added to `dealResponseSchema` itself, after
+stopping to ask when the brief's "list this deal's contacts" requirement
+turned out to have no corresponding read endpoint) — full detail in
+`docs/decisions.md` D48. 279 `apps/api` tests (up from 275) and 63
+`apps/web` tests (up from 53), 342 total, all passing. Nothing pushed.
+**Packages 3.4 (the Kanban pipeline board) and 3.5 (the convert dialog and
+related tabs) are next.**
 
 ## 2. Hard constraints
 
@@ -268,6 +285,8 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
       contacts/page.tsx, contacts/[id]/page.tsx   (2.5, D38) same pattern
       leads/page.tsx, leads/new/page.tsx, leads/[id]/page.tsx,
       leads/[id]/edit/page.tsx   (2.6, D39) same thin-wrapper pattern
+      deals/page.tsx, deals/new/page.tsx, deals/[id]/page.tsx,
+      deals/[id]/edit/page.tsx   (3.3, D48) same thin-wrapper pattern
   components/
     auth-guard.tsx          useMe()-driven redirect: unauth'd -> /login?
                         next=..., shows a Skeleton while loading; also
@@ -316,7 +335,10 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     pickers/                owner-select.tsx, company-select.tsx (2.4, D37)
                         — OwnerSelect wraps Select over GET /users/options
                         (form use only); CompanySelect is a hand-built
-                        async combobox (no Combobox primitive installed)
+                        async combobox (no Combobox primitive installed);
+                        contact-select.tsx (3.3, D48) — the same hand-built
+                        combobox pattern, optionally scoped by companyId,
+                        used by the deal Contacts tab
     companies/              companies-page-client.tsx (2.4, D37) — the
                         Companies list: DataTable + SearchInput +
                         useListUrlState, owner/archived filters, sortable
@@ -362,6 +384,33 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         current status, hidden entirely once CONVERTED;
                         read-only original-enquiry panel; History tab, now
                         showing "by <name>" per row, 2.7 item 4 D44)
+    deals/                  (3.3, D48) deals-page-client.tsx (list:
+                        search/stage/status/owner/company filters +
+                        archived toggle, sortable name/value/probability/
+                        expectedCloseDate only — DEAL_SORT_FIELDS); deal-
+                        form.tsx (one shared create/edit form; Stage is
+                        create-only — updateDealSchema has no stageId key
+                        at all, D47 — defaults to the pipeline's first open
+                        stage and copies its probability; value/probability
+                        need the same z.coerce.number() override as
+                        Company/Lead, D38/D39); create-deal-page-client.tsx,
+                        edit-deal-page-client.tsx (refuses to render the
+                        form at all for a closed deal, a backstop alongside
+                        the detail page's own hidden Edit link);
+                        deal-detail-page-client.tsx (RecordLayout; key
+                        facts include a client-computed Weighted value;
+                        Overview/Contacts/Stage history tabs; Move stage via
+                        a DropdownMenu, not a persistent Select, since it's
+                        a one-shot action; Close as Won via
+                        ConfirmActionDialog, Close as Lost via the new
+                        CloseLostDialog; Reopen only once closed; Archive/
+                        Restore always available, per D47); deal-contacts-
+                        tab.tsx (reads the deal's own `contacts` summary
+                        directly — no second request; add/remove/make-
+                        primary all funnel through one replaceContacts()
+                        helper calling the one real PUT endpoint); close-
+                        lost-dialog.tsx (submit disabled until a
+                        LOSS_REASONS reason is chosen)
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx,
                         users-page-client.tsx (2.0, D31 — the Client
@@ -391,11 +440,16 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     use-leads.ts            (2.6, D39) useLeadsList(params), useLead(id),
                         useLeadStatusHistory(id)
     use-lead-sources.ts     (2.6, D39) GET /lead-sources, for the Source select
+    use-deals.ts            (3.3, D48) useDealsList(params), useDeal(id),
+                        useDealStageHistory(id)
+    use-pipeline.ts         (3.3, D48) usePipelineStages(), usePipelineSummary()
   lib/
     api-client.ts           ApiError + apiGet/apiPost/apiPatch, same-origin
                         credentials; onUnauthorized(listener) — apiFetch
                         calls the registered listener on every 401,
-                        regardless of caller (D28)
+                        regardless of caller (D28); apiPut (3.3, D48 — the
+                        first PUT route this frontend has needed, for
+                        PUT /deals/:id/contacts)
     handle-form-error.ts    the one place that decides: 422 -> field errors,
                         409/401/403 -> inline banner, 500/network -> toast
                         with request id (D26)
@@ -411,6 +465,8 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     lead-presentation.ts    (2.6, D39) leadStatusLabel/leadStatusBadgeVariant,
                         priorityLabel/priorityBadgeVariant — reuses the
                         Badge README's status-tone mapping (D27)
+    deal-presentation.ts    (3.3, D48) dealStatusLabel/dealStatusBadgeVariant
+                        — same tone-mapping pattern as lead-presentation.ts
     datetime-local.ts       (2.6, D39) toDatetimeLocalValue/
                         fromDatetimeLocalValue — bridges the native
                         <input type="datetime-local"> (bare local string,
@@ -422,7 +478,13 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         no DOM needed) (D28)
   tests/components/        (2.4, D37) data-table.test.tsx (7),
                         search-input.test.tsx (4), owner-select.test.tsx
-                        (3, mocked fetch + QueryClientProvider)
+                        (3, mocked fetch + QueryClientProvider); package
+                        3.3's deal-form.test.tsx (D42 reset-target, create-
+                        mode-defaults-prefill-probability, no Stage field
+                        in edit mode), close-lost-dialog.test.tsx (submit
+                        disabled until a reason is chosen), deal-detail-
+                        page-client.test.tsx (closed deal hides Edit/Move
+                        stage/Close actions and shows Reopen instead)
   tests/setup.ts            (2.4, D37) afterEach(cleanup) for
                         @testing-library/react — not automatic without
                         vitest's globals:true, which this repo doesn't use
@@ -510,7 +572,13 @@ apps/api/               Express 5 app (port 4000)
                         (Won/Lost, Lost requires a LOSS_REASONS reason),
                         POST /:id/reopen (back to the pipeline's first open
                         stage), PUT /:id/contacts (full replace + one
-                        primary), deals:read/write, records:archive
+                        primary), deals:read/write, records:archive;
+                        GET /:id/stage-history (3.3, D48 — same shape as
+                        Lead's status-history, D35); every query that
+                        builds a DealResponse now includes dealContacts
+                        (3.3, D48's `dealContactsInclude` — one shared
+                        Prisma include, not duplicated per query) so the
+                        response's `contacts` summary is always accurate
       pipeline/           pipeline.service.ts, pipeline.routes.ts (3.2,
                         D47) — GET /pipeline/stages, GET /pipeline/summary
                         (per-stage + open totals computed entirely in
@@ -568,7 +636,11 @@ apps/api/               Express 5 app (port 4000)
                         (including the closed-deal-is-read-only 409s and
                         the probability-overwrite behaviour), and the
                         pipeline summary cross-checked against an
-                        independently hand-written SQL query
+                        independently hand-written SQL query;
+                        stage-history.test.ts (3.3, D48) — ordering, actor
+                        name, Staff can read, cross-org/missing 404; crud
+                        tests extended with the `contacts` summary
+                        round-trip and the new contactId filter
 
 packages/shared/        Zod schemas + enums, consumed as a compiled package
   src/roles.ts           ROLES enum
@@ -625,9 +697,17 @@ packages/shared/        Zod schemas + enums, consumed as a compiled package
                         deliberately excluded — create-only, same pattern
                         as Lead's requirement), create/update/moveStage/
                         close/setContacts schemas, listDealsQuerySchema
-                        (status/stageId/companyId/ownerId/archived/q/sort —
-                        no contactId filter yet, see 3.3's brief),
-                        dealResponseSchema, dealContactResponseSchema
+                        (status/stageId/companyId/contactId/ownerId/
+                        archived/q/sort — contactId added in 3.3, D48, for
+                        3.5's Contact Deals tab); dealResponseSchema now
+                        carries a `contacts` summary array (3.3, D48 — a
+                        read gap found and approved while building the
+                        Contacts tab); dealContactResponseSchema (the PUT
+                        response shape, unchanged);
+                        dealStageHistoryResponseSchema +
+                        dealStageHistoryListResponseSchema (3.3, D48 — GET
+                        /deals/:id/stage-history, same shape as Lead's
+                        status history, D35)
   src/pipeline.ts        (3.2, D47) stageTypeSchema,
                         pipelineStageResponseSchema,
                         pipelineSummaryResponseSchema (per-stage totals +
@@ -1148,6 +1228,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D45 — Package 2.7 (items 1–4, closing out D40–D44): D42's root cause confirmed from Next's own bundled docs (Cache Components hides a page with React's `Activity` instead of unmounting, effect cleanup still fires on hide) and fixed with a `useLayoutEffect` cleanup that resets create-mode forms to blank, including `ContactFormDialog` force-closing itself; D41's `packages/shared/src/phone.ts` (fixed country-code list, strict `phoneFieldSchema`, a reserved-unused `parsePhoneLenient` for future website intake) plus a `PhoneInput` component, and a found-and-fixed bug where the component mistook its own just-emitted `onChange` for an external change; D40's Company "More details" `Collapsible` (new primitive, not yet in `docs/design-system/`) and Lead's Source preselecting "Manual" by name; D43's `contacts.ts` restructured like `leads.ts` (D39) plus a service-level post-patch guard, with seven pre-existing tests fixed that created email/phone-less contacts; D44's `changedByName` join and the hint's visibility fix. 244 `apps/api` + 53 `apps/web` = 297 tests.
 - D46 — Package 3.1 (lead conversion transaction, built 2026-11-20, documented in this same-day catch-up pass before 3.3): one `$transaction` with a `SELECT ... FOR UPDATE` row lock on the lead, link-or-create Company (422 if creating one and the lead has no company name — judgment call, no placeholder name invented), link-with-fill-empty-only-or-create Contact (an existing contact's company is never overwritten), an optional Deal in the pipeline's first open stage with its `DealContact`/first `DealStageHistory` row, then convert + history + `LeadConversion` row + activity repoint + audit, all in the same transaction; `GET /leads/:id/conversion-matches` (plain, non-blocking) and `POST /leads/:id/convert`; `getDefaultPipeline`/`getFirstOpenStage` built here, reused by 3.2; `tests/helpers/tenant.ts` extended with a real six-stage pipeline per tenant
 - D47 — Package 3.2 (Deals API, stage moves, close/reopen, pipeline summary, built 2026-11-20, documented in the same catch-up pass): full Deal CRUD; `stageId` excluded from the shared update field map (create-only, like Lead's `requirement`); stage move refuses a non-open target (422) or a non-open deal (409) and copies the target stage's probability every time (roadmap D7, overwrites a manual edit by design); close requires a `LOSS_REASONS` reason for Lost; **reopen returns the deal to the pipeline's first open stage** (judgment call — the brief doesn't say which stage to land on); **archive/restore are deliberately NOT blocked by the closed-deal-is-read-only rule** (judgment call — archiving is a records-management action, not a pipeline mutation); `PUT /deals/:id/contacts` fully replaces the set with one primary; `GET /pipeline/{stages,summary}`, the summary computed entirely as Postgres SQL (`COALESCE`/`SUM`/weighted-value multiplication over `NUMERIC`, never JS floats) and cross-checked in its test against an independently hand-written SQL query — found empirically that `Prisma.Decimal` stringifies an empty stage's zero as `"0"`, not `"0.00"`
+- D48 — Package 3.3 (Deals list, forms, detail, close dialogs): three backend additions found while building the UI — `contactId` filter on `GET /deals` (via the `DealContact` join, for 3.5's Contact Deals tab); `GET /deals/:id/stage-history` (same shape as Lead's status-history, D35); and, after stopping to ask because it was genuinely outside the pre-approved allowance, a `contacts` summary array added to `dealResponseSchema` itself (populated by one shared `dealContactsInclude` Prisma include reused across every Deal query), so the Contacts tab can read a deal's current contacts without a second round trip or a `PUT` just to list them. `DealForm` shares create/edit (Stage is create-only — `updateDealSchema` has no `stageId` key); hit the same `z.coerce.number()` gotcha as Company/Lead (D38/D39) for `value`/`probability`. `ContactSelect` (new picker, same hand-built pattern as `CompanySelect`, D37). Detail-page actions (Edit, Move stage, Close Won/Lost, Reopen) are gated by `deal.status`; Archive/Restore are not, mirroring D47's backend choice exactly. Component tests deliberately avoid simulating a Radix `Select` open/pick (no existing test in this repo does either) — "stage pre-fills probability" is proven via the create-mode default-autofill, not a simulated manual pick.
 
 ## 10. Gotchas and lessons learned
 
@@ -1271,9 +1352,11 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `tests/components/owner-select.test.tsx` (3) — the last three package
   2.4; plus package 2.7's `tests/components/lead-form.test.tsx`,
   `company-form.test.tsx`, `contact-form-dialog.test.tsx`, and
-  `phone-input.test.tsx`), and `apps/api` (`vitest run`) — **275 `apps/api`
-  tests + 53 `apps/web` tests, 328 total**, all passing as of the last run
-  (package 3.2). Package 2.7 (items 1–4) brought the count to 244 + 53 =
+  `phone-input.test.tsx`; plus package 3.3's `deal-form.test.tsx`,
+  `close-lost-dialog.test.tsx`, `deal-detail-page-client.test.tsx`), and
+  `apps/api` (`vitest run`) — **279 `apps/api` tests + 63 `apps/web` tests,
+  342 total**, all passing as of the last run (package 3.3). Package 2.7
+  (items 1–4) brought the count to 244 + 53 =
   297 (D42's reset-on-hide tests, D41's phone-validation and `PhoneInput`
   composition tests, D40/D43's "More details"/Source-preselect/Contact-
   email-or-phone tests, D44's actor-name and hint-visibility tests — full
@@ -1281,7 +1364,11 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   (`tests/leads/conversion.test.ts` — every conversion combination, a
   forced mid-transaction rollback, two concurrent conversions, D46) for
   256; package 3.2 added 19 (`tests/deals/{crud,stage-and-close,
-  pipeline}.test.ts`, D47) for the current 275. `apps/web` runs under jsdom (D36) with
+  pipeline}.test.ts`, D47) for 275 + 53 = 328; package 3.3 added 4
+  `apps/api` tests (the `contacts` summary round-trip and `contactId`
+  filter folded into `crud.test.ts`, plus the new
+  `stage-history.test.ts`) and 10 `apps/web` tests (D48) for the current
+  279 + 63 = 342. `apps/web` runs under jsdom (D36) with
   `tests/setup.ts` registering RTL's `afterEach(cleanup)` (D37) —
   needed because RTL's own auto-cleanup never self-registers without
   vitest's `globals: true`, which this repo doesn't use.
@@ -1457,11 +1544,16 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   file was updated for both in a docs-only catch-up pass on 2026-11-20,
   done immediately before package 3.3 started, once it was noticed the
   docs hadn't kept pace with the two already-shipped commits. 275
-  `apps/api` + 53 `apps/web` = 328 tests, nothing pushed. **Packages 3.3
-  (deals list/forms/detail UI), 3.4 (the Kanban pipeline board), and 3.5
-  (the convert dialog and related tabs) are next.** Day 6/7 (testing,
-  stabilisation, demo) remain explicitly out of scope until the build days
-  are done.
+  `apps/api` + 53 `apps/web` = 328 tests, nothing pushed.
+- **Package 3.3 (Deals list, forms, detail, close dialogs) is built** —
+  full detail in §7 and `docs/decisions.md` D48. A real gap (no way to
+  read a deal's current contacts before any write) was found while
+  building the Contacts tab; stopped and asked per instruction; approved
+  option built (a `contacts` summary on `dealResponseSchema` itself). 279
+  `apps/api` + 63 `apps/web` = 342 tests, nothing pushed. **Packages 3.4
+  (the Kanban pipeline board) and 3.5 (the convert dialog and related
+  tabs) are next, in the same session.** Day 6/7 (testing, stabilisation,
+  demo) remain explicitly out of scope until the build days are done.
 
 ## 14. Open questions and unverified items
 
@@ -2103,3 +2195,52 @@ log just records that a session happened and what it covered.
   One docs-only commit. Nothing pushed. Packages 3.3 (deals list/forms/
   detail UI), 3.4 (the Kanban pipeline board), and 3.5 (the convert dialog
   and related tabs) are next, in the same session.
+- **2026-11-20 (same session, continued) — package 3.3, Deals list, forms,
+  detail, close dialogs.** Backend groundwork first: a `contactId` filter
+  on `GET /deals` (via the `DealContact` join — a deal has no direct
+  contact column), ahead of 3.5's Contact Deals tab; `GET
+  /deals/:id/stage-history` (`dealStageHistoryResponseSchema`,
+  `listDealStageHistory`), same shape and actor-join pattern as Lead's
+  status history (D35). While building the Contacts tab, found that the
+  brief's "list this deal's contacts" requirement had no corresponding
+  read endpoint — only `PUT /deals/:id/contacts`, which returns state only
+  after a write — stopped and asked per instruction rather than guessing;
+  approved option: extend `dealResponseSchema` itself with a `contacts:
+  { contactId, contactName, isPrimary }[]` summary, populated by one
+  shared Prisma include (`dealContactsInclude`) added to every query that
+  builds a `DealResponse` (create, get, update, move-stage, close, reopen,
+  archive, restore, list) — a freshly created deal correctly returns
+  `contacts: []`, not an absent field, confirmed by a new test.
+  Frontend: `/deals` (list — search, stage/status/owner/company filters,
+  archived toggle, sortable name/value/probability/expectedCloseDate);
+  `/deals/new` and `/deals/[id]/edit` sharing one `DealForm` (Stage is
+  create-only — `updateDealSchema` has no `stageId` key at all, D47 — and
+  defaults to the pipeline's first open stage, copying its probability;
+  hit the same `z.coerce.number()` Zod v4 gotcha as Company/Lead for
+  `value`/`probability`, same fix as D38/D39, the third time now); new
+  `ContactSelect` picker (same hand-built combobox pattern as
+  `CompanySelect`, D37); `/deals/[id]` (`RecordLayout` — key facts include
+  a client-computed Weighted value; Overview/Contacts/Stage history tabs;
+  actions: Edit, Move stage via a `DropdownMenu` of the pipeline's other
+  open stages, Close as Won via a plain `ConfirmActionDialog`, Close as
+  Lost via a new `CloseLostDialog` requiring a `LOSS_REASONS` reason
+  before its submit button enables, Reopen once closed — all correctly
+  gated on `deal.status`; Archive/Restore are **not** gated, mirroring
+  D47's backend choice exactly, not an independent frontend call). New
+  `apiPut` added to `lib/api-client.ts` — this app's first `PUT` route.
+  Component tests deliberately avoid simulating a Radix `Select`
+  dropdown's open/pick interaction, the same restraint every existing test
+  in this repo already shows (`lead-form.test.tsx`'s Source-preselect test
+  only ever reads the trigger's displayed text) — "stage pre-fills
+  probability" is proven via the create-mode default-autofill (the same
+  code path a real pick would also run), and "Lost dialog cannot submit
+  without a reason" is proven by opening the `Dialog` (not a `Select` —
+  no established avoidance pattern needed there) and reading the footer
+  button's `disabled` property directly, since this repo has no
+  `@testing-library/jest-dom` (D37) and therefore no `toBeDisabled()`
+  matcher. `pnpm typecheck && pnpm lint && pnpm test && pnpm build` all
+  pass clean (279 `apps/api`: 275 carried over + 4 new; 63 `apps/web`: 53
+  carried over + 10 new; 342 total). One commit. Nothing pushed.
+  `docs/decisions.md` D48 has the full detail. Packages 3.4 (the Kanban
+  pipeline board) and 3.5 (the convert dialog and related tabs) are next,
+  in the same session.

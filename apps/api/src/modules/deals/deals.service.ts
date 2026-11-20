@@ -7,6 +7,7 @@ import type {
   ListDealsQuery,
   DealResponse,
   DealContactResponse,
+  DealStageHistoryResponse,
 } from '@growspark/shared';
 import { prisma } from '../../db/prisma.js';
 import { ApiError } from '../../middleware/error-handler.js';
@@ -18,7 +19,24 @@ import { getDefaultPipeline, getFirstOpenStage } from '../../lib/pipeline.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Deal, Prisma } from '../../generated/prisma/client.js';
 
-function toDealResponse(deal: Deal): DealResponse {
+/**
+ * Package 3.3 (not in 3.2's original brief): every query that feeds
+ * toDealResponse joins each deal's contacts this same way, so the response
+ * always carries a real `contacts` summary — never a second round trip per
+ * deal, and never a stale/omitted array depending on which endpoint asked.
+ */
+const dealContactsInclude = {
+  dealContacts: {
+    include: { contact: { select: { firstName: true, lastName: true } } },
+    orderBy: { createdAt: 'asc' },
+  },
+} satisfies Prisma.DealInclude;
+
+type DealWithContacts = Deal & {
+  dealContacts: { contactId: string; isPrimary: boolean; contact: { firstName: string; lastName: string | null } }[];
+};
+
+function toDealResponse(deal: DealWithContacts): DealResponse {
   return {
     id: deal.id,
     name: deal.name,
@@ -39,6 +57,11 @@ function toDealResponse(deal: Deal): DealResponse {
     archivedAt: deal.archivedAt ? deal.archivedAt.toISOString() : null,
     createdAt: deal.createdAt.toISOString(),
     updatedAt: deal.updatedAt.toISOString(),
+    contacts: deal.dealContacts.map((dc) => ({
+      contactId: dc.contactId,
+      contactName: [dc.contact.firstName, dc.contact.lastName].filter(Boolean).join(' '),
+      isPrimary: dc.isPrimary,
+    })),
   };
 }
 
@@ -92,6 +115,7 @@ export async function listDeals(ctx: RequestContext, query: ListDealsQuery): Pro
     ...(query.status ? { status: query.status } : {}),
     ...(query.stageId ? { stageId: query.stageId } : {}),
     ...(query.companyId ? { companyId: query.companyId } : {}),
+    ...(query.contactId ? { dealContacts: { some: { contactId: query.contactId } } } : {}),
     ...(query.ownerId ? { ownerId: query.ownerId } : {}),
     ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
   };
@@ -99,7 +123,7 @@ export async function listDeals(ctx: RequestContext, query: ListDealsQuery): Pro
   const orderBy = buildOrderBy(query.sort, { field: 'createdAt', direction: 'desc' });
 
   const [rows, total] = await Promise.all([
-    prisma.deal.findMany({ where, orderBy, ...toSkipTake(query) }),
+    prisma.deal.findMany({ where, orderBy, ...toSkipTake(query), include: dealContactsInclude }),
     prisma.deal.count({ where }),
   ]);
 
@@ -142,6 +166,7 @@ export async function createDeal(ctx: RequestContext, input: CreateDealInput): P
         dealType: input.dealType ?? null,
         sourceId: input.sourceId ?? null,
       },
+      include: dealContactsInclude,
     });
     await tx.dealStageHistory.create({
       data: { organizationId: ctx.orgId, dealId: deal.id, fromStageId: null, toStageId: stage.id, changedById: ctx.userId },
@@ -158,7 +183,7 @@ export async function createDeal(ctx: RequestContext, input: CreateDealInput): P
 }
 
 export async function getDeal(ctx: RequestContext, id: string): Promise<DealResponse> {
-  const deal = await prisma.deal.findFirst({ where: { id, ...scoped(ctx) } });
+  const deal = await prisma.deal.findFirst({ where: { id, ...scoped(ctx) }, include: dealContactsInclude });
   if (!deal) {
     throw new ApiError(404, 'NOT_FOUND', 'Deal not found');
   }
@@ -190,7 +215,7 @@ export async function updateDeal(ctx: RequestContext, id: string, input: UpdateD
       ...(input.sourceId !== undefined ? { source: input.sourceId ? { connect: { id: input.sourceId } } : { disconnect: true } } : {}),
     };
 
-    const deal = await tx.deal.update({ where: { id: existing.id }, data });
+    const deal = await tx.deal.update({ where: { id: existing.id }, data, include: dealContactsInclude });
     await writeAudit(tx, ctx, {
       action: 'deal.updated',
       entityType: 'deal',
@@ -225,6 +250,7 @@ export async function moveDealStage(ctx: RequestContext, id: string, input: Move
     const deal = await tx.deal.update({
       where: { id: existing.id },
       data: { stageId: stage.id, probability: stage.probability },
+      include: dealContactsInclude,
     });
     await tx.dealStageHistory.create({
       data: {
@@ -272,6 +298,7 @@ export async function closeDeal(ctx: RequestContext, id: string, input: CloseDea
         lostReason: input.status === 'LOST' ? (input.lostReason ?? null) : null,
         lostNote: input.status === 'LOST' ? (input.lostNote ?? null) : null,
       },
+      include: dealContactsInclude,
     });
     await tx.dealStageHistory.create({
       data: {
@@ -314,6 +341,7 @@ export async function reopenDeal(ctx: RequestContext, id: string): Promise<DealR
         lostReason: null,
         lostNote: null,
       },
+      include: dealContactsInclude,
     });
     await tx.dealStageHistory.create({
       data: {
@@ -339,7 +367,11 @@ export async function archiveDeal(ctx: RequestContext, id: string): Promise<Deal
     if (existing.archivedAt) {
       throw new ApiError(409, 'ALREADY_ARCHIVED', 'This deal is already archived.');
     }
-    const deal = await tx.deal.update({ where: { id: existing.id }, data: { archivedAt: new Date() } });
+    const deal = await tx.deal.update({
+      where: { id: existing.id },
+      data: { archivedAt: new Date() },
+      include: dealContactsInclude,
+    });
     await writeAudit(tx, ctx, { action: 'deal.archived', entityType: 'deal', entityId: deal.id });
     return deal;
   });
@@ -355,7 +387,11 @@ export async function restoreDeal(ctx: RequestContext, id: string): Promise<Deal
     if (!existing.archivedAt) {
       throw new ApiError(409, 'NOT_ARCHIVED', 'This deal is not archived.');
     }
-    const deal = await tx.deal.update({ where: { id: existing.id }, data: { archivedAt: null } });
+    const deal = await tx.deal.update({
+      where: { id: existing.id },
+      data: { archivedAt: null },
+      include: dealContactsInclude,
+    });
     await writeAudit(tx, ctx, { action: 'deal.restored', entityType: 'deal', entityId: deal.id });
     return deal;
   });
@@ -404,4 +440,30 @@ export async function setDealContacts(
     const rows = await tx.dealContact.findMany({ where: { dealId: existing.id } });
     return rows.map((row) => ({ contactId: row.contactId, isPrimary: row.isPrimary }));
   });
+}
+
+/**
+ * Package 3.3 (not in 3.2's original brief): GET /deals/:id/stage-history,
+ * the Stage history tab's data source — same shape and reasoning as
+ * leads.service.ts's listLeadStatusHistory (D35).
+ */
+export async function listDealStageHistory(ctx: RequestContext, dealId: string): Promise<DealStageHistoryResponse[]> {
+  const deal = await prisma.deal.findFirst({ where: { id: dealId, ...scoped(ctx) } });
+  if (!deal) {
+    throw new ApiError(404, 'NOT_FOUND', 'Deal not found');
+  }
+  const rows = await prisma.dealStageHistory.findMany({
+    where: { ...scoped(ctx), dealId },
+    orderBy: { createdAt: 'desc' },
+    include: { changedBy: { select: { name: true } } },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    dealId: row.dealId,
+    fromStageId: row.fromStageId,
+    toStageId: row.toStageId,
+    changedById: row.changedById,
+    changedByName: row.changedBy.name,
+    createdAt: row.createdAt.toISOString(),
+  }));
 }

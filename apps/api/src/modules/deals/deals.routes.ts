@@ -11,6 +11,7 @@ import {
   dealResponseSchema,
   dealsListResponseSchema,
   dealContactsResponseSchema,
+  dealStageHistoryListResponseSchema,
   type IdParam,
   type CreateDealInput,
   type UpdateDealInput,
@@ -185,6 +186,23 @@ export function registerDealsRoutes(app: Application): void {
         const { id } = req.params as unknown as IdParam;
         const data = await dealsService.setDealContacts(req.ctx!, id, req.body as SetDealContactsInput);
         res.status(200).json(dealContactsResponseSchema.parse({ data }));
+      } catch (err) {
+        next(err);
+      }
+    },
+  });
+
+  defineRoute({
+    app,
+    method: 'get',
+    path: '/api/v1/deals/:id/stage-history',
+    auth: PERMISSIONS.DEALS_READ,
+    validate: { params: idParamSchema },
+    handler: async (req, res, next) => {
+      try {
+        const { id } = req.params as unknown as IdParam;
+        const data = await dealsService.listDealStageHistory(req.ctx!, id);
+        res.status(200).json(dealStageHistoryListResponseSchema.parse({ data }));
       } catch (err) {
         next(err);
       }
