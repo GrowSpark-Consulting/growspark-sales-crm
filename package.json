@@ -13,6 +13,7 @@
     "db:generate": "pnpm --filter api exec prisma generate",
     "db:migrate": "pnpm --filter api exec prisma migrate deploy",
     "db:seed": "pnpm --filter api exec prisma db seed",
+    "db:seed:sample": "pnpm --filter api run db:seed:sample",
     "db:reset": "pnpm --filter api run db:reset",
     "db:verify-fresh": "pnpm --filter api run db:verify-fresh",
     "prepare": "pnpm --filter @growspark/shared build && pnpm --filter api exec prisma generate",

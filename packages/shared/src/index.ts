@@ -6,6 +6,8 @@ export type { LossReason } from './loss-reasons.js';
 export { PERMISSIONS, ROLE_PERMISSIONS, hasPermission } from './permissions.js';
 export { activityTypeSchema, activityStatusSchema, createActivitySchema, updateActivitySchema, listActivitiesQuerySchema, activityResponseSchema, activitiesListResponseSchema, activityResponseEnvelopeSchema, timelineQuerySchema, timelineResponseSchema } from './activities.js';
 export type { CreateActivityInput, UpdateActivityInput, ListActivitiesQuery, ActivityResponse, TimelineEntry } from './activities.js';
+export { todayQuerySchema, dashboardQuerySchema, todayResponseSchema, dashboardResponseSchema } from './workspace.js';
+export type { TodayQuery, DashboardQuery } from './workspace.js';
 export type { Permission } from './permissions.js';
 export { loginSchema, changePasswordSchema, meResponseSchema } from './auth.js';
 export type { LoginInput, ChangePasswordInput, MeResponse } from './auth.js';

@@ -1,5 +1,6 @@
 import type { PipelineStageResponse, PipelineSummaryResponse } from '@growspark/shared';
 import { prisma } from '../../db/prisma.js';
+import { Prisma } from '../../generated/prisma/client.js';
 import { getDefaultPipeline } from '../../lib/pipeline.js';
 import type { RequestContext } from '../../lib/context.js';
 
@@ -42,8 +43,9 @@ interface OpenTotalsRow {
  * so a Kanban board can show totals on every column); "open" is a separate
  * aggregate across only OPEN-status, non-archived deals.
  */
-export async function getPipelineSummary(ctx: RequestContext): Promise<PipelineSummaryResponse['data']> {
+export async function getPipelineSummary(ctx: RequestContext, ownerId?: string): Promise<PipelineSummaryResponse['data']> {
   const pipeline = await getDefaultPipeline(prisma, ctx.orgId);
+  const ownerFilter = ownerId ? Prisma.sql`AND d.owner_id = ${ownerId}::uuid` : Prisma.empty;
 
   const stageRows = await prisma.$queryRaw<StageSummaryRow[]>`
     SELECT
@@ -59,6 +61,7 @@ export async function getPipelineSummary(ctx: RequestContext): Promise<PipelineS
       ON d.stage_id = ps.id
       AND d.organization_id = ps.organization_id
       AND d.archived_at IS NULL
+      ${ownerFilter}
     WHERE ps.organization_id = ${ctx.orgId}::uuid AND ps.pipeline_id = ${pipeline.id}::uuid
     GROUP BY ps.id, ps.name, ps.position, ps.type
     ORDER BY ps.position ASC
@@ -74,6 +77,7 @@ export async function getPipelineSummary(ctx: RequestContext): Promise<PipelineS
       AND pipeline_id = ${pipeline.id}::uuid
       AND status = 'OPEN'::deal_status
       AND archived_at IS NULL
+      ${ownerId ? Prisma.sql`AND owner_id = ${ownerId}::uuid` : Prisma.empty}
   `;
 
   return {

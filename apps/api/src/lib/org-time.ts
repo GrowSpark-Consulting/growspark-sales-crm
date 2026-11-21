@@ -40,17 +40,46 @@ function localMidnight(year: number, month: number, day: number, timeZone: strin
 /** Half-open UTC instants spanning the organisation's local calendar day. */
 export function orgDayBounds(now: Date, timeZone: string): InstantBounds {
   const local = zonedParts(now, timeZone);
-  const start = localMidnight(local.year, local.month, local.day, timeZone);
-  const next = new Date(Date.UTC(local.year, local.month - 1, local.day + 1));
-  return { start, end: localMidnight(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), timeZone) };
+  return orgCalendarDayBounds(local.year, local.month, local.day, timeZone);
+}
+
+export function orgCalendarDayBounds(year: number, month: number, day: number, timeZone: string): InstantBounds {
+  const normalized = new Date(Date.UTC(year, month - 1, day));
+  const next = new Date(Date.UTC(normalized.getUTCFullYear(), normalized.getUTCMonth(), normalized.getUTCDate() + 1));
+  return {
+    start: localMidnight(normalized.getUTCFullYear(), normalized.getUTCMonth() + 1, normalized.getUTCDate(), timeZone),
+    end: localMidnight(next.getUTCFullYear(), next.getUTCMonth() + 1, next.getUTCDate(), timeZone),
+  };
+}
+
+export function orgDateBounds(date: string, timeZone: string): InstantBounds {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!match) throw new RangeError('Expected an ISO calendar date');
+  return orgCalendarDayBounds(Number(match[1]), Number(match[2]), Number(match[3]), timeZone);
+}
+
+export function addOrgDays(date: Date, days: number, timeZone: string): Date {
+  const local = zonedParts(date, timeZone);
+  const target = new Date(Date.UTC(local.year, local.month - 1, local.day + days));
+  return localMidnight(target.getUTCFullYear(), target.getUTCMonth() + 1, target.getUTCDate(), timeZone);
+}
+
+export function orgDateKey(date: Date, timeZone: string): string {
+  const local = zonedParts(date, timeZone);
+  return `${String(local.year).padStart(4, '0')}-${String(local.month).padStart(2, '0')}-${String(local.day).padStart(2, '0')}`;
 }
 
 /** Half-open UTC instants spanning the organisation's local calendar month. */
 export function orgMonthBounds(now: Date, timeZone: string): InstantBounds {
   const local = zonedParts(now, timeZone);
-  const next = new Date(Date.UTC(local.year, local.month, 1));
+  return orgCalendarMonthBounds(local.year, local.month, timeZone);
+}
+
+export function orgCalendarMonthBounds(year: number, month: number, timeZone: string): InstantBounds {
+  const normalized = new Date(Date.UTC(year, month - 1, 1));
+  const next = new Date(Date.UTC(normalized.getUTCFullYear(), normalized.getUTCMonth() + 1, 1));
   return {
-    start: localMidnight(local.year, local.month, 1, timeZone),
+    start: localMidnight(normalized.getUTCFullYear(), normalized.getUTCMonth() + 1, 1, timeZone),
     end: localMidnight(next.getUTCFullYear(), next.getUTCMonth() + 1, 1, timeZone),
   };
 }

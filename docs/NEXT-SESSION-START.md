@@ -152,14 +152,11 @@ specific package you're about to work on.
 
 ### Day 4 — activities, timelines, Today workspace, dashboard
 
-This is the next work, per the roadmap. Exact scope beyond the roadmap's own
-headline items (tasks/calls/meetings/notes linked to records, timelines on
-every record type, a "Today" view, and a dashboard with KPIs and charts) is
-not yet detailed in this repo — confirm with the user before building ahead
-of what's written here, same as every other package boundary. The roadmap
-also flags Day 4 as needing agreed metric definitions before building the
-dashboard (see the roadmap PDF's own Day 4 section) — get those confirmed
-first.
+Backend packages 4.0–4.2 are complete as of 2026-11-21, including the
+owner-approved metrics and Today rules (decisions D51–D53). See
+`docs/PROJECT-STATE.md` §7 and `docs/reconciliation.md`. The Day 4 UI is
+intentionally not started; wait for the user's separate prompt before
+building it.
 
 ## Day 4: staging deployment (as currently planned)
 

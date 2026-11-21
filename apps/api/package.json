@@ -14,7 +14,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:reset": "tsx scripts/db-reset.ts",
-    "db:verify-fresh": "tsx scripts/db-verify-fresh.ts"
+    "db:verify-fresh": "tsx scripts/db-verify-fresh.ts",
+    "db:seed:sample": "tsx --env-file=.env scripts/db-seed-sample.ts"
   },
   "dependencies": {
     "@growspark/shared": "workspace:*",

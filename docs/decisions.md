@@ -2096,3 +2096,10 @@ reconstructed from memory, and cross-checked against each commit's own message.
 - Staff and Admin both use the existing `activities:read` and `activities:write` permissions; the permission table was unchanged.
 - Timelines merge activities with lead status and conversion events and deal stage history, newest first; they include a computed next open task/call/meeting.
 - `orgDayBounds` and `orgMonthBounds` are the time-boundary helpers, tested around Asia/Kolkata midnight and month change. No dependencies added.
+## D53 — Day 4 package 4.2: Today, dashboard and sample seed (2026-11-21)
+
+- `GET /today` uses `activities:read` with scope `mine` by default; `GET /dashboard` uses `dashboard:read` with scope `all` by default. Admin and Staff retain their existing permissions.
+- Dashboard metric definitions are the owner's approved roadmap table: selected-range lead cohort metrics, open-deal pipeline as an unfiltered snapshot, won/lost and revenue by `closedAt`, win rate among closed deals, overdue task/call/meeting count before the organisation's local day start, and six local-month won-revenue buckets. Every metric excludes archived records; scopes use lead/deal owner and activity assignee.
+- Money aggregations stay in PostgreSQL NUMERIC. Existing pipeline summary logic accepts an optional owner filter and is reused for the dashboard pipeline breakdown. `orgDayBounds`/`orgMonthBounds` remain the sole boundary helpers.
+- Independent test SQL covers every KPI, source/status breakdowns, pipeline stages, monthly revenue and recent activity for all/mine, one-day and empty ranges, empty organisations, and cross-organisation isolation.
+- Added `pnpm db:seed:sample`: local fictional sample records are found-or-created, dates are relative to now, three tasks are overdue, repeat execution preserves counts, and the script refuses `NODE_ENV=production`. No new dependency, schema migration or permission change. Day 4 UI is intentionally outside this prompt.

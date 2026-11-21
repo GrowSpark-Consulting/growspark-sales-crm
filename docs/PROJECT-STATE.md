@@ -1338,8 +1338,9 @@ SQL and authenticated `GET /pipeline/summary` both returned count 1, value
 migration or dependency was added. Root verification passed: 283 API + 75 web
 tests (358 total). See `docs/decisions.md` D51.
 
-**Day 3 (lead conversion, deals, pipeline) is done.** Day 4 package 4.0
-carry-overs and package 4.1 are complete; package 4.2 remains.
+**Day 3 (lead conversion, deals, pipeline) is done.** Day 4 packages 4.0,
+4.1 and 4.2 are complete. Day 4's UI is intentionally pending a separate
+user prompt.
 
 **Package 4.1 (Activities API, timelines and organisation time bounds) is complete.**
 Added `GET|POST /activities`, `GET|PATCH /activities/:id`, complete/cancel
@@ -1352,6 +1353,17 @@ and `orgMonthBounds` are the shared UTC-boundary helpers. Existing link and
 assignee/due indexes were reused; no schema migration, new permission or
 dependency. Root verification: 288 API + 75 web tests (363 total), all gates
 passed. See `docs/decisions.md` D52.
+
+**Package 4.2 (Today, dashboard and sample data) is complete.** Added
+`GET /today` (`activities:read`, default scope `mine`) and `GET /dashboard`
+(`dashboard:read`, default scope `all`). Metrics and breakdowns follow the
+approved definitions, use organisation-scoped SQL, and exclude archived
+records; metric, chart, pipeline and recent-activity results are checked
+against independent SQL for `all`/`mine`, one-day/empty ranges, empty
+organisations and cross-org isolation. Added the dev-only, production-
+refusing, idempotent `pnpm db:seed:sample` script. No schema or permission
+change and no dependency. Root verification: 290 API + 75 web tests (365
+total), all gates passed. See `docs/decisions.md` D53.
 
 ## 8. Database
 
@@ -1390,13 +1402,11 @@ passed. See `docs/decisions.md` D52.
     (Staff) — passwords come **only** from the `SEED_ADMIN_PASSWORD` /
     `SEED_STAFF_PASSWORD` env vars, no default anywhere in code.
   - 7 lead sources, 1 default pipeline ("Sales Pipeline") with 6 stages.
-- **Current state of both databases** (checked via `psql` this session):
-  both `crm_dev` and `crm_test` have the one migration applied and the full
-  seed data present (1 org / 2 users / 7 sources / 1 pipeline / 6 stages; 0
-  leads/companies/deals — nothing beyond the seed has ever been created).
-  `crm_test` additionally carries whatever the last test run left (the schema
-  tests clean up their own rows; the seed data is deliberately left in place
-  to prove idempotency).
+- **Current state after package 4.2:** `crm_dev` retains the normal seed plus
+  the fictional sample set (3 companies, 3 contacts, 5 leads, 3 deals, 12
+  activities, including 3 overdue tasks); verified by running the sample seed
+  twice and querying counts. `crm_test` is truncated by the API test harness
+  before each test and was left empty by the final root verification.
 - **No migration was added for packages 3.1 or 3.2.** Every table Day 3
   needed — `LeadConversion`, `Deal`, `DealContact`, `DealStageHistory`,
   `Pipeline`, `PipelineStage` — was already created in the one Day 1
@@ -1457,6 +1467,10 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D48 — Package 3.3 (Deals list, forms, detail, close dialogs): three backend additions found while building the UI — `contactId` filter on `GET /deals` (via the `DealContact` join, for 3.5's Contact Deals tab); `GET /deals/:id/stage-history` (same shape as Lead's status-history, D35); and, after stopping to ask because it was genuinely outside the pre-approved allowance, a `contacts` summary array added to `dealResponseSchema` itself (populated by one shared `dealContactsInclude` Prisma include reused across every Deal query), so the Contacts tab can read a deal's current contacts without a second round trip or a `PUT` just to list them. `DealForm` shares create/edit (Stage is create-only — `updateDealSchema` has no `stageId` key); hit the same `z.coerce.number()` gotcha as Company/Lead (D38/D39) for `value`/`probability`. `ContactSelect` (new picker, same hand-built pattern as `CompanySelect`, D37). Detail-page actions (Edit, Move stage, Close Won/Lost, Reopen) are gated by `deal.status`; Archive/Restore are not, mirroring D47's backend choice exactly. Component tests deliberately avoid simulating a Radix `Select` open/pick (no existing test in this repo does either) — "stage pre-fills probability" is proven via the create-mode default-autofill, not a simulated manual pick.
 - D49 — Package 3.4 (pipeline board, `@dnd-kit/core`): new dependency `@dnd-kit/core@6.3.1` only (confirmed no peer-dependency warning against `react@19.3.1` first; `/sortable`/`/utilities` deliberately not added); Board/List toggle on `/deals` kept in the URL; columns = `OPEN`-type pipeline stages only, Won/Lost totals shown in a summary bar from `GET /pipeline/summary`'s `open` aggregate instead (D47); each column's query uses a fixed, filter-free shape so its cache key is predictable for the optimistic move-mutation (snapshot both affected columns, patch both, roll back on error, broadly invalidate on settle) shared by the drag handler and every card's own "Move to…" dropdown fallback; `PointerSensor` uses an 8px activation distance so the card's nested link/dropdown stay clickable, `KeyboardSensor` uses `@dnd-kit/core`'s own built-in default coordinate getter (not `/sortable`'s), `closestCenter` for collision detection. The required dropdown-move test passes against a stateful fake backend; the actual drag gesture itself could not be interactively verified (no browser-automation tool in this environment) — flagged plainly rather than claimed as proven.
 - D50 — Package 3.5 (Convert dialog and related tabs), closing out Day 3: `companyName` added to `convertLeadSchema` (read only when creating a new company, overrides the lead's own name — lets a nameless lead still convert instead of dead-ending in the existing 422); `conversion` added to `leadResponseSchema`, populated only by `GET /leads/:id` (found and fixed a real bug while wiring this in — `listLeads`'s bare `rows.map(toLeadResponse)` was passing the array index into the new second parameter, caught by `pnpm typecheck`); Convert on the lead detail page is a real trigger only when `QUALIFIED` and not archived, disabled elsewhere, hidden once `CONVERTED`/archived, with a new "Converted" panel (company/contact/deal links + date) replacing "Change status"; `ConvertLeadDialog`'s three Link/Create `ModeToggle` sections prefill from `GET /leads/:id/conversion-matches`; **a genuine race condition found by this package's own tests** — the first draft initialised defaults in a `useEffect` keyed on the async matches arriving, which could silently overwrite text the user had already started typing — fixed by keeping the form entirely unrendered until the matches lookup settles, and separately moved the initialisation off `useEffect` onto the "adjust state during render" pattern (D37) to satisfy this repo's `react-hooks/set-state-in-effect` lint rule; no-double-submit via a `pending` guard checked first in the handler, proven by a two-synchronous-clicks test; `DealsTab` (shared by Company's and Contact's detail pages, via `GET /deals`'s `companyId`/`contactId` filters) and `DealForm`'s new create-mode-only `defaultCompanyId` (from `CreateDealPageClient`'s `?companyId=` param, which needed a `<Suspense>` boundary added to `deals/new/page.tsx`, D26's rule) close the loop back to Deals.
+
+- D51 — Package 4.0: optional lead source, decimal-string numeric editing and SQL reconciliation
+- D52 — Package 4.1: Activities API/timelines and organisation calendar bounds; no migration
+- D53 — Package 4.2: approved Today/dashboard metrics, independent SQL checks and fictional sample seed
 
 ## 10. Gotchas and lessons learned
 
@@ -1827,6 +1841,11 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   **Package 3.5 (the convert dialog and related tabs) is next, in the
   same session.** Day 6/7 (testing, stabilisation, demo) remain
   explicitly out of scope until the build days are done.
+
+- **Day 4 backend packages 4.0–4.2 are complete** (details in §7 and
+  decisions D51–D53). Activities, timelines, Today, dashboard and sample data
+  are implemented and fully verified. The Day 4 UI has not been started and
+  is deferred to the user's separate prompt.
 
 ## 14. Open questions and unverified items
 
@@ -2665,3 +2684,12 @@ log just records that a session happened and what it covered.
   Focused tests: 11 passing. Full root verification: 288 API + 75 web tests
   (363 total), typecheck/lint/build passed. Package 4.1 was committed locally,
   not pushed; package 4.2 remains.
+- **2026-11-21 — Package 4.2 complete.** Added Today and dashboard APIs,
+  independent SQL reconciliation tests for all metrics/charts and scope cases,
+  and the idempotent production-guarded sample seed. Verified sample counts
+  remained 3 companies, 3 contacts, 5 leads, 3 deals and 12 activities after
+  two runs, including 3 overdue tasks; production refusal also verified.
+  No schema migration, dependency or permission change. Root gates passed:
+  290 API + 75 web tests (365 total), typecheck, lint and build. Day 4 UI is
+  deferred to a later prompt as instructed. Package 4.2 was committed locally,
+  not pushed.

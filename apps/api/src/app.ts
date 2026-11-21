@@ -15,6 +15,7 @@ import { registerLeadsRoutes } from './modules/leads/leads.routes.js';
 import { registerDealsRoutes } from './modules/deals/deals.routes.js';
 import { registerPipelineRoutes } from './modules/pipeline/pipeline.routes.js';
 import { registerActivitiesRoutes } from './modules/activities/activities.routes.js';
+import { registerWorkspaceRoutes } from './modules/workspace/workspace.routes.js';
 import { resetRouteRegistry } from './lib/route-registry.js';
 import { env } from './env.js';
 
@@ -59,6 +60,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
   registerDealsRoutes(app);
   registerPipelineRoutes(app);
   registerActivitiesRoutes(app);
+  registerWorkspaceRoutes(app);
   options.extraRoutes?.(app);
 
   app.use(errorHandler);
