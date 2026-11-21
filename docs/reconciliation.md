@@ -1,6 +1,6 @@
-# Pipeline reconciliation — 2026-11-21
+# Pipeline reconciliation â€” 2026-11-21
 
-Compared the independent SQL in `docs/MANUAL-TEST-DAY3.md` §3.4 against authenticated `GET /api/v1/pipeline/summary` for the seeded organisation in `crm_dev`.
+Compared the independent SQL in `docs/MANUAL-TEST-DAY3.md` Â§3.4 against authenticated `GET /api/v1/pipeline/summary` for the seeded organisation in `crm_dev`.
 
 ```sql
 SELECT COUNT(*), SUM(value), SUM(value * probability / 100.0)
