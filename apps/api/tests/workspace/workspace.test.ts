@@ -53,7 +53,9 @@ describe('Today and dashboard', () => {
     const overdue = await prisma.activity.create({ data: { organizationId: tenant.organization.id, type: 'TASK', subject: 'Overdue', status: 'OPEN', dueAt: new Date(bounds.start.getTime() - 60_000), assigneeId: tenant.adminUser.id, createdById: tenant.adminUser.id, companyId: company.id } });
     const meeting = await prisma.activity.create({ data: { organizationId: tenant.organization.id, type: 'MEETING', subject: 'Upcoming meeting', status: 'OPEN', startAt: new Date(bounds.end.getTime() + 60_000), assigneeId: tenant.adminUser.id, createdById: tenant.adminUser.id, companyId: company.id } });
     const openDeal = await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Closing soon', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages[0]!.id, probability: 10, ownerId: tenant.adminUser.id, expectedCloseDate: new Date(`${orgDateKey(new Date(), tenant.organization.timezone)}T00:00:00.000Z`) } });
-    await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Archived closing deal', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages[0]!.id, probability: 10, ownerId: tenant.adminUser.id, archivedAt: new Date(), expectedCloseDate: new Date(`${orgDateKey(new Date(), tenant.organization.timezone)}T00:00:00.000Z`) } });
+    const wonDeal = await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Recently won', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages.find((stage) => stage.type === 'WON')!.id, status: 'WON', probability: 100, ownerId: tenant.adminUser.id, closedAt: new Date() } });
+    const lostDeal = await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Recently lost', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages.find((stage) => stage.type === 'LOST')!.id, status: 'LOST', probability: 0, lostReason: 'Price', ownerId: tenant.adminUser.id, closedAt: new Date() } });
+    const archivedDeal = await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Archived closing deal', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages[0]!.id, probability: 10, ownerId: tenant.adminUser.id, archivedAt: new Date(), expectedCloseDate: new Date(`${orgDateKey(new Date(), tenant.organization.timezone)}T00:00:00.000Z`) } });
     await prisma.deal.create({ data: { organizationId: other.organization.id, name: 'Other deal', companyId: (await prisma.company.create({ data: { organizationId: other.organization.id, name: 'Other Co', nameNormalized: 'other co' } })).id, pipelineId: other.pipeline.id, stageId: other.stages[0]!.id, probability: 10, ownerId: other.adminUser.id } });
 
     const response = await get(token, '/api/v1/today?scope=all');
@@ -66,9 +68,22 @@ describe('Today and dashboard', () => {
     expect(sections.closingDeals.items.map((item: { id: string }) => item.id)).toContain(openDeal.id);
     expect(sections.dealsWithoutActivity.items.map((item: { id: string }) => item.id)).toContain(openDeal.id);
     expect(sections.recentlyUpdatedDeals.items.map((item: { id: string }) => item.id)).toContain(openDeal.id);
+    expect(sections.recentlyUpdatedDeals.items.map((item: { id: string }) => item.id)).toEqual(expect.arrayContaining([wonDeal.id, lostDeal.id]));
+    for (const section of [sections.closingDeals, sections.dealsWithoutActivity, sections.recentlyUpdatedDeals]) {
+      expect(section.items.map((item: { id: string }) => item.id)).not.toContain(archivedDeal.id);
+    }
     expect(sections.newLeads.items.map((item: { title: string }) => item.title)).not.toContain('Other Lead');
     expect(sections.closingDeals.total).toBe(1);
     expect(sections.newLeads.total).toBe(1);
+    expect(sections.tasksDueToday.items[0].href).toBe('/activities?type=TASK&status=OPEN');
+    expect(sections.overdueTasks.items[0].href).toBe('/activities?type=TASK&status=OPEN');
+    expect(sections.meetings.items[0].href).toBe('/activities?type=MEETING&status=OPEN');
+    expect(sections.newLeads.items[0].href).toBe('/leads?status=NEW');
+    expect(sections.closingDeals.items[0].href).toBe('/deals?status=OPEN');
+    expect(sections.dealsWithoutActivity.items[0].href).toBe('/deals?status=OPEN');
+    expect(sections.recentlyUpdatedDeals.items.every((item: { href: string }) => item.href === '/deals')).toBe(true);
+    const mine = await get(token, '/api/v1/today?scope=mine');
+    expect(mine.body.data.newLeads.items[0].href).toBe(`/leads?status=NEW&ownerId=${tenant.adminUser.id}`);
   });
 
   it('matches every dashboard KPI to independent SQL for all/mine and handles empty ranges and organisations', async () => {

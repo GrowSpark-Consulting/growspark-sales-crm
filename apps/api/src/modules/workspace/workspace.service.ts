@@ -203,8 +203,8 @@ export async function getToday(ctx: RequestContext, query: TodayQuery, now = new
 
   const activityItems = (rows: typeof dueRows, href: string) => rows.map((row) => ({ id: row.id, title: row.subject, href, type: row.type, dueAt: row.dueAt?.toISOString() ?? null }));
   const dealItems = (rows: typeof closingRows, href: string) => rows.map((row) => ({ id: row.id, title: row.name, href, type: 'DEAL' }));
-  const leadItems = leadRows.map((row) => ({ id: row.id, title: [row.firstName, row.lastName].filter(Boolean).join(' '), href: '/leads?status=NEW', type: 'LEAD' }));
-  const scopeParam = ownerId ? `&${'ownerId'}=${ownerId}` : '';
+  const scopeParam = ownerId ? `&ownerId=${ownerId}` : '';
+  const leadItems = leadRows.map((row) => ({ id: row.id, title: [row.firstName, row.lastName].filter(Boolean).join(' '), href: `/leads?status=NEW${scopeParam}`, type: 'LEAD' }));
   const activityScopeParam = ownerId ? `&assigneeId=${ownerId}` : '';
   return { data: {
     tasksDueToday: { items: activityItems(dueRows, `/activities?type=TASK&status=OPEN${activityScopeParam}`), total: dueCount },
@@ -213,6 +213,6 @@ export async function getToday(ctx: RequestContext, query: TodayQuery, now = new
     newLeads: { items: leadItems, total: leadCount },
     closingDeals: { items: dealItems(closingRows, `/deals?status=OPEN${scopeParam}`), total: closingCount },
     dealsWithoutActivity: { items: dealItems(noActivityRows, `/deals?status=OPEN${scopeParam}`), total: noActivityCount },
-    recentlyUpdatedDeals: { items: dealItems(recentRows, `/deals?status=OPEN${scopeParam}`), total: recentCount },
+    recentlyUpdatedDeals: { items: dealItems(recentRows, '/deals'), total: recentCount },
   } };
 }
