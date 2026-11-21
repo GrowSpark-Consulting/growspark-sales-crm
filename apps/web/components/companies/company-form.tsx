@@ -8,6 +8,7 @@ import Link from "next/link";
 import { createCompanySchema, type CreateCompanyInput, type CompanyResponse } from "@growspark/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -32,7 +33,7 @@ import type { CompaniesListResult } from "@/hooks/use-companies";
  * field's validator identical to the shared schema.
  */
 const companyFormSchema = createCompanySchema.extend({
-  annualRevenue: z.number().nonnegative("Annual revenue cannot be negative").optional(),
+  annualRevenue: z.union([z.number().nonnegative("Annual revenue cannot be negative"), z.string().regex(/^\d+(\.\d{1,2})?$/, "Enter a valid amount")]).optional(),
 });
 
 /** Exported so a test can assert the cleanup's reset target is genuinely blank (D42). */
@@ -45,7 +46,7 @@ export function companyToFormValues(company?: CompanyResponse): CreateCompanyInp
     email: company?.email ?? "",
     phone: company?.phone ?? "",
     employeeSize: company?.employeeSize ?? "",
-    annualRevenue: company?.annualRevenue ? Number(company.annualRevenue) : undefined,
+    annualRevenue: company?.annualRevenue ?? undefined,
     addressLine1: company?.addressLine1 ?? "",
     addressLine2: company?.addressLine2 ?? "",
     city: company?.city ?? "",
@@ -301,15 +302,10 @@ export function CompanyForm({ company, onSubmit, submitLabel, pendingLabel, onCa
                   <FormItem>
                     <FormLabel>Annual revenue</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
+                      <NumericInput
                         placeholder="e.g. 5000000"
                         value={value ?? ""}
-                        onChange={(event) =>
-                          onChange(event.target.value === "" ? undefined : event.target.valueAsNumber)
-                        }
+                        onValueChange={(next) => onChange(next === "" ? undefined : next)}
                         {...field}
                       />
                     </FormControl>

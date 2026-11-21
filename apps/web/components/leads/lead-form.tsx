@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -14,6 +14,7 @@ import {
 } from "@growspark/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -31,7 +32,7 @@ import { priorityLabel } from "@/lib/lead-presentation";
 // same issue, same fix, as Company's companyFormSchema (D38).
 const leadBaseFormFields = {
   ...leadCreatableFields,
-  estimatedBudget: z.number().nonnegative("Estimated budget cannot be negative").optional(),
+  estimatedBudget: z.union([z.number().nonnegative("Estimated budget cannot be negative"), z.string().regex(/^\d+(\.\d{1,2})?$/, "Enter a valid amount")]).optional(),
 };
 
 const emailOrPhoneRefine = {
@@ -111,19 +112,6 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
       setBannerError(null);
     };
   }, [mode, form]);
-
-  // D40: preselect a "Manual" source on create rather than forcing an
-  // explicit choice — the seed always has a lead source named exactly
-  // "Manual" (apps/api/prisma/seed-lib.ts), so this matches by name, not by
-  // list position (the first/default source is actually "Website"). Only
-  // applies while nothing has been chosen yet, so it never overrides a
-  // user's own selection, and re-applies after a D42 reset-to-blank.
-  useEffect(() => {
-    if (mode !== "create") return;
-    if (form.getValues("sourceId")) return;
-    const manual = sources.find((source) => source.name === "Manual");
-    if (manual) form.setValue("sourceId", manual.id);
-  }, [mode, sources, form]);
 
   /**
    * D29: duplicates warn, never block. Unlike Companies (D38, no dedicated
@@ -329,7 +317,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="sourceId"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Source *</FormLabel>
+                <FormLabel>Source</FormLabel>
                 <Select value={field.value} onValueChange={field.onChange}>
                   <FormControl>
                     <SelectTrigger className="w-full">
@@ -405,13 +393,10 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
               <FormItem>
                 <FormLabel>Estimated budget</FormLabel>
                 <FormControl>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
+                  <NumericInput
                     placeholder="e.g. 500000"
                     value={value ?? ""}
-                    onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.valueAsNumber)}
+                    onValueChange={(next) => onChange(next === "" ? undefined : next)}
                     {...field}
                   />
                 </FormControl>

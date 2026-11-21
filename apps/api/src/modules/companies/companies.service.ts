@@ -7,6 +7,7 @@ import type {
   DuplicateMatch,
 } from '@growspark/shared';
 import { prisma } from '../../db/prisma.js';
+import { Prisma as PrismaRuntime } from '../../generated/prisma/client.js';
 import { ApiError } from '../../middleware/error-handler.js';
 import { scoped } from '../../lib/scoped.js';
 import { writeAudit } from '../../lib/audit.js';
@@ -123,7 +124,7 @@ export async function createCompany(
         email: input.email ?? null,
         phone: input.phone ?? null,
         employeeSize: input.employeeSize ?? null,
-        annualRevenue: input.annualRevenue ?? null,
+        annualRevenue: input.annualRevenue === undefined ? null : new PrismaRuntime.Decimal(input.annualRevenue),
         addressLine1: input.addressLine1 ?? null,
         addressLine2: input.addressLine2 ?? null,
         city: input.city ?? null,
@@ -176,7 +177,7 @@ export async function updateCompany(
       ...(input.email !== undefined ? { email: blankToNull(input.email) } : {}),
       ...(input.phone !== undefined ? { phone: blankToNull(input.phone) } : {}),
       ...(input.employeeSize !== undefined ? { employeeSize: blankToNull(input.employeeSize) } : {}),
-      ...(input.annualRevenue !== undefined ? { annualRevenue: input.annualRevenue } : {}),
+      ...(input.annualRevenue !== undefined ? { annualRevenue: new PrismaRuntime.Decimal(input.annualRevenue) } : {}),
       ...(input.addressLine1 !== undefined ? { addressLine1: blankToNull(input.addressLine1) } : {}),
       ...(input.addressLine2 !== undefined ? { addressLine2: blankToNull(input.addressLine2) } : {}),
       ...(input.city !== undefined ? { city: blankToNull(input.city) } : {}),

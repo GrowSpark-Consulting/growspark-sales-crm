@@ -142,7 +142,7 @@ describe("LeadForm (D42: create form must open empty every time)", () => {
   });
 });
 
-describe("LeadForm source preselect (D40: default to 'Manual', never force an explicit choice)", () => {
+describe("LeadForm optional source", () => {
   beforeEach(() => {
     stubFetch();
   });
@@ -151,13 +151,13 @@ describe("LeadForm source preselect (D40: default to 'Manual', never force an ex
     vi.unstubAllGlobals();
   });
 
-  it("create mode: preselects the lead source named 'Manual' once sources load", async () => {
+  it("create mode: leaves source blank and optional", async () => {
     renderWithClient(
       <LeadForm mode="create" onSubmit={vi.fn()} submitLabel="Add lead" pendingLabel="Adding…" onCancel={vi.fn()} />,
     );
 
-    const trigger = await screen.findByRole("combobox", { name: "Source *" });
-    await waitFor(() => expect(trigger.textContent).toContain("Manual"));
+    const trigger = await screen.findByRole("combobox", { name: "Source" });
+    await waitFor(() => expect(trigger.textContent).toContain("Select a source"));
   });
 
   it("edit mode: never overrides the lead's own already-set source (not 'Manual' here)", async () => {
@@ -172,7 +172,7 @@ describe("LeadForm source preselect (D40: default to 'Manual', never force an ex
       />,
     );
 
-    const trigger = await screen.findByRole("combobox", { name: "Source *" });
+    const trigger = await screen.findByRole("combobox", { name: "Source" });
     await waitFor(() => expect(trigger.textContent).toContain("Referral"));
     expect(trigger.textContent).not.toContain("Manual");
   });

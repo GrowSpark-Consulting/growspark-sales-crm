@@ -10,6 +10,7 @@ import type {
   DealStageHistoryResponse,
 } from '@growspark/shared';
 import { prisma } from '../../db/prisma.js';
+import { Prisma as PrismaRuntime } from '../../generated/prisma/client.js';
 import { ApiError } from '../../middleware/error-handler.js';
 import { scoped } from '../../lib/scoped.js';
 import { writeAudit } from '../../lib/audit.js';
@@ -159,8 +160,8 @@ export async function createDeal(ctx: RequestContext, input: CreateDealInput): P
         companyId: input.companyId,
         pipelineId: pipeline.id,
         stageId: stage.id,
-        probability: input.probability ?? stage.probability,
-        value: input.value ?? 0,
+        probability: input.probability === undefined ? stage.probability : Number(input.probability),
+        value: new PrismaRuntime.Decimal(input.value ?? 0),
         expectedCloseDate: input.expectedCloseDate ? new Date(input.expectedCloseDate) : null,
         ownerId: input.ownerId ?? ctx.userId,
         dealType: input.dealType ?? null,
@@ -205,8 +206,8 @@ export async function updateDeal(ctx: RequestContext, id: string, input: UpdateD
     const data: Prisma.DealUpdateInput = {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.companyId !== undefined ? { company: { connect: { id: input.companyId } } } : {}),
-      ...(input.value !== undefined ? { value: input.value } : {}),
-      ...(input.probability !== undefined ? { probability: input.probability } : {}),
+      ...(input.value !== undefined ? { value: new PrismaRuntime.Decimal(input.value) } : {}),
+      ...(input.probability !== undefined ? { probability: Number(input.probability) } : {}),
       ...(input.expectedCloseDate !== undefined
         ? { expectedCloseDate: input.expectedCloseDate ? new Date(input.expectedCloseDate) : null }
         : {}),

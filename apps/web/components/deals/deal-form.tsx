@@ -7,6 +7,7 @@ import { z } from "zod";
 import { createDealSchema, type CreateDealInput, type DealResponse } from "@growspark/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -27,8 +28,8 @@ const NO_SOURCE = "NO_SOURCE";
  * Overridden here with non-coercing validators, same fix as D38.
  */
 const dealFormSchema = createDealSchema.extend({
-  value: z.number().nonnegative("Value cannot be negative").optional(),
-  probability: z.number().int("Probability must be a whole number").min(0).max(100).optional(),
+  value: z.union([z.number().nonnegative("Value cannot be negative"), z.string().regex(/^\d+(\.\d{1,2})?$/, "Enter a valid amount")]).optional(),
+  probability: z.union([z.number().int().min(0).max(100), z.string().regex(/^(100|[0-9]{1,2})$/, "Probability must be a whole number")]).optional(),
 });
 type DealFormInput = z.infer<typeof dealFormSchema>;
 
@@ -38,7 +39,7 @@ export function dealToFormValues(deal?: DealResponse, defaultOwnerId?: string, d
     name: deal?.name ?? "",
     companyId: deal?.companyId ?? defaultCompanyId ?? "",
     stageId: undefined,
-    value: deal?.value !== undefined ? Number(deal.value) : undefined,
+    value: deal?.value ?? undefined,
     probability: deal?.probability,
     expectedCloseDate: deal?.expectedCloseDate ?? undefined,
     ownerId: deal?.ownerId ?? defaultOwnerId ?? undefined,
@@ -214,12 +215,9 @@ export function DealForm({
               <FormItem>
                 <FormLabel>Value (₹)</FormLabel>
                 <FormControl>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
+                  <NumericInput
                     value={value ?? ""}
-                    onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.valueAsNumber)}
+                    onValueChange={(next) => onChange(next === "" ? undefined : next)}
                     {...field}
                   />
                 </FormControl>
@@ -235,13 +233,10 @@ export function DealForm({
               <FormItem>
                 <FormLabel>Probability (%)</FormLabel>
                 <FormControl>
-                  <Input
-                    type="number"
+                  <NumericInput
                     inputMode="numeric"
-                    min={0}
-                    max={100}
                     value={value ?? ""}
-                    onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.valueAsNumber)}
+                    onValueChange={(next) => onChange(next === "" ? undefined : next)}
                     {...field}
                   />
                 </FormControl>

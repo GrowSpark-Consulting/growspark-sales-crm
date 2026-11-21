@@ -1328,8 +1328,18 @@ code.
   carried over + 3 new; 74 `apps/web`: 65 carried over + 9 new; 356
   total). Full detail in `docs/decisions.md` D50.
 
-**Day 3 (lead conversion, deals, pipeline) is done.** Day 4 is not yet
-detailed in this repo.
+**Package 4.0 (lead-source optionality, numeric input and SQL reconciliation) is complete.**
+Lead Source is optional in shared validation and the form; omitted values resolve
+to the organization-scoped `Manual` source in the API. Money/number controls
+preserve editable text (including leading zeroes) and send decimal strings to
+the API, where Prisma `Decimal` receives those exact strings. The independent
+SQL and authenticated `GET /pipeline/summary` both returned count 1, value
+56677, weighted value 14169.25; details in `docs/reconciliation.md`. No schema
+migration or dependency was added. Root verification passed: 283 API + 75 web
+tests (358 total). See `docs/decisions.md` D51.
+
+**Day 3 (lead conversion, deals, pipeline) is done.** Day 4 package 4.0
+carry-overs are complete; packages 4.1 and 4.2 remain.
 
 ## 8. Database
 
@@ -2627,3 +2637,12 @@ log just records that a session happened and what it covered.
   `docs/decisions.md` D50 has the full detail. **Day 3 (lead conversion,
   deals, pipeline) is done.** Day 4 is not yet detailed in this repo â€”
   confirm scope with the user before starting it.
+- **2026-11-21 — Package 4.0 complete.** Optional lead source with
+  organisation-scoped Manual fallback, shared decimal-string numeric input,
+  and SQL/API reconciliation documented in `docs/reconciliation.md`. No schema
+  migration or dependency. Verification: `pnpm typecheck`, `pnpm lint`,
+  `pnpm test` (283 API + 75 web = 358 tests), and `pnpm build` all passed.
+  One transient initial test expectation was corrected before the final green
+  verification. The initial sandboxed build could not fetch existing Google
+  Fonts; the elevated rerun passed. API process stopped by its recorded PID;
+  ports 3000 and 4000 clear. Package 4.0 was committed locally, not pushed.

@@ -17,7 +17,7 @@ export const createCompanySchema = z.object({
   // canonical E.164 string; validated strictly here for manual CRM entry.
   phone: phoneFieldSchema.optional(),
   employeeSize: optionalTrimmed(100),
-  annualRevenue: z.coerce.number().nonnegative('Annual revenue cannot be negative').optional(),
+  annualRevenue: z.union([z.number().nonnegative('Annual revenue cannot be negative'), z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount')]).optional(),
   addressLine1: optionalTrimmed(300),
   addressLine2: optionalTrimmed(300),
   city: optionalTrimmed(150),

@@ -31,7 +31,7 @@ export const leadCreatableFields = {
   website: optionalTrimmed(2000),
   jobTitle: optionalTrimmed(200),
   industry: optionalTrimmed(200),
-  sourceId: z.uuid('A lead source is required'),
+  sourceId: z.uuid().optional(),
   sourceDetail: optionalTrimmed(200),
   priority: prioritySchema.optional(),
   ownerId: z.uuid().nullable().optional(),
@@ -49,7 +49,7 @@ export const createLeadSchema = z
   .object({
     ...leadCreatableFields,
     requirement: z.string().trim().max(5000, 'Requirement is too long').optional(),
-    estimatedBudget: z.coerce.number().nonnegative('Estimated budget cannot be negative').optional(),
+    estimatedBudget: z.union([z.number().nonnegative('Estimated budget cannot be negative'), z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount')]).optional(),
     capturedFields: z.record(z.string(), z.unknown()).optional(),
   })
   .refine((data) => Boolean(data.email?.trim()) || Boolean(data.phone?.trim()), {

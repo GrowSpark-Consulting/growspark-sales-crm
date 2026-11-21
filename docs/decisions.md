@@ -2081,3 +2081,10 @@ reconstructed from memory, and cross-checked against each commit's own message.
   background test runner can be re-invoked without checking if the first
   one finished" as safe â€” on this machine, with this test suite's ~50
   isolated worker processes per run, it visibly is not.
+
+## D51 — Day 4 package 4.0: optional source and decimal text input (2026-11-21)
+
+- Manual lead Source is optional. If `sourceId` is omitted, the API resolves the exact source name `Manual` within the request organisation; an explicit source remains validated against that organisation. The lead form therefore leaves Source blank and has no required marker. No schema change is needed because `leads.source_id` remains non-nullable and receives the resolved source.
+- Numeric editing uses text-backed controls so deletion of leading zeroes works, clearing stays empty, and money values remain decimal strings through request validation. The API constructs Prisma Decimal values from those strings; probability remains an integer. This applies to deal value, estimated budget, annual revenue, and probability. Employee size was already a text field that preserves its entered representation and continues to allow ranges such as `51-200`.
+- Reconciliation compares the roadmap's independent SQL against authenticated `GET /pipeline/summary`; count, total value and weighted value matched exactly (formatting may omit trailing zeroes). See `docs/reconciliation.md`.
+- No dependency, migration, permission change, UI restyling, or website integration.

@@ -19,8 +19,8 @@ export type DealStatus = z.infer<typeof dealStatusSchema>;
 export const dealCreatableFields = {
   name: z.string().trim().min(1, 'Deal name is required').max(300, 'Deal name is too long'),
   companyId: z.uuid('A company is required'),
-  value: z.coerce.number().nonnegative('Value cannot be negative').optional(),
-  probability: z.coerce.number().int('Probability must be a whole number').min(0).max(100).optional(),
+  value: z.union([z.number().nonnegative('Value cannot be negative'), z.string().regex(/^\d+(\.\d{1,2})?$/, 'Enter a valid amount')]).optional(),
+  probability: z.union([z.number().int().min(0).max(100), z.string().regex(/^(100|[0-9]{1,2})$/, 'Probability must be a whole number')]).optional(),
   expectedCloseDate: z.iso.date().nullable().optional(),
   ownerId: z.uuid().nullable().optional(),
   dealType: optionalTrimmed(100),

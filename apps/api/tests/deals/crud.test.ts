@@ -33,14 +33,14 @@ describe('Deals CRUD', () => {
     const api = authed(app, token);
     const company = await createCompany(tenant);
 
-    const res = await api.post('/api/v1/deals', { name: 'Example Deal', companyId: company.id, value: 250000 });
+    const res = await api.post('/api/v1/deals', { name: 'Example Deal', companyId: company.id, value: '056677.25' });
     expect(res.status).toBe(201);
     expect(res.body.data.stageId).toBe(tenant.stages[0]!.id);
     expect(res.body.data.probability).toBe(tenant.stages[0]!.probability);
     expect(res.body.data.ownerId).toBe(tenant.adminUser.id);
-    expect(res.body.data.value).toBe('250000');
     expect(res.body.data.currency).toBe('INR');
     expect(res.body.data.status).toBe('OPEN');
+    expect(res.body.data.value).toBe('56677.25');
 
     const history = await prisma.dealStageHistory.findMany({ where: { dealId: res.body.data.id } });
     expect(history).toHaveLength(1);

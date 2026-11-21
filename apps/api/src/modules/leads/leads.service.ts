@@ -10,6 +10,7 @@ import type {
   DuplicateMatch,
 } from '@growspark/shared';
 import { prisma } from '../../db/prisma.js';
+import { Prisma as PrismaRuntime } from '../../generated/prisma/client.js';
 import { ApiError } from '../../middleware/error-handler.js';
 import { scoped } from '../../lib/scoped.js';
 import { writeAudit } from '../../lib/audit.js';
@@ -136,7 +137,12 @@ export async function createLead(ctx: RequestContext, input: CreateLeadInput): P
   const companyNameNormalized = normalizeCompanyName(input.companyName);
 
   const created = await prisma.$transaction(async (tx) => {
-    await assertSourceInOrg(tx, ctx.orgId, input.sourceId);
+    const sourceId = input.sourceId ?? (await tx.leadSource.findFirst({
+      where: { organizationId: ctx.orgId, name: 'Manual' },
+      select: { id: true },
+    }))?.id;
+    if (!sourceId) throw new ApiError(422, 'VALIDATION_FAILED', 'The Manual lead source is not configured.');
+    await assertSourceInOrg(tx, ctx.orgId, sourceId);
     await assertOwnerInOrg(tx, ctx.orgId, input.ownerId);
 
     const lead = await tx.lead.create({
@@ -153,12 +159,12 @@ export async function createLead(ctx: RequestContext, input: CreateLeadInput): P
         website: input.website ?? null,
         jobTitle: input.jobTitle ?? null,
         industry: input.industry ?? null,
-        sourceId: input.sourceId,
+        sourceId,
         sourceDetail: input.sourceDetail ?? null,
         priority: input.priority ?? 'MEDIUM',
         ownerId: input.ownerId ?? null,
         requirement: input.requirement ?? null,
-        estimatedBudget: input.estimatedBudget ?? null,
+        estimatedBudget: input.estimatedBudget === undefined ? null : new PrismaRuntime.Decimal(input.estimatedBudget),
         purchaseTimeline: input.purchaseTimeline ?? null,
         nextFollowUpAt: input.nextFollowUpAt ? new Date(input.nextFollowUpAt) : null,
         notes: input.notes ?? null,

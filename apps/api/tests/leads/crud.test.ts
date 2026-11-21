@@ -3,6 +3,7 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { createTestTenant } from '../helpers/tenant.js';
 import { createSession } from '../../src/lib/session.js';
+import { prisma } from '../../src/db/prisma.js';
 import { ALLOWED_ORIGIN, sessionCookieHeader } from '../helpers/http.js';
 
 function authed(app: ReturnType<typeof createApp>, token: string) {
@@ -17,6 +18,19 @@ function authed(app: ReturnType<typeof createApp>, token: string) {
 }
 
 describe('Leads CRUD', () => {
+  it('uses the organisation-scoped Manual source when sourceId is omitted', async () => {
+    const tenant = await createTestTenant();
+    const manual = await prisma.leadSource.create({
+      data: { organizationId: tenant.organization.id, name: 'Manual', sortOrder: 2 },
+    });
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const res = await authed(createApp(), token).post('/api/v1/leads', {
+      firstName: 'No source selected', email: 'nosource@example.com',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.data.sourceId).toBe(manual.id);
+  });
+
   it('creates, reads, lists, updates, archives, and restores a lead', async () => {
     const tenant = await createTestTenant();
     const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
