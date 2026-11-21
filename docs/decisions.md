@@ -1416,7 +1416,7 @@ documentation pass).** Closes out D40–D44.
 
 - **Item 1 (D42) — root cause confirmed, not assumed.** `next.config.ts`
   has `cacheComponents: true`, and `/leads/new`/`/companies/new` build as
-  fully static routes (confirmed in `pnpm build`'s own route list, `○`). Next's
+  fully static routes (confirmed in `pnpm build`'s own route list, `---`). Next's
   own bundled docs (`node_modules/next/dist/docs/01-app/02-guides/
   migrating-to-cache-components.md` → "UI state preservation", and
   `preserving-ui-state.md` → "Forms, inputs, and state") say directly: with
@@ -2082,9 +2082,17 @@ reconstructed from memory, and cross-checked against each commit's own message.
   one finished" as safe — on this machine, with this test suite's ~50
   isolated worker processes per run, it visibly is not.
 
-## D51 � Day 4 package 4.0: optional source and decimal text input (2026-11-21)
+## D51 - Day 4 package 4.0: optional source and decimal text input (2026-11-21)
 
 - Manual lead Source is optional. If `sourceId` is omitted, the API resolves the exact source name `Manual` within the request organisation; an explicit source remains validated against that organisation. The lead form therefore leaves Source blank and has no required marker. No schema change is needed because `leads.source_id` remains non-nullable and receives the resolved source.
 - Numeric editing uses text-backed controls so deletion of leading zeroes works, clearing stays empty, and money values remain decimal strings through request validation. The API constructs Prisma Decimal values from those strings; probability remains an integer. This applies to deal value, estimated budget, annual revenue, and probability. Employee size was already a text field that preserves its entered representation and continues to allow ranges such as `51-200`.
 - Reconciliation compares the roadmap's independent SQL against authenticated `GET /pipeline/summary`; count, total value and weighted value matched exactly (formatting may omit trailing zeroes). See `docs/reconciliation.md`.
 - No dependency, migration, permission change, UI restyling, or website integration.
+
+## D52 — Day 4 package 4.1: activities, timelines and time bounds (2026-11-21)
+
+- Implemented the Activities API and record timelines on the existing activity schema. No migration or index was created; the verified link indexes and partial `(organization_id, assignee_id, due_at)` index already exist.
+- Every activity requires an organisation-owned record link; deal-linked activities also link to the deal's company. Notes are created DONE with `completedAt`; completing/cancelling non-open rows returns 409. Assignee defaults to the current user.
+- Staff and Admin both use the existing `activities:read` and `activities:write` permissions; the permission table was unchanged.
+- Timelines merge activities with lead status and conversion events and deal stage history, newest first; they include a computed next open task/call/meeting.
+- `orgDayBounds` and `orgMonthBounds` are the time-boundary helpers, tested around Asia/Kolkata midnight and month change. No dependencies added.

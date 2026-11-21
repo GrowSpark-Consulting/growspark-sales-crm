@@ -1339,7 +1339,19 @@ migration or dependency was added. Root verification passed: 283 API + 75 web
 tests (358 total). See `docs/decisions.md` D51.
 
 **Day 3 (lead conversion, deals, pipeline) is done.** Day 4 package 4.0
-carry-overs are complete; packages 4.1 and 4.2 remain.
+carry-overs and package 4.1 are complete; package 4.2 remains.
+
+**Package 4.1 (Activities API, timelines and organisation time bounds) is complete.**
+Added `GET|POST /activities`, `GET|PATCH /activities/:id`, complete/cancel
+actions, and timelines for leads, contacts, companies and deals, all guarded
+by the existing `activities:read`/`activities:write` permissions. Cross-org
+links return 404; deal activities inherit the deal's company; Notes start
+DONE; repeat completion is 409. Timelines merge activities with lead status,
+conversion and deal stage history, with computed `nextActivity`. `orgDayBounds`
+and `orgMonthBounds` are the shared UTC-boundary helpers. Existing link and
+assignee/due indexes were reused; no schema migration, new permission or
+dependency. Root verification: 288 API + 75 web tests (363 total), all gates
+passed. See `docs/decisions.md` D52.
 
 ## 8. Database
 
@@ -1543,7 +1555,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   "Forms, inputs, and state").** Effect cleanup still fires on hide though
   — exactly like a real unmount — so a `useLayoutEffect` whose cleanup
   resets what needs resetting is the documented, correct fix (D42, D45),
-  not a workaround. A build's own route list (`pnpm build`'s `○ (Static)`
+  not a workaround. A build's own route list (`pnpm build`'s `--- (Static)`
   markers) tells you which routes are actually subject to this: static
   routes get held in the Client Cache across navigation; genuinely dynamic
   ones may not.
@@ -2637,7 +2649,7 @@ log just records that a session happened and what it covered.
   `docs/decisions.md` D50 has the full detail. **Day 3 (lead conversion,
   deals, pipeline) is done.** Day 4 is not yet detailed in this repo —
   confirm scope with the user before starting it.
-- **2026-11-21 � Package 4.0 complete.** Optional lead source with
+- **2026-11-21 - Package 4.0 complete.** Optional lead source with
   organisation-scoped Manual fallback, shared decimal-string numeric input,
   and SQL/API reconciliation documented in `docs/reconciliation.md`. No schema
   migration or dependency. Verification: `pnpm typecheck`, `pnpm lint`,
@@ -2646,3 +2658,10 @@ log just records that a session happened and what it covered.
   verification. The initial sandboxed build could not fetch existing Google
   Fonts; the elevated rerun passed. API process stopped by its recorded PID;
   ports 3000 and 4000 clear. Package 4.0 was committed locally, not pushed.
+- **2026-11-21 — Package 4.1 complete.** Built activity CRUD/actions,
+  organisation-scoped link validation, deal-to-company timeline propagation,
+  merged timelines and computed next activity. Added UTC day/month bounds.
+  No schema migration, index migration, permission change or dependency.
+  Focused tests: 11 passing. Full root verification: 288 API + 75 web tests
+  (363 total), typecheck/lint/build passed. Package 4.1 was committed locally,
+  not pushed; package 4.2 remains.
