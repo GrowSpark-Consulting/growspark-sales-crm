@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { Prisma } from '../../src/generated/prisma/client.js';
 import { createApp } from '../../src/app.js';
@@ -39,11 +39,65 @@ async function independentDashboardSql(orgId: string, from: Date, to: Date, dayS
   return row!;
 }
 
+async function expectDashboardAuxSql(
+  response: { body: { data: { leadsBySource: unknown; leadsByStatus: unknown; pipelineByStage: { stages: { stageId: string; count: number; totalValue: string; weightedValue: string }[] }; monthlyWonRevenue: { month: string; value: string }[] } } },
+  orgId: string,
+  pipelineId: string,
+  timeZone: string,
+  ownerId?: string,
+) {
+  const leadOwner = ownerId ? Prisma.sql`AND owner_id=${ownerId}::uuid` : Prisma.empty;
+  const sourceOwner = ownerId ? Prisma.sql`AND l.owner_id=${ownerId}::uuid` : Prisma.empty;
+  const dealOwner = ownerId ? Prisma.sql`AND d.owner_id=${ownerId}::uuid` : Prisma.empty;
+  const monthOwner = ownerId ? Prisma.sql`AND owner_id=${ownerId}::uuid` : Prisma.empty;
+  const sources = await prisma.$queryRaw<{ sourceId: string; sourceName: string; count: number }[]>`
+    SELECT l.source_id AS "sourceId", s.name AS "sourceName", COUNT(*)::int AS count
+    FROM leads l JOIN lead_sources s ON s.id=l.source_id AND s.organization_id=l.organization_id
+    WHERE l.organization_id=${orgId}::uuid AND l.archived_at IS NULL ${sourceOwner}
+    GROUP BY l.source_id,s.name ORDER BY count DESC,s.name
+  `;
+  const statuses = await prisma.$queryRaw<{ status: string; count: number }[]>`
+    SELECT status::text AS status, COUNT(*)::int AS count FROM leads
+    WHERE organization_id=${orgId}::uuid AND archived_at IS NULL ${leadOwner}
+    GROUP BY status ORDER BY status
+  `;
+  const stages = await prisma.$queryRaw<{ stageId: string; count: number; totalValue: string; weightedValue: string }[]>`
+    SELECT ps.id AS "stageId", COUNT(d.id)::int AS count,
+      COALESCE(SUM(d.value),0)::numeric(14,2)::text AS "totalValue",
+      COALESCE(SUM(d.value*d.probability/100.0),0)::numeric(14,2)::text AS "weightedValue"
+    FROM pipeline_stages ps LEFT JOIN deals d ON d.stage_id=ps.id AND d.organization_id=ps.organization_id AND d.archived_at IS NULL ${dealOwner}
+    WHERE ps.organization_id=${orgId}::uuid AND ps.pipeline_id=${pipelineId}::uuid
+    GROUP BY ps.id,ps.position ORDER BY ps.position
+  `;
+  const firstMonth = response.body.data.monthlyWonRevenue[0]!.month;
+  const lastMonth = response.body.data.monthlyWonRevenue[5]!.month;
+  const start = orgDateBounds(`${firstMonth}-01`, timeZone).start;
+  const end = orgMonthBounds(new Date(`${lastMonth}-15T12:00:00.000Z`), timeZone).end;
+  const months = await prisma.$queryRaw<{ month: string; value: string }[]>`
+    SELECT to_char(date_trunc('month', closed_at AT TIME ZONE ${timeZone}), 'YYYY-MM') AS month,
+      COALESCE(SUM(value),0)::numeric(14,2)::text AS value
+    FROM deals WHERE organization_id=${orgId}::uuid AND archived_at IS NULL AND status='WON'::deal_status
+      AND closed_at >= ${start} AND closed_at < ${end} ${monthOwner}
+    GROUP BY 1 ORDER BY 1
+  `;
+  const expectedMonths = response.body.data.monthlyWonRevenue.map(({ month }) => ({ month, value: '0.00' }));
+  for (const row of months) {
+    const index = expectedMonths.findIndex((item) => item.month === row.month);
+    if (index >= 0) expectedMonths[index] = row;
+  }
+  expect(response.body.data.leadsBySource).toEqual(sources);
+  expect(response.body.data.leadsByStatus).toEqual(statuses);
+  expect(response.body.data.pipelineByStage.stages.map((row) => ({ stageId: row.stageId, count: row.count, totalValue: canonicalDecimal(row.totalValue), weightedValue: canonicalDecimal(row.weightedValue) }))).toEqual(stages.map((row) => ({ ...row, totalValue: canonicalDecimal(row.totalValue), weightedValue: canonicalDecimal(row.weightedValue) })));
+  expect(response.body.data.monthlyWonRevenue).toEqual(expectedMonths);
+}
+
 describe('Today and dashboard', () => {
   it('fills every Today section and keeps organisation data isolated', async () => {
     const tenant = await createTestTenant();
     const other = await createTestTenant('Other Org');
-    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const [{ token }, staff] = await Promise.all([
+      createSession(tenant.organization.id, tenant.adminUser.id), createSession(tenant.organization.id, tenant.staffUser.id),
+    ]);
     const company = await prisma.company.create({ data: { organizationId: tenant.organization.id, name: 'Today Co', nameNormalized: 'today co' } });
     const bounds = orgDayBounds(new Date(), tenant.organization.timezone);
     const lead = await prisma.lead.create({ data: { organizationId: tenant.organization.id, firstName: 'Today Lead', email: 'today@example.test', emailNormalized: 'today@example.test', sourceId: tenant.leadSource.id, ownerId: tenant.adminUser.id } });
@@ -56,7 +110,9 @@ describe('Today and dashboard', () => {
     const wonDeal = await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Recently won', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages.find((stage) => stage.type === 'WON')!.id, status: 'WON', probability: 100, ownerId: tenant.adminUser.id, closedAt: new Date() } });
     const lostDeal = await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Recently lost', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages.find((stage) => stage.type === 'LOST')!.id, status: 'LOST', probability: 0, lostReason: 'Price', ownerId: tenant.adminUser.id, closedAt: new Date() } });
     const archivedDeal = await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Archived closing deal', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages[0]!.id, probability: 10, ownerId: tenant.adminUser.id, archivedAt: new Date(), expectedCloseDate: new Date(`${orgDateKey(new Date(), tenant.organization.timezone)}T00:00:00.000Z`) } });
-    await prisma.deal.create({ data: { organizationId: other.organization.id, name: 'Other deal', companyId: (await prisma.company.create({ data: { organizationId: other.organization.id, name: 'Other Co', nameNormalized: 'other co' } })).id, pipelineId: other.pipeline.id, stageId: other.stages[0]!.id, probability: 10, ownerId: other.adminUser.id } });
+    const otherCompany = await prisma.company.create({ data: { organizationId: other.organization.id, name: 'Other Co', nameNormalized: 'other co' } });
+    const otherDeal = await prisma.deal.create({ data: { organizationId: other.organization.id, name: 'Other deal', companyId: otherCompany.id, pipelineId: other.pipeline.id, stageId: other.stages[0]!.id, probability: 10, ownerId: other.adminUser.id, expectedCloseDate: new Date(`${orgDateKey(new Date(), other.organization.timezone)}T00:00:00.000Z`) } });
+    const otherActivity = await prisma.activity.create({ data: { organizationId: other.organization.id, type: 'TASK', subject: 'Other task today', status: 'OPEN', dueAt: new Date(orgDayBounds(new Date(), other.organization.timezone).start.getTime() + 60_000), assigneeId: other.adminUser.id, createdById: other.adminUser.id, companyId: otherCompany.id, dealId: otherDeal.id } });
 
     const response = await get(token, '/api/v1/today?scope=all');
     expect(response.status).toBe(200);
@@ -73,6 +129,12 @@ describe('Today and dashboard', () => {
       expect(section.items.map((item: { id: string }) => item.id)).not.toContain(archivedDeal.id);
     }
     expect(sections.newLeads.items.map((item: { title: string }) => item.title)).not.toContain('Other Lead');
+    for (const section of [sections.closingDeals, sections.dealsWithoutActivity, sections.recentlyUpdatedDeals]) {
+      expect(section.items.map((item: { id: string }) => item.id)).not.toContain(otherDeal.id);
+    }
+    for (const section of [sections.tasksDueToday, sections.overdueTasks, sections.meetings]) {
+      expect(section.items.map((item: { id: string }) => item.id)).not.toContain(otherActivity.id);
+    }
     expect(sections.closingDeals.total).toBe(1);
     expect(sections.newLeads.total).toBe(1);
     expect(sections.tasksDueToday.items[0].href).toBe('/activities?type=TASK&status=OPEN');
@@ -84,6 +146,7 @@ describe('Today and dashboard', () => {
     expect(sections.recentlyUpdatedDeals.items.every((item: { href: string }) => item.href === '/deals')).toBe(true);
     const mine = await get(token, '/api/v1/today?scope=mine');
     expect(mine.body.data.newLeads.items[0].href).toBe(`/leads?status=NEW&ownerId=${tenant.adminUser.id}`);
+    expect((await get(staff.token, '/api/v1/today')).status).toBe(200);
   });
 
   it('matches every dashboard KPI to independent SQL for all/mine and handles empty ranges and organisations', async () => {
@@ -105,6 +168,9 @@ describe('Today and dashboard', () => {
     await lead(3, 'CONVERTED', tenant.staffUser.id);
     await prisma.lead.create({ data: { organizationId: tenant.organization.id, firstName: 'Archived', email: 'archived.dash@example.test', emailNormalized: 'archived.dash@example.test', sourceId: tenant.leadSource.id, status: 'QUALIFIED', ownerId: tenant.adminUser.id, createdAt, archivedAt: createdAt } });
     await prisma.lead.create({ data: { organizationId: other.organization.id, firstName: 'Leak test', email: 'leak@example.test', emailNormalized: 'leak@example.test', sourceId: other.leadSource.id } });
+    const otherCompany = await prisma.company.create({ data: { organizationId: other.organization.id, name: 'Foreign Dashboard Co', nameNormalized: 'foreign dashboard co' } });
+    const foreignDeal = await prisma.deal.create({ data: { organizationId: other.organization.id, name: 'Foreign Dashboard Deal', companyId: otherCompany.id, pipelineId: other.pipeline.id, stageId: other.stages[0]!.id, value: '999999.99', probability: 90, ownerId: other.adminUser.id } });
+    await prisma.activity.create({ data: { organizationId: other.organization.id, type: 'TASK', subject: 'Foreign Dashboard Activity', status: 'OPEN', dueAt: new Date(orgDayBounds(new Date(), other.organization.timezone).start.getTime() - 1), assigneeId: other.adminUser.id, createdById: other.adminUser.id, companyId: otherCompany.id, dealId: foreignDeal.id } });
     await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Dashboard Won', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages.find((s) => s.type === 'WON')!.id, status: 'WON', value: '120.35', probability: 100, closedAt: createdAt, ownerId: tenant.adminUser.id } });
     await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Dashboard Lost', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages.find((s) => s.type === 'LOST')!.id, status: 'LOST', lostReason: 'Price', value: '50.10', probability: 0, closedAt: createdAt, ownerId: tenant.staffUser.id } });
     const open = await prisma.deal.create({ data: { organizationId: tenant.organization.id, name: 'Dashboard Open', companyId: company.id, pipelineId: tenant.pipeline.id, stageId: tenant.stages[0]!.id, status: 'OPEN', value: '1000.25', probability: 25, ownerId: tenant.adminUser.id } });
@@ -201,6 +267,7 @@ describe('Today and dashboard', () => {
       overdueActivities: emptyRangeSql.overdue_count,
     });
     expect(emptyRange.body.data.leadsBySource.some((row: { sourceId: string }) => row.sourceId === other.leadSource.id)).toBe(false);
+    await expectDashboardAuxSql(emptyRange, tenant.organization.id, tenant.pipeline.id, tenant.organization.timezone);
     const emptyOrg = await get((await createSession(empty.organization.id, empty.adminUser.id)).token, '/api/v1/dashboard?from=2026-10-01&to=2026-10-01');
     expect(emptyOrg.body.data.metrics.leadsCreated).toBe(0);
     expect(emptyOrg.body.data.metrics.openDeals.count).toBe(0);
@@ -216,5 +283,41 @@ describe('Today and dashboard', () => {
       wonRevenue: emptyOrgSql.won_revenue, winRate: emptyOrgSql.win_rate,
       overdueActivities: emptyOrgSql.overdue_count,
     });
+    await expectDashboardAuxSql(emptyOrg, empty.organization.id, empty.pipeline.id, empty.organization.timezone);
+  });
+
+  it('uses organisation month boundaries for the default dashboard range and monthly revenue', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-30T18:00:00.000Z')); // 23:30 Asia/Kolkata on Nov 30
+    try {
+      const tenant = await createTestTenant();
+      const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+      const company = await prisma.company.create({ data: { organizationId: tenant.organization.id, name: 'Month Boundary Co', nameNormalized: 'month boundary co' } });
+      const wonStage = tenant.stages.find((stage) => stage.type === 'WON')!;
+      await prisma.deal.create({ data: {
+        organizationId: tenant.organization.id, name: 'Won before local month boundary', companyId: company.id,
+        pipelineId: tenant.pipeline.id, stageId: wonStage.id, status: 'WON', value: '10.00', probability: 100,
+        closedAt: new Date('2026-11-30T18:29:59.999Z'),
+      } });
+      await prisma.deal.create({ data: {
+        organizationId: tenant.organization.id, name: 'Won after local month boundary', companyId: company.id,
+        pipelineId: tenant.pipeline.id, stageId: wonStage.id, status: 'WON', value: '20.00', probability: 100,
+        closedAt: new Date('2026-11-30T18:30:00.000Z'),
+      } });
+
+      const before = await get(token, '/api/v1/dashboard');
+      expect(before.body.data.range).toEqual({ from: '2026-11-01', to: '2026-11-30' });
+      expect(before.body.data.metrics.wonRevenue).toBe('10.00');
+      expect(before.body.data.monthlyWonRevenue.find((row: { month: string }) => row.month === '2026-11').value).toBe('10.00');
+
+      vi.setSystemTime(new Date('2026-11-30T19:00:00.000Z')); // 00:30 Asia/Kolkata on Dec 1
+      const after = await get(token, '/api/v1/dashboard');
+      expect(after.body.data.range).toEqual({ from: '2026-12-01', to: '2026-12-31' });
+      expect(after.body.data.metrics.wonRevenue).toBe('20.00');
+      expect(after.body.data.monthlyWonRevenue.find((row: { month: string }) => row.month === '2026-11').value).toBe('10.00');
+      expect(after.body.data.monthlyWonRevenue.find((row: { month: string }) => row.month === '2026-12').value).toBe('20.00');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

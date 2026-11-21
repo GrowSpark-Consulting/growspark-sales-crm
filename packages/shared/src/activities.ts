@@ -1,9 +1,16 @@
 import { z } from 'zod';
-import { pageQuerySchema, paginationMetaSchema, sortQuerySchema } from './common.js';
+import { booleanQueryParam, pageQuerySchema, paginationMetaSchema, sortQuerySchema } from './common.js';
 import { prioritySchema } from './priorities.js';
 
 export const activityTypeSchema = z.enum(['TASK', 'CALL', 'MEETING', 'NOTE']);
 export const activityStatusSchema = z.enum(['OPEN', 'DONE', 'CANCELLED']);
+export const nextActivitySummarySchema = z.object({
+  type: z.enum(['TASK', 'CALL', 'MEETING']),
+  subject: z.string(),
+  dueAt: z.string().nullable(),
+  isOverdue: z.boolean(),
+});
+export type NextActivitySummary = z.infer<typeof nextActivitySummarySchema>;
 const optionalDate = z.iso.datetime().nullable().optional();
 
 const activityFields = {
@@ -40,11 +47,18 @@ export const listActivitiesQuerySchema = pageQuerySchema.extend({
   sort: sortQuerySchema(ACTIVITY_SORT_FIELDS),
   type: activityTypeSchema.optional(),
   status: activityStatusSchema.optional(),
+  dueFrom: z.iso.datetime().optional(),
+  dueTo: z.iso.datetime().optional(),
+  overdue: booleanQueryParam.optional(),
   assigneeId: z.uuid().optional(),
   leadId: z.uuid().optional(),
   contactId: z.uuid().optional(),
   companyId: z.uuid().optional(),
   dealId: z.uuid().optional(),
+}).superRefine((value, ctx) => {
+  if (value.dueFrom && value.dueTo && Date.parse(value.dueFrom) > Date.parse(value.dueTo)) {
+    ctx.addIssue({ code: 'custom', path: ['dueTo'], message: 'dueTo must be on or after dueFrom' });
+  }
 });
 export type ListActivitiesQuery = z.infer<typeof listActivitiesQuerySchema>;
 

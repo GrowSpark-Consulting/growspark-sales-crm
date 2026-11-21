@@ -152,11 +152,11 @@ specific package you're about to work on.
 
 ### Day 4 — activities, timelines, Today workspace, dashboard
 
-Backend packages 4.0–4.2 are complete as of 2026-11-21, including the
-owner-approved metrics and Today rules (decisions D51–D53). See
-`docs/PROJECT-STATE.md` §7 and `docs/reconciliation.md`. The Day 4 UI is
-intentionally not started; wait for the user's separate prompt before
-building it.
+Backend packages 4.0–4.2b are complete as of 2026-11-21, including the
+owner-approved metrics and Today rules, detail nextActivity, and activity due
+and overdue filters (decisions D51–D54). See `docs/PROJECT-STATE.md` §7 and
+`docs/reconciliation.md`. The Day 4 UI is intentionally not started; wait for
+the user's separate prompt before building it.
 
 ## Day 4: staging deployment (as currently planned)
 

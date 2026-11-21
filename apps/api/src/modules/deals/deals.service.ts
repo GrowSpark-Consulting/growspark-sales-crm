@@ -8,6 +8,7 @@ import type {
   DealResponse,
   DealContactResponse,
   DealStageHistoryResponse,
+  NextActivitySummary,
 } from '@growspark/shared';
 import { prisma } from '../../db/prisma.js';
 import { Prisma as PrismaRuntime } from '../../generated/prisma/client.js';
@@ -17,6 +18,7 @@ import { writeAudit } from '../../lib/audit.js';
 import { toSkipTake, buildPaginationMeta } from '../../lib/pagination.js';
 import { buildOrderBy } from '../../lib/list-query.js';
 import { getDefaultPipeline, getFirstOpenStage } from '../../lib/pipeline.js';
+import { findNextActivity } from '../../lib/next-activity.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Deal, Prisma } from '../../generated/prisma/client.js';
 
@@ -37,7 +39,7 @@ type DealWithContacts = Deal & {
   dealContacts: { contactId: string; isPrimary: boolean; contact: { firstName: string; lastName: string | null } }[];
 };
 
-function toDealResponse(deal: DealWithContacts): DealResponse {
+function toDealResponse(deal: DealWithContacts, nextActivity?: NextActivitySummary | null): DealResponse {
   return {
     id: deal.id,
     name: deal.name,
@@ -63,6 +65,7 @@ function toDealResponse(deal: DealWithContacts): DealResponse {
       contactName: [dc.contact.firstName, dc.contact.lastName].filter(Boolean).join(' '),
       isPrimary: dc.isPrimary,
     })),
+    ...(nextActivity !== undefined ? { nextActivity } : {}),
   };
 }
 
@@ -128,7 +131,7 @@ export async function listDeals(ctx: RequestContext, query: ListDealsQuery): Pro
     prisma.deal.count({ where }),
   ]);
 
-  return { data: rows.map(toDealResponse), meta: buildPaginationMeta(query, total) };
+  return { data: rows.map((deal) => toDealResponse(deal)), meta: buildPaginationMeta(query, total) };
 }
 
 export async function createDeal(ctx: RequestContext, input: CreateDealInput): Promise<DealResponse> {
@@ -184,11 +187,12 @@ export async function createDeal(ctx: RequestContext, input: CreateDealInput): P
 }
 
 export async function getDeal(ctx: RequestContext, id: string): Promise<DealResponse> {
-  const deal = await prisma.deal.findFirst({ where: { id, ...scoped(ctx) }, include: dealContactsInclude });
+  const deal = await prisma.deal.findFirst({ where: { id, ...scoped(ctx) }, include: { ...dealContactsInclude, organization: { select: { timezone: true } } } });
   if (!deal) {
     throw new ApiError(404, 'NOT_FOUND', 'Deal not found');
   }
-  return toDealResponse(deal);
+  const nextActivity = await findNextActivity(ctx, { dealId: deal.id }, deal.organization.timezone);
+  return toDealResponse(deal, nextActivity);
 }
 
 export async function updateDeal(ctx: RequestContext, id: string, input: UpdateDealInput): Promise<DealResponse> {

@@ -4,6 +4,7 @@ import { duplicateMatchSchema } from './duplicates.js';
 import { leadStatusSchema, openLeadStatusSchema } from './lead-statuses.js';
 import { prioritySchema } from './priorities.js';
 import { phoneFieldSchema } from './phone.js';
+import { nextActivitySummarySchema } from './activities.js';
 
 function optionalTrimmed(max: number) {
   return z.string().trim().max(max).optional();
@@ -137,6 +138,8 @@ export const leadResponseSchema = z.object({
   archivedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** Populated on GET /leads/:id; omitted from collection and mutation responses. */
+  nextActivity: nextActivitySummarySchema.nullable().optional(),
   /**
    * Package 3.5 (not in 3.1's original brief): what the Day 3 convert
    * action created or linked, for the Converted panel's links. Always

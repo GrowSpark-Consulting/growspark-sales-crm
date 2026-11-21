@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { pageQuerySchema, paginationMetaSchema, sortQuerySchema, booleanQueryParam } from './common.js';
 import { lossReasonSchema } from './loss-reasons.js';
+import { nextActivitySummarySchema } from './activities.js';
 
 function optionalTrimmed(max: number) {
   return z.string().trim().max(max).optional();
@@ -116,6 +117,8 @@ export const dealResponseSchema = z.object({
   archivedAt: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** Populated on GET /deals/:id; omitted from collection and mutation responses. */
+  nextActivity: nextActivitySummarySchema.nullable().optional(),
   contacts: z.array(dealContactSummarySchema),
 });
 export type DealResponse = z.infer<typeof dealResponseSchema>;

@@ -1365,6 +1365,17 @@ refusing, idempotent `pnpm db:seed:sample` script. No schema or permission
 change and no dependency. Root verification: 290 API + 75 web tests (365
 total), all gates passed. See `docs/decisions.md` D53.
 
+**Package 4.2b (Day 4 backend gaps) is complete.** Lead and deal detail
+responses now include the computed next open task/call/meeting with an
+organisation-local overdue flag. Activity listing supports inclusive due
+bounds and `overdue=true` via `orgDayBounds`; existing owner, status, type,
+record-link and dueAt sort filters remain. The monthly revenue chart now
+anchors to the organisation's local month. Tests cover fixed-clock endpoint
+boundaries, mixed timelines, both detail endpoints, Staff access, cross-org
+Today isolation, empty-range/empty-org dashboard auxiliary SQL and the month
+transition. Root verification: 294 API + 75 web tests (369 total); all gates
+passed. See `docs/decisions.md` D54.
+
 ## 8. Database
 
 - **Migrations applied via** `prisma migrate deploy` (root: `pnpm db:migrate`,
@@ -1402,10 +1413,11 @@ total), all gates passed. See `docs/decisions.md` D53.
     (Staff) — passwords come **only** from the `SEED_ADMIN_PASSWORD` /
     `SEED_STAFF_PASSWORD` env vars, no default anywhere in code.
   - 7 lead sources, 1 default pipeline ("Sales Pipeline") with 6 stages.
-- **Current state after package 4.2:** `crm_dev` retains the normal seed plus
-  the fictional sample set (3 companies, 3 contacts, 5 leads, 3 deals, 12
-  activities, including 3 overdue tasks); verified by running the sample seed
-  twice and querying counts. `crm_test` is truncated by the API test harness
+- **Current state after package 4.2b:** `crm_dev` retains the normal seed plus
+  the fictional sample set (3 companies, 3 contacts, 5 leads, 4 deals, 14
+  activities, including 3 overdue tasks, one due-today task and a meeting
+  today); verified by running the sample seed twice and querying counts.
+  `crm_test` is truncated by the API test harness
   before each test and was left empty by the final root verification.
 - **No migration was added for packages 3.1 or 3.2.** Every table Day 3
   needed — `LeadConversion`, `Deal`, `DealContact`, `DealStageHistory`,
@@ -1471,6 +1483,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D51 — Package 4.0: optional lead source, decimal-string numeric editing and SQL reconciliation
 - D52 — Package 4.1: Activities API/timelines and organisation calendar bounds; no migration
 - D53 — Package 4.2: approved Today/dashboard metrics, independent SQL checks and fictional sample seed
+- D54 — Package 4.2b: detail next activity, activity due/overdue filters, expanded tests and Today sample coverage
 
 ## 10. Gotchas and lessons learned
 
@@ -2693,3 +2706,10 @@ log just records that a session happened and what it covered.
   290 API + 75 web tests (365 total), typecheck, lint and build. Day 4 UI is
   deferred to a later prompt as instructed. Package 4.2 was committed locally,
   not pushed.
+- **2026-11-21 — Package 4.2b complete.** Closed the Day 4 backend gaps with
+  lead/deal detail nextActivity summaries, due-range and overdue activity
+  filters, local-month chart boundary correction, expanded endpoint/timeline/
+  SQL/access tests, and Today-complete sample seed data. Final root
+  verification: 294 API + 75 web tests (369 total), typecheck, lint and build
+  passed. No schema, permission or dependency changes. Package committed
+  locally, not pushed; Day 4 UI remains deferred.

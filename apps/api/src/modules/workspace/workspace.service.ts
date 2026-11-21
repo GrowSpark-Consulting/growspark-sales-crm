@@ -121,8 +121,9 @@ async function leadsByStatus(ctx: RequestContext, ownerId?: string) {
 }
 
 async function monthlyRevenue(ctx: RequestContext, now: Date, timeZone: string, ownerId?: string) {
+  const [localYear, localMonth] = orgDateKey(now, timeZone).slice(0, 7).split('-').map(Number);
   const months = Array.from({ length: 6 }, (_, offset) => {
-    const anchor = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (5 - offset), 15, 12));
+    const anchor = new Date(Date.UTC(localYear!, localMonth! - 1 - (5 - offset), 15, 12));
     const bounds = orgMonthBounds(anchor, timeZone);
     return { month: orgDateKey(bounds.start, timeZone).slice(0, 7), ...bounds };
   });

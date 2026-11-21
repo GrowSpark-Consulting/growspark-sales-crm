@@ -2103,3 +2103,13 @@ reconstructed from memory, and cross-checked against each commit's own message.
 - Money aggregations stay in PostgreSQL NUMERIC. Existing pipeline summary logic accepts an optional owner filter and is reused for the dashboard pipeline breakdown. `orgDayBounds`/`orgMonthBounds` remain the sole boundary helpers.
 - Independent test SQL covers every KPI, source/status breakdowns, pipeline stages, monthly revenue and recent activity for all/mine, one-day and empty ranges, empty organisations, and cross-organisation isolation.
 - Added `pnpm db:seed:sample`: local fictional sample records are found-or-created, dates are relative to now, three tasks are overdue, repeat execution preserves counts, and the script refuses `NODE_ENV=production`. No new dependency, schema migration or permission change. Day 4 UI is intentionally outside this prompt.
+- Follow-up link correction (`a42b506`): recently updated deals link to `/deals` without a status filter so Won and Lost deals remain reachable; NEW-lead links retain the owner filter for `scope=mine`.
+
+## D54 — Day 4 package 4.2b: close backend gaps (2026-11-21)
+
+- Added computed `nextActivity` to `GET /leads/:id` and `GET /deals/:id`: the earliest open task/call/meeting, including overdue items, with `type`, `subject`, `dueAt` and organisation-local `isOverdue`; done, cancelled and notes do not qualify. Each detail request performs one scoped activity lookup; list responses omit the summary.
+- Added shared-Zod `dueFrom`, `dueTo` and `overdue=true` activity-list filters. Due bounds are inclusive and validated in order. Overdue means an open task/call/meeting with `dueAt` before `orgDayBounds(now, timezone).start`; `now` is injectable at the service boundary. Existing assignee, status, type and linked-record filters remain; `dueAt` was already sortable.
+- Fixed monthly won-revenue bucket anchoring to use the organisation's local year/month at month transitions.
+- Expanded tests for fixed-clock overdue membership through the endpoint, lead/deal next activity, contact/company/deal timelines and mixed history ordering, Staff access to Today/dashboard, cross-organisation Today records, empty dashboard auxiliary SQL comparisons, and the dashboard month transition.
+- Extended the idempotent sample seed with a due-today task, a meeting today and meetings in the next 7 days, a NEW lead owned by the demo Admin, and an open closing-soon deal with no open activity. It continues to use found-or-create only and refuses production. No schema/migration, dependency or permission change.
+- Final root verification: 294 API + 75 web tests (369 total), across 55 API and 16 web test files; typecheck, lint and build passed. Lint retains three existing React Hook Form warnings.

@@ -1,6 +1,6 @@
 import { prisma } from '../src/db/prisma.js';
 import { env } from '../src/env.js';
-import { orgDayBounds, addOrgDays } from '../src/lib/org-time.js';
+import { orgDayBounds, orgDateKey, addOrgDays } from '../src/lib/org-time.js';
 
 const PREFIX = 'Sample CRM';
 
@@ -8,7 +8,7 @@ async function main(): Promise<void> {
   if (env.NODE_ENV === 'production') throw new Error('The sample CRM seed refuses to run in production.');
   const organization = await prisma.organization.findFirst({ orderBy: { createdAt: 'asc' } });
   if (!organization) throw new Error('No organization found. Run `pnpm db:seed` first.');
-  const owner = await prisma.user.findFirst({ where: { organizationId: organization.id, isActive: true }, orderBy: { createdAt: 'asc' } });
+  const owner = await prisma.user.findFirst({ where: { organizationId: organization.id, role: 'ADMIN', isActive: true }, orderBy: { createdAt: 'asc' } });
   const pipeline = await prisma.pipeline.findFirst({ where: { organizationId: organization.id, isDefault: true } });
   const source = await prisma.leadSource.findFirst({ where: { organizationId: organization.id, name: 'Manual' } });
   if (!owner || !pipeline || !source) throw new Error('Seed an active user, default pipeline and Manual lead source first.');
@@ -56,21 +56,24 @@ async function main(): Promise<void> {
     { name: `${PREFIX} Open Deal`, status: 'OPEN' as const, stage: openStage, value: '250000.00', probability: openStage.probability },
     { name: `${PREFIX} Won Deal`, status: 'WON' as const, stage: wonStage, value: '125000.00', probability: 100 },
     { name: `${PREFIX} Lost Deal`, status: 'LOST' as const, stage: lostStage, value: '90000.00', probability: 0 },
+    { name: `${PREFIX} Closing Soon`, status: 'OPEN' as const, stage: openStage, value: '65000.00', probability: openStage.probability,
+      expectedCloseDate: new Date(`${orgDateKey(addOrgDays(new Date(), 7, organization.timezone), organization.timezone)}T00:00:00.000Z`) },
   ];
   for (let index = 0; index < dealSpecs.length; index += 1) {
     const spec = dealSpecs[index]!;
     let deal = await prisma.deal.findFirst({ where: { organizationId: organization.id, name: spec.name } });
     if (!deal) deal = await prisma.deal.create({ data: {
-      organizationId: organization.id, name: spec.name, companyId: companies[index]!.id,
+      organizationId: organization.id, name: spec.name, companyId: companies[index % companies.length]!.id,
       pipelineId: pipeline.id, stageId: spec.stage.id, status: spec.status, value: spec.value,
       probability: spec.probability, ownerId: owner.id,
+      ...('expectedCloseDate' in spec ? { expectedCloseDate: spec.expectedCloseDate } : {}),
       closedAt: spec.status === 'OPEN' ? null : new Date(), lostReason: spec.status === 'LOST' ? 'Price' : null,
     } });
     deals.push(deal);
   }
   for (let index = 0; index < deals.length; index += 1) {
     const deal = deals[index]!;
-    const contact = contacts[index]!;
+    const contact = contacts[index % contacts.length]!;
     const exists = await prisma.dealContact.findUnique({ where: { dealId_contactId: { dealId: deal.id, contactId: contact.id } } });
     if (!exists) await prisma.dealContact.create({ data: { organizationId: organization.id, dealId: deal.id, contactId: contact.id, isPrimary: true } });
   }
@@ -95,7 +98,26 @@ async function main(): Promise<void> {
       leadId: index % 2 === 0 ? leads[(index - 1) % leads.length]!.id : null,
     } });
   }
-  process.stdout.write('Sample CRM data is ready (3 companies, 3 contacts, 5 leads, 3 deals, 12 activities).\n');
+  const todayTaskSubject = `${PREFIX} TASK Due Today`;
+  if (!await prisma.activity.findFirst({ where: { organizationId: organization.id, subject: todayTaskSubject } })) {
+    await prisma.activity.create({ data: {
+      organizationId: organization.id, type: 'TASK', subject: todayTaskSubject,
+      description: 'Fictional sample data for local development.', status: 'OPEN', priority: 'MEDIUM',
+      dueAt: new Date(today.start.getTime() + 60 * 60 * 1000), assigneeId: owner.id, createdById: owner.id,
+      companyId: companies[0]!.id,
+    } });
+  }
+  const todayMeetingSubject = `${PREFIX} MEETING Today`;
+  if (!await prisma.activity.findFirst({ where: { organizationId: organization.id, subject: todayMeetingSubject } })) {
+    const startAt = new Date(today.start.getTime() + 10 * 60 * 60 * 1000);
+    await prisma.activity.create({ data: {
+      organizationId: organization.id, type: 'MEETING', subject: todayMeetingSubject,
+      description: 'Fictional sample data for local development.', status: 'OPEN', priority: 'MEDIUM',
+      startAt, endAt: new Date(startAt.getTime() + 60 * 60 * 1000), assigneeId: owner.id, createdById: owner.id,
+      companyId: companies[0]!.id,
+    } });
+  }
+  process.stdout.write('Sample CRM data is ready (3 companies, 3 contacts, 5 leads, 4 deals, 14 activities).\n');
 }
 
 main().catch((error: unknown) => {

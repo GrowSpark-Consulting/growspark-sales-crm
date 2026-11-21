@@ -5,6 +5,7 @@ import { scoped } from '../../lib/scoped.js';
 import { writeAudit } from '../../lib/audit.js';
 import { toSkipTake, buildPaginationMeta } from '../../lib/pagination.js';
 import { buildOrderBy } from '../../lib/list-query.js';
+import { orgDayBounds } from '../../lib/org-time.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Activity, Prisma } from '../../generated/prisma/client.js';
 
@@ -47,13 +48,30 @@ function toDate(value: string | null | undefined): Date | null | undefined {
 }
 
 export interface ActivitiesResult { data: ActivityResponse[]; meta: { page: number; pageSize: number; total: number } }
-export async function listActivities(ctx: RequestContext, query: ListActivitiesQuery): Promise<ActivitiesResult> {
+export async function listActivities(ctx: RequestContext, query: ListActivitiesQuery, now = new Date()): Promise<ActivitiesResult> {
+  const predicates: Prisma.ActivityWhereInput[] = [];
+  if (query.dueFrom || query.dueTo) {
+    predicates.push({ dueAt: {
+      ...(query.dueFrom ? { gte: new Date(query.dueFrom) } : {}),
+      ...(query.dueTo ? { lte: new Date(query.dueTo) } : {}),
+    } });
+  }
+  if (query.overdue) {
+    const organization = await prisma.organization.findUnique({ where: { id: ctx.orgId }, select: { timezone: true } });
+    if (!organization) throw new ApiError(404, 'NOT_FOUND', 'Organisation not found');
+    predicates.push({
+      status: 'OPEN',
+      type: { in: ['TASK', 'CALL', 'MEETING'] },
+      dueAt: { lt: orgDayBounds(now, organization.timezone).start },
+    });
+  }
   const where: Prisma.ActivityWhereInput = {
     ...scoped(ctx),
     ...(query.type ? { type: query.type } : {}), ...(query.status ? { status: query.status } : {}),
     ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
     ...(query.leadId ? { leadId: query.leadId } : {}), ...(query.contactId ? { contactId: query.contactId } : {}),
     ...(query.companyId ? { companyId: query.companyId } : {}), ...(query.dealId ? { dealId: query.dealId } : {}),
+    ...(predicates.length ? { AND: predicates } : {}),
   };
   const [rows, total] = await Promise.all([
     prisma.activity.findMany({ where, orderBy: buildOrderBy(query.sort, { field: 'createdAt', direction: 'desc' }), ...toSkipTake(query) }),

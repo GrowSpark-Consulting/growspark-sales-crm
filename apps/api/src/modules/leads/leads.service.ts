@@ -8,6 +8,7 @@ import type {
   LeadResponse,
   LeadStatusHistoryResponse,
   DuplicateMatch,
+  NextActivitySummary,
 } from '@growspark/shared';
 import { prisma } from '../../db/prisma.js';
 import { Prisma as PrismaRuntime } from '../../generated/prisma/client.js';
@@ -17,12 +18,13 @@ import { writeAudit } from '../../lib/audit.js';
 import { toSkipTake, buildPaginationMeta } from '../../lib/pagination.js';
 import { buildOrderBy } from '../../lib/list-query.js';
 import { findDuplicateLeads } from '../../lib/duplicates.js';
+import { findNextActivity } from '../../lib/next-activity.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Lead, Prisma } from '../../generated/prisma/client.js';
 
 type LeadConversionSummary = { companyId: string; contactId: string; dealId: string | null } | null;
 
-function toLeadResponse(lead: Lead, conversion: LeadConversionSummary = null): LeadResponse {
+function toLeadResponse(lead: Lead, conversion: LeadConversionSummary = null, nextActivity?: NextActivitySummary | null): LeadResponse {
   return {
     id: lead.id,
     firstName: lead.firstName,
@@ -49,6 +51,7 @@ function toLeadResponse(lead: Lead, conversion: LeadConversionSummary = null): L
     createdAt: lead.createdAt.toISOString(),
     updatedAt: lead.updatedAt.toISOString(),
     conversion,
+    ...(nextActivity !== undefined ? { nextActivity } : {}),
   };
 }
 
@@ -191,18 +194,21 @@ export async function createLead(ctx: RequestContext, input: CreateLeadInput): P
 }
 
 export async function getLead(ctx: RequestContext, id: string): Promise<LeadResponse> {
-  const lead = await prisma.lead.findFirst({ where: { id, ...scoped(ctx) } });
+  const lead = await prisma.lead.findFirst({ where: { id, ...scoped(ctx) }, include: { organization: { select: { timezone: true } } } });
   if (!lead) {
     throw new ApiError(404, 'NOT_FOUND', 'Lead not found');
   }
   // Package 3.5: only the detail endpoint pays for this extra lookup — a
   // non-converted lead simply has no LeadConversion row, so this is a
   // cheap miss for the common case, not a join every list row would carry.
-  const conversion = await prisma.leadConversion.findUnique({
-    where: { leadId: lead.id },
-    select: { companyId: true, contactId: true, dealId: true },
-  });
-  return toLeadResponse(lead, conversion ?? null);
+  const [conversion, nextActivity] = await Promise.all([
+    prisma.leadConversion.findUnique({
+      where: { leadId: lead.id },
+      select: { companyId: true, contactId: true, dealId: true },
+    }),
+    findNextActivity(ctx, { leadId: lead.id }, lead.organization.timezone),
+  ]);
+  return toLeadResponse(lead, conversion ?? null, nextActivity);
 }
 
 export async function updateLead(
