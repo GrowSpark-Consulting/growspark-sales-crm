@@ -17,6 +17,7 @@ import { formatPhoneForDisplay } from "@/lib/format";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { ContactFormDialog } from "@/components/contacts/contact-form-dialog";
 import { DealsTab } from "@/components/deals/deals-tab";
+import { RecordTimeline } from "@/components/activities/record-timeline";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -141,6 +142,7 @@ export function ContactDetailPageClient({ contactId }: { contactId: string }) {
           label: "Deals",
           content: <DealsTab contactId={contact.id} emptyLabel={`No deals yet for ${fullName}.`} />,
         },
+        { value: "timeline", label: "Timeline", content: <RecordTimeline owner="contacts" recordId={contact.id} /> },
       ]}
     />
   );

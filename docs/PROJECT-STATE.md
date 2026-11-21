@@ -405,7 +405,8 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         PhoneInput, 2.7 item 2),
                         contacts-page-client.tsx, contact-detail-page-client.tsx
                         (3.5 D50 gained a read-only Deals tab, shared
-                        DealsTab, no "Add deal" link per the brief)
+                        DealsTab, no "Add deal" link per the brief; 4.3 D55
+                        gained the shared Timeline tab)
     leads/                  (2.6, D39) leads-page-client.tsx (list: all 5
                         named filters + search/sort/paging, sortable
                         name/status/priority/created only); lead-form.tsx
@@ -490,6 +491,11 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         contactId filters (contactId was 3.3's own
                         forward-looking addition for exactly this); only
                         Company's usage passes addHref
+    activities/             activity-composer.tsx and record-timeline.tsx
+                        (4.3, D55) — shared Task/Call/Meeting/Note composer
+                        and paginated merged timeline, reused by all four
+                        record detail pages; completed entries include the
+                        actor and timestamp from existing audit events
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx,
                         users-page-client.tsx (2.0, D31 — the Client
@@ -525,6 +531,7 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     use-deals.ts            (3.3, D48) useDealsList(params), useDeal(id),
                         useDealStageHistory(id)
     use-pipeline.ts         (3.3, D48) usePipelineStages(), usePipelineSummary()
+    use-activities.ts       (4.3, D55) paginated useRecordTimeline() query
   lib/
     api-client.ts           ApiError + apiGet/apiPost/apiPatch, same-origin
                         credentials; onUnauthorized(listener) — apiFetch
@@ -900,6 +907,7 @@ packages pin exact versions, no `^`/`~` ranges, per `CLAUDE.md`).
 | apps/web | `vitest` | 5.1.1 | Package 1.6 — added (with explicit sign-off) so `lib/format.ts` could ship with real unit tests; same pinned version as `apps/api` (D27) |
 | apps/web | `jsdom`, `@testing-library/react`, `@testing-library/dom` | 31.0.1, 16.3.3, 10.4.2 | Package 2.3b — added for component tests (2.4); `vitest.config.mts` sets `environment: "jsdom"` globally (D36) |
 | apps/web | `@dnd-kit/core` | 6.3.1 | Package 3.4 — the pipeline board's drag and drop; confirmed no peer-dependency warning against `react@19.3.1` before installing. `@dnd-kit/sortable`/`/utilities` deliberately **not** added — approval was core only (D49) |
+| apps/web | `recharts` | 3.11.0 | Exact-pinned by the owner in `064a0f7`; approved for Day 4 dashboard charts, peer range includes React 19.3.1; first used in package 4.5 |
 | packages/shared | `zod` | 4.6.7 | |
 
 ## 7. What has been built, package by package
@@ -1376,6 +1384,21 @@ Today isolation, empty-range/empty-org dashboard auxiliary SQL and the month
 transition. Root verification: 294 API + 75 web tests (369 total); all gates
 passed. See `docs/decisions.md` D54.
 
+**Package 4.3 (Activity composer and record timelines) is complete.** Added a
+shared composer for Task, Call, Meeting and Note to Lead, Contact, Company and
+Deal timelines; activities link to the current record, Notes omit due date
+and are stored DONE, and the assignee defaults to the signed-in user. The
+shared timeline merges activities with lead status/conversion and deal-stage
+history newest-first, with load-more paging and Complete/Cancel actions.
+Completed activity entries show completion time and actor, enriched from
+existing audit events without a schema change. Lead/deal key facts show the
+API's next activity and overdue status. Tests: 295 API + 79 web = 374.
+`pnpm typecheck`, `pnpm lint`, `pnpm --filter api test`,
+`pnpm --filter web test`, and `pnpm build` passed. Lint retains three
+existing React Hook Form warnings. No schema, migration, permission change or
+dependency added. Browser/theme/focus checks remain unverified; no browser
+was launched. See `docs/decisions.md` D55.
+
 ## 8. Database
 
 - **Migrations applied via** `prisma migrate deploy` (root: `pnpm db:migrate`,
@@ -1627,7 +1650,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 ## 11. Testing
 
 - `pnpm test` (root) runs `packages/shared` (no tests yet — its schemas are
-  exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run` — 5
+  exercised via `apps/api/tests/shared/`), `apps/web` (`vitest run` — 17
   files: `tests/lib/format.test.ts` (12, package 1.6),
   `tests/lib/api-client.test.ts` (4, package 1.7),
   `tests/components/data-table.test.tsx` (7),
@@ -1639,9 +1662,10 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   `close-lost-dialog.test.tsx`, `deal-detail-page-client.test.tsx`; plus
   package 3.4's `pipeline-board.test.tsx`; plus package 3.5's
   `convert-lead-dialog.test.tsx` and `lead-detail-page-client.test.tsx`),
-  and `apps/api` (`vitest run`) — **282 `apps/api` tests + 74 `apps/web`
-  tests, 356 total**, all passing as of the last run (package 3.5,
-  closing out Day 3). Package 2.7
+  plus package 4.3's `tests/components/activity-composer.test.tsx` (4 — selected
+  type/link, Note without due date, completion refresh with actor/time, and
+  overdue label), and `apps/api` (`vitest run`) — **295 `apps/api` tests + 79
+  `apps/web` tests, 374 total**, all passing after package 4.3. Package 2.7
   (items 1–4) brought the count to 244 + 53 =
   297 (D42's reset-on-hide tests, D41's phone-validation and `PhoneInput`
   composition tests, D40/D43's "More details"/Source-preselect/Contact-
@@ -1661,7 +1685,9 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   conversion-summary round-trip, all folded into
   `tests/leads/conversion.test.ts`) and 9 `apps/web` tests
   (`convert-lead-dialog.test.tsx`, `lead-detail-page-client.test.tsx`,
-  D50) for the current 282 + 74 = 356. `apps/web` runs under jsdom (D36) with
+  D50) for 282 + 74 = 356; package 4.3 added one API test in
+  `tests/activities/activities.test.ts` and four web tests above, bringing the
+  current count to 295 + 79 = 374. `apps/web` runs under jsdom (D36) with
   `tests/setup.ts` registering RTL's `afterEach(cleanup)` (D37) —
   needed because RTL's own auto-cleanup never self-registers without
   vitest's `globals: true`, which this repo doesn't use.
@@ -1855,10 +1881,10 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   same session.** Day 6/7 (testing, stabilisation, demo) remain
   explicitly out of scope until the build days are done.
 
-- **Day 4 backend packages 4.0–4.2 are complete** (details in §7 and
-  decisions D51–D53). Activities, timelines, Today, dashboard and sample data
-  are implemented and fully verified. The Day 4 UI has not been started and
-  is deferred to the user's separate prompt.
+- **Day 4 backend packages 4.0–4.2b and UI package 4.3 are complete**
+  (details in §7 and decisions D51–D55). The Activity composer and merged
+  record timelines are implemented and automated verification passed.
+  Package 4.4 (My Tasks and Today UI), then 4.5 (dashboard UI) are next.
 
 ## 14. Open questions and unverified items
 
@@ -2713,3 +2739,13 @@ log just records that a session happened and what it covered.
   verification: 294 API + 75 web tests (369 total), typecheck, lint and build
   passed. No schema, permission or dependency changes. Package committed
   locally, not pushed; Day 4 UI remains deferred.
+- **2026-11-21 — Package 4.3 complete.** Added the shared activity composer,
+  paginated merged Timeline tabs on Lead/Contact/Company/Deal, next-activity
+  display on Lead/Deal, and completion actor/time sourced from existing audit
+  rows. Added one API test and four web tests. Verification passed sequentially:
+  `pnpm typecheck`, `pnpm lint` (three existing warnings),
+  `pnpm --filter api test` (55 files, 295 tests),
+  `pnpm --filter web test` (17 files, 79 tests), and `pnpm build`. No schema,
+  migration, permission change or dependency added. No browser was started;
+  browser-only checks remain unverified. Package 4.3 was committed locally,
+  not pushed; package 4.4 is next.

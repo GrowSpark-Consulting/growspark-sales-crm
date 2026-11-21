@@ -3,7 +3,9 @@ import { booleanQueryParam, pageQuerySchema, paginationMetaSchema, sortQuerySche
 import { prioritySchema } from './priorities.js';
 
 export const activityTypeSchema = z.enum(['TASK', 'CALL', 'MEETING', 'NOTE']);
+export type ActivityType = z.infer<typeof activityTypeSchema>;
 export const activityStatusSchema = z.enum(['OPEN', 'DONE', 'CANCELLED']);
+export type ActivityStatus = z.infer<typeof activityStatusSchema>;
 export const nextActivitySummarySchema = z.object({
   type: z.enum(['TASK', 'CALL', 'MEETING']),
   subject: z.string(),
@@ -81,6 +83,7 @@ export const timelineQuerySchema = pageQuerySchema.extend({});
 export const timelineEntrySchema = z.object({
   id: z.string(), kind: z.enum(['ACTIVITY', 'LEAD_STATUS', 'DEAL_STAGE', 'CONVERSION']),
   at: z.string(), title: z.string(), description: z.string().nullable(), actorId: z.string().nullable(),
+  status: activityStatusSchema.optional(), completedAt: z.string().nullable().optional(), completedByName: z.string().nullable().optional(),
 });
 export type TimelineEntry = z.infer<typeof timelineEntrySchema>;
 export const timelineResponseSchema = z.object({

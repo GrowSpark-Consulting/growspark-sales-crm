@@ -159,6 +159,22 @@ describe('Activities API', () => {
     expect(timeline.body.nextActivity.subject).toBe('Follow up');
   });
 
+  it('includes the completing actor and completion time in activity timeline entries', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const lead = await prisma.lead.create({ data: {
+      organizationId: tenant.organization.id, firstName: 'Completion', sourceId: tenant.leadSource.id,
+      email: 'completion@example.test', emailNormalized: 'completion@example.test',
+    } });
+    const created = await api(token).post('/api/v1/activities').send({ type: 'TASK', subject: 'Review quote', leadId: lead.id });
+    await api(token).post(`/api/v1/activities/${created.body.data.id}/complete`);
+    const timeline = await api(token).get(`/api/v1/leads/${lead.id}/timeline`);
+    expect(timeline.body.data[0]).toMatchObject({
+      status: 'DONE', completedByName: tenant.adminUser.name,
+    });
+    expect(timeline.body.data[0].completedAt).toBeTruthy();
+  });
+
   it('merges contact, company and deal timelines with mixed lead conversion and deal-stage history in order', async () => {
     const tenant = await createTestTenant();
     const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);

@@ -181,7 +181,16 @@ export async function getTimeline(ctx: RequestContext, owner: TimelineOwner, id:
     ? { ...scoped(ctx), OR: [{ contactId: id }, ...(linkedDealIds.length ? [{ dealId: { in: linkedDealIds } }] : [])] }
     : { ...scoped(ctx), ...link };
   const activities = await prisma.activity.findMany({ where: activityWhere, orderBy: { createdAt: 'desc' } });
-  const entries: TimelineEntry[] = activities.map((a) => ({ id: a.id, kind: 'ACTIVITY', at: a.createdAt.toISOString(), title: `${a.type}: ${a.subject}`, description: a.description, actorId: a.createdById }));
+  const completionEvents = activities.length ? await prisma.auditEvent.findMany({
+    where: { ...scoped(ctx), entityType: 'activity', action: 'activity.completed', entityId: { in: activities.map((activity) => activity.id) } },
+    include: { actor: { select: { name: true } } },
+  }) : [];
+  const completedByActivity = new Map(completionEvents.map((event) => [event.entityId, event.actor?.name ?? null]));
+  const entries: TimelineEntry[] = activities.map((a) => ({
+    id: a.id, kind: 'ACTIVITY', at: a.createdAt.toISOString(), title: `${a.type}: ${a.subject}`, description: a.description, actorId: a.createdById,
+    status: a.status, completedAt: a.completedAt?.toISOString() ?? null,
+    completedByName: a.status === 'DONE' ? completedByActivity.get(a.id) ?? null : null,
+  }));
   if (owner === 'lead') {
     const [history, conversion] = await Promise.all([
       prisma.leadStatusHistory.findMany({ where: { ...scoped(ctx), leadId: id }, include: { changedBy: { select: { name: true } } } }),

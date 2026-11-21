@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { CompanyContactsTab } from "@/components/companies/company-contacts-tab";
 import { DealsTab } from "@/components/deals/deals-tab";
+import { RecordTimeline } from "@/components/activities/record-timeline";
 import { formatDate, formatPhoneForDisplay } from "@/lib/format";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -154,6 +155,7 @@ export function CompanyDetailPageClient({ companyId }: { companyId: string }) {
             />
           ),
         },
+        { value: "timeline", label: "Timeline", content: <RecordTimeline owner="companies" recordId={company.id} /> },
       ]}
     />
   );

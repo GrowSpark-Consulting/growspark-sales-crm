@@ -19,6 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { CloseLostDialog } from "@/components/deals/close-lost-dialog";
 import { DealContactsTab } from "@/components/deals/deal-contacts-tab";
+import { NextActivityField, RecordTimeline } from "@/components/activities/record-timeline";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -213,6 +214,7 @@ export function DealDetailPageClient({ dealId }: { dealId: string }) {
         { label: "Weighted value", value: formatINR(weightedValue) },
         { label: "Expected close", value: deal.expectedCloseDate ? formatDate(deal.expectedCloseDate) : null },
         { label: "Owner", value: ownerName ?? "Unassigned" },
+        { label: "Next activity", value: <NextActivityField activity={deal.nextActivity} /> },
       ]}
       tabs={[
         {
@@ -279,6 +281,7 @@ export function DealDetailPageClient({ dealId }: { dealId: string }) {
             </div>
           ),
         },
+        { value: "timeline", label: "Timeline", content: <RecordTimeline owner="deals" recordId={deal.id} /> },
       ]}
     />
   );

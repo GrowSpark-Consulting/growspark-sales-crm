@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { ConvertLeadDialog } from "@/components/leads/convert-lead-dialog";
+import { NextActivityField, RecordTimeline } from "@/components/activities/record-timeline";
 import { formatDate, formatTime, formatPhoneForDisplay } from "@/lib/format";
 import { leadStatusBadgeVariant, leadStatusLabel, priorityBadgeVariant, priorityLabel } from "@/lib/lead-presentation";
 
@@ -142,6 +143,7 @@ export function LeadDetailPageClient({ leadId }: { leadId: string }) {
         { label: "Priority", value: <Badge variant={priorityBadgeVariant(lead.priority)}>{priorityLabel(lead.priority)}</Badge> },
         { label: "Owner", value: ownerName ?? "Unassigned" },
         { label: "Next follow-up", value: lead.nextFollowUpAt ? `${formatDate(lead.nextFollowUpAt)}, ${formatTime(lead.nextFollowUpAt)}` : null },
+        { label: "Next activity", value: <NextActivityField activity={lead.nextActivity} /> },
       ]}
       tabs={[
         {
@@ -274,6 +276,7 @@ export function LeadDetailPageClient({ leadId }: { leadId: string }) {
             </div>
           ),
         },
+        { value: "timeline", label: "Timeline", content: <RecordTimeline owner="leads" recordId={lead.id} /> },
       ]}
     />
   );
