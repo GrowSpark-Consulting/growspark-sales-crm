@@ -147,16 +147,31 @@ specific package you're about to work on.
   each was built. `docs/MANUAL-TEST-DAY3.md` is written and ready for the
   user to run in a real browser — not yet run by anyone, same as every
   other manual test script in this repo (no browser-automation tool here).
+- **Day 4 is done.** Backend packages 4.0–4.2b (D51–D54) built the
+  Activities API, record timelines, organisation time-bounds helpers, the
+  `GET /today`/`GET /dashboard` endpoints with the owner-approved metrics,
+  and a fictional sample-data seed (`pnpm db:seed:sample`). UI packages
+  4.3–4.5 (D55–D57) built: a shared Activity composer and merged Timeline
+  tab on Lead/Contact/Company/Deal detail pages (4.3); `/tasks` (My Tasks —
+  Open/Overdue/Done tabs, type/priority/due-range filters) and `/today` (one
+  card per Today section, a Mine/All scope toggle, Complete and "Add
+  follow-up" actions) (4.4 — this package was resumed from a prior session
+  that had left it half-built and uncommitted; see D56 for the full audit of
+  what was kept versus rewritten); and the real dashboard on Home (nine
+  StatCard KPIs, four Recharts bar charts each with a screen-reader-only
+  data-table alternative, a recent-activity list, date-range and scope
+  controls) (4.5). **296 `apps/api` + 91 `apps/web` = 387 automated tests
+  pass.** `docs/MANUAL-TEST-DAY4.md` is written and ready for the user to
+  run in a real browser — not yet run by anyone; see
+  `docs/DAY-4-SUMMARY.md` for a plain-language look back at the whole day,
+  including exactly what has and hasn't been verified.
 
 ## The next work, in order
 
-### Day 4 — activities, timelines, Today workspace, dashboard
-
-Backend packages 4.0–4.2b are complete as of 2026-11-21, including the
-owner-approved metrics and Today rules, detail nextActivity, and activity due
-and overdue filters (decisions D51–D54). See `docs/PROJECT-STATE.md` §7 and
-`docs/reconciliation.md`. The Day 4 UI is intentionally not started; wait for
-the user's separate prompt before building it.
+Day 5 (website intake, CSV export, Docker packaging, the P0 freeze) is not
+yet detailed in this repo — confirm exact scope with the user before
+starting it. Per the roadmap, Days 6–7 (testing, stabilisation, demo) stay
+out of scope until the build days are done.
 
 ## Day 4: staging deployment (as currently planned)
 
@@ -183,8 +198,15 @@ A fuller, individually-verified version of some of these lives in
 - **No browser-automation tool exists in this environment.** Every manual
   browser check (console errors, hydration warnings, light/dark theme,
   focus order, and anything in `MANUAL-TEST-DAY1.md`/`MANUAL-TEST-DAY2.md`/
-  `MANUAL-TEST-DAY3.md`) needs the user to actually run it; don't claim to
-  have verified any of that yourself.
+  `MANUAL-TEST-DAY3.md`/`MANUAL-TEST-DAY4.md`) needs the user to actually
+  run it; don't claim to have verified any of that yourself.
+- **The Day 4 dashboard's four Recharts bar charts have never been looked
+  at in a real browser.** Automated tests cover their screen-reader-only
+  data-table alternative (Recharts' `ResponsiveContainer` renders at zero
+  width/height in jsdom — there is no `ResizeObserver` there — so the
+  actual SVG bars/tooltips/axis labels are untested territory); whether
+  they actually look right, in both themes, is for `MANUAL-TEST-DAY4.md`
+  §4 and §6 to confirm.
 - **The pipeline board's actual drag-and-drop gesture (package 3.4) has
   never been watched happen in a real browser**, for the same reason —
   only the always-present "Move to…" dropdown fallback has an automated
