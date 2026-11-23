@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { checkDatabaseSchemaConsistency, checkLocalDatabaseHost } from './lib/database-config-guards.js';
 
 /**
  * Express's "trust proxy" setting accepts `false`, `true`, or a hop count
@@ -21,25 +22,56 @@ const trustProxySchema = z
     return hops;
   });
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().int().positive().default(4000),
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  ALLOWED_ORIGINS: z
-    .string()
-    .default('http://localhost:3000')
-    .transform((value) =>
-      value
-        .split(',')
-        .map((origin) => origin.trim())
-        .filter((origin) => origin.length > 0),
-    ),
-  TRUST_PROXY: trustProxySchema,
-  SESSION_TTL_DAYS: z.coerce.number().int().positive().default(7),
-});
+const envSchema = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    PORT: z.coerce.number().int().positive().default(4000),
+    DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+    // Unset in local dev/test (the adapter targets whatever the connection's
+    // default schema is, unchanged). Set to "sales" in staging, matching
+    // DATABASE_URL's own ?schema= param — see docs/decisions.md D58 and the
+    // checkDatabaseSchemaConsistency guard below for why both must agree.
+    DATABASE_SCHEMA: z.string().min(1).optional(),
+    ALLOWED_ORIGINS: z
+      .string()
+      .default('http://localhost:3000')
+      .transform((value) =>
+        value
+          .split(',')
+          .map((origin) => origin.trim())
+          .filter((origin) => origin.length > 0),
+      ),
+    TRUST_PROXY: trustProxySchema,
+    SESSION_TTL_DAYS: z.coerce.number().int().positive().default(7),
+  })
+  .superRefine((value, ctx) => {
+    const schemaMismatch = checkDatabaseSchemaConsistency(value.DATABASE_URL, value.DATABASE_SCHEMA);
+    if (schemaMismatch) {
+      ctx.addIssue({ code: 'custom', path: ['DATABASE_SCHEMA'], message: schemaMismatch });
+    }
+
+    // Never applies to NODE_ENV=production (Render genuinely connects to
+    // Supabase) or to the staging scripts (which load .env.staging.local
+    // directly and never import this module at all).
+    if (value.NODE_ENV !== 'production') {
+      const nonLocalHost = checkLocalDatabaseHost(value.DATABASE_URL);
+      if (nonLocalHost) {
+        ctx.addIssue({ code: 'custom', path: ['DATABASE_URL'], message: nonLocalHost });
+      }
+    }
+  });
+
+/**
+ * Exported separately from the process.exit-on-failure wrapper below so
+ * tests can assert on validation behaviour (including the cross-field
+ * guards above) without actually terminating the test process.
+ */
+export function parseEnv(raw: NodeJS.ProcessEnv) {
+  return envSchema.safeParse(raw);
+}
 
 function loadEnv() {
-  const result = envSchema.safeParse(process.env);
+  const result = parseEnv(process.env);
   if (!result.success) {
     console.error('Invalid environment configuration:');
     for (const issue of result.error.issues) {
