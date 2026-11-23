@@ -1620,6 +1620,16 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D55 — Package 4.3: shared activity composer and merged record timelines, completion actor/time enrichment, no schema change
 - D56 — Package 4.4: My Tasks and Today workspace UI, resumed from a half-built uncommitted session; Today items link straight to their own record
 - D57 — Package 4.5: dashboard on Home, nine StatCard KPIs (a logged conflict with the design system's six-card guidance), four single-series bar charts with a sr-only table alternative each, no schema/dependency change
+- D58 — Package 4C Part A: schema targeting for staging — `@prisma/adapter-pg`'s own `schema` option (not Prisma's `multiSchema`, not the URL's `?schema=` param, which only steers `migrate`) is what makes the runtime Client target the `sales` schema; tested against a local non-superuser stand-in role, not just assumed
+- D59 — Package 4C Part B: `DATABASE_URL`'s `?schema=` and `DATABASE_SCHEMA` must always agree (a new pure, reusable guard) and local dev/test refuse to start against a non-localhost `DATABASE_URL`, scoped to never apply in production or to the staging scripts
+- D60 — Package 4C Part B: `TRUST_PROXY` stays `false` on Render too, closing D21/D23's "revisit at deployment" note by documentation, not a code change — Next's `rewrites()` proxy still breaks the forwarding chain regardless of hosting platform
+- D61 — Package 4C Part A completion: `DATABASE_POOL_MAX` (default 10, staging sets 5) and `DATABASE_SSL_CA`/`DATABASE_SSL_REJECT_UNAUTHORIZED` (unused today — see D66)
+- D62 — Package 4C Part C: the three staging scripts (`staging:migrate`/`staging:create-admin`/`staging:seed-sample`); `seed-lib.ts` split into `seedBaselineOrganization()` and `seedDemoUsers()` so staging structurally cannot get the two local demo accounts
+- D63 — Fix: `pnpm staging:migrate` failed on Windows (`pnpm` resolves to a `.cmd` shim; Node 22 refuses to spawn one without a shell) — fixed by running the Prisma CLI's own entry file via `process.execPath` directly, no shell involved
+- D64 — Fix: new `APP_ENV` env var (no default, on purpose) tells staging apart from Render's real production deployment for the sample-seed guard, which was refusing staging for the wrong reason (`NODE_ENV=production`, which staging legitimately sets)
+- D65 — Milestone: `staging:migrate` and `staging:create-admin` ran successfully against the real Supabase project, confirmed by the user — the first real-world validation of D58's mechanism and D62's bootstrap flow
+- D66 — TLS against the real Supabase pooler is verified (on), but via a version-specific `pg-connection-string` aliasing of `sslmode=require`→`verify-full` that is scheduled to change in a future major version; recommended fix is a one-line connection-string edit (`sslmode=verify-full` explicitly) in the user's own `.env.staging.local`, not a code change
+- D67 — Package 4C Part D: `render.yaml` (two services, `region: singapore`, every env var `sync: false`) and `docs/STAGING.md`; the API's `startCommand` had to bypass its own `package.json` `start` script (`node --env-file=.env`, which crashes with no `.env` file present, as every Render deployment has)
 
 ## 10. Gotchas and lessons learned
 
@@ -2008,6 +2018,21 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   tests). No manual browser pass has been run on any Day 4 screen yet —
   that's the next thing to do, per the roadmap's own Day 4 acceptance
   checklist.
+- **Package 4C (hosted staging) is built and the database steps have run
+  for real** (details in §7/§9, decisions D58–D67; full walkthrough in
+  `docs/STAGING.md`). Schema targeting (`@prisma/adapter-pg`'s own `schema`
+  option, D58), config guards (D59/D60), connection pool/TLS config (D61,
+  verified safe in D66), the three staging scripts (D62, plus Windows and
+  `APP_ENV` fixes in D63/D64), and the Render Blueprint (`render.yaml`,
+  D67) are all committed, not pushed. **Confirmed against the real Supabase
+  project, by the user**: `pnpm staging:migrate` and
+  `pnpm staging:create-admin` both succeeded (D65). **Not yet done**:
+  `pnpm staging:seed-sample` (optional, needs `APP_ENV=staging` added to
+  the user's own `.env.staging.local` first, per D64); deploying either
+  Render service from the Blueprint; clicking through the deployed app.
+  This tool has never run a staging script itself and never will without
+  being told to — `apps/api/.env.staging.local` is git-ignored and
+  deny-listed from this tool's own Read/Edit/Write.
 
 ## 14. Open questions and unverified items
 
@@ -2019,6 +2044,12 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   architecture decision (how/whether a reverse proxy in front of both apps
   sets and forwards `X-Forwarded-For`), not something to engineer around in
   application code. Revisit before relying on it as a real control.
+  **Checked against the real Render/Supabase deployment architecture once
+  it was actually known (D60)**: the conclusion is unchanged and now
+  confirmed, not just assumed — Next's `rewrites()` proxy still breaks the
+  forwarding chain the same way on Render as it does locally, so
+  `TRUST_PROXY` stays `false` there too. Genuine per-IP limiting still
+  needs a different network path and is still deferred.
 - The exact plan for Days 2–5 beyond what's already built — the user told me
   the 7-day shape (build/test/stabilise) but not full detail for every
   package; don't invent content for them.
@@ -2064,9 +2095,11 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   company-name duplicate hint (2.5, D38) reuses the plain `?q=` list
   search rather than a dedicated endpoint, so it may miss a genuine
   duplicate that doesn't share a contiguous substring with the typed name
-  (a real, accepted limitation, not a bug). The Day 4 hosted-staging plan
-  (Render + Supabase, a separate `sales` schema, a first-admin command) is
-  still just a plan — nothing built toward it — and the website-forwarding
+  (a real, accepted limitation, not a bug). **The Day 4 hosted-staging plan
+  is now built and partly run for real** — see the Package 4C bullet in
+  §13 and `docs/STAGING.md` (this sentence was a stale "still just a plan"
+  note by the time of this edit; deploying the Render services themselves
+  is the remaining step) — and the website-forwarding
   patch remains explicitly **not approved**.
 - **New from package 3.4**: the pipeline board's actual pointer/touch and
   keyboard drag gesture has never been interactively verified in a real
@@ -2872,3 +2905,51 @@ log just records that a session happened and what it covered.
   migration, permission change or dependency added. No browser was started;
   browser-only checks remain unverified. Package 4.3 was committed locally,
   not pushed; package 4.4 is next.
+- **2026-11-23 — Package 4C (hosted staging) built end-to-end, and the
+  database steps confirmed working against the real Supabase project.**
+  Full detail in `docs/decisions.md` D58–D67 and `docs/STAGING.md`.
+  Summary: Part 0 added `.claude/settings.json` deny rules plus a
+  `.gitignore` fix so this tool can never read, create, edit or delete
+  `apps/api/.env.staging.local` or any other real env file (exact paths,
+  not globs, so `.example` files stay editable) — a guardrail, explicitly
+  not a guarantee (command-pattern Bash/PowerShell denies can be bypassed
+  by quoting, aliases, or other tools; documented as such, not oversold).
+  Part A found, by testing against a local non-superuser stand-in role
+  (not the real `sales_app`, never reachable from here), that
+  `@prisma/adapter-pg`'s own `schema` constructor option — not Prisma's
+  `multiSchema` feature, not the connection string's `?schema=` param,
+  which only steers `migrate` — is what makes the Client actually target
+  the `sales` schema, with zero `schema.prisma` changes (D58); also added
+  `DATABASE_POOL_MAX`/`DATABASE_SSL_CA`/`DATABASE_SSL_REJECT_UNAUTHORIZED`
+  (D61). Part B added two new startup guards — `DATABASE_URL`'s `?schema=`
+  must agree with `DATABASE_SCHEMA` (D59), local dev/test refuse a
+  non-localhost `DATABASE_URL` (D59) — and closed D21/D23's "revisit at
+  deployment" note now that the Render/Next.js topology is known:
+  `TRUST_PROXY` stays `false` there too (D60). Part C built the three
+  staging scripts and split `seed-lib.ts` so staging cannot get the local
+  demo accounts even by accident (D62) — this tool never ran any of them
+  itself, only their extracted pure logic, against a fake file or the
+  local database. Two bugs were found by the user actually running the
+  scripts and fixed the same session: `staging:migrate` failed on Windows
+  with `ENOENT` (`pnpm` resolves to a `.cmd` shim Node 22 refuses to spawn
+  without a shell — fixed by running Prisma's own CLI entry file via
+  `process.execPath` directly, D63), and `staging:seed-sample` refused
+  with "refuses to run in production" because `NODE_ENV=production` is
+  what staging legitimately sets (fixed with a new `APP_ENV` env var that
+  has no default, on purpose, D64). **After those fixes, the user
+  confirmed `pnpm staging:migrate` and `pnpm staging:create-admin` both
+  succeeded against the real Supabase project** (D65) — the first
+  real-world validation of the schema-targeting mechanism. That also
+  answered a standing TLS question: certificate verification is on, via a
+  `pg-connection-string` version-specific aliasing of `sslmode=require` to
+  `verify-full` that is scheduled to change in a future major version; a
+  one-line `sslmode=verify-full` edit to the user's own connection string
+  was proposed as the future-proof fix (D66). Part D added `render.yaml`
+  (two services, `region: singapore`, every env var `sync: false`) and
+  `docs/STAGING.md` (D67). Final state: typecheck/lint/build clean across
+  the whole repo; `apps/api` test count progressed 324 → 332 → 333 → 347
+  across this session's commits as each piece landed. Eight commits this
+  session, nothing pushed. Remaining for next time: `APP_ENV=staging`
+  needs adding to the user's own `.env.staging.local` before
+  `pnpm staging:seed-sample` can run; deploying the two Render services
+  from the Blueprint; clicking through the deployed app.

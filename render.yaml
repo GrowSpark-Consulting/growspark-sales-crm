@@ -1,0 +1,86 @@
+# Render Blueprint — two services, matching the architecture in
+# docs/decisions.md D1: a Next.js web app and a separate Express API, with
+# the browser only ever talking to the web app's own origin (its /api/*
+# proxy reaches the API service over HTTPS, server to server).
+#
+# Every envVars entry below is `sync: false` deliberately — this file names
+# which variables exist, never their values. Applying this blueprint in the
+# Render dashboard prompts you to fill each one in by hand; see
+# docs/STAGING.md for exactly what to put in each one and where it comes
+# from (your own apps/api/.env.staging.local, or a value Render itself
+# assigns once you know the service's name).
+#
+# region: singapore — closest Render region to the Supabase project's own
+# Mumbai (ap-south-1) region; minimises latency between the API and its
+# database. Render has no Mumbai region itself.
+
+services:
+  - type: web
+    name: growspark-crm-api
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: >-
+      corepack enable &&
+      corepack prepare pnpm@11.10.0 --activate &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @growspark/shared build &&
+      pnpm --filter api exec prisma generate &&
+      pnpm --filter api build
+    # Not `pnpm --filter api start` — that script runs
+    # `node --env-file=.env dist/index.js`, and Node's --env-file fails hard
+    # (exit code 9) if the file doesn't exist, which it never will on
+    # Render (env vars are injected directly into process.env, no .env file
+    # involved at all). src/env.ts already reads process.env directly with
+    # no file-loading step of its own, so this just runs the compiled output.
+    startCommand: node apps/api/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      # production — enables Secure cookies (src/lib/cookies.ts) and the
+      # permission-map validation; see the "What each variable means" table
+      # in docs/STAGING.md.
+      - key: NODE_ENV
+        sync: false
+      # staging — distinct from NODE_ENV=production; see docs/decisions.md
+      # D64 for why both exist.
+      - key: APP_ENV
+        sync: false
+      # PORT is deliberately NOT listed here — Render assigns and injects
+      # its own PORT automatically, and src/env.ts already defaults to it
+      # correctly. Declaring it here would just invite overriding a value
+      # Render needs to control itself.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SCHEMA
+        sync: false
+      - key: DATABASE_POOL_MAX
+        sync: false
+      - key: DATABASE_SSL_CA
+        sync: false
+      - key: DATABASE_SSL_REJECT_UNAUTHORIZED
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: TRUST_PROXY
+        sync: false
+      - key: SESSION_TTL_DAYS
+        sync: false
+
+  - type: web
+    name: growspark-crm-web
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: >-
+      corepack enable &&
+      corepack prepare pnpm@11.10.0 --activate &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @growspark/shared build &&
+      pnpm --filter web build
+    startCommand: pnpm --filter web start
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_ENV
+        sync: false
+      - key: API_INTERNAL_URL
+        sync: false

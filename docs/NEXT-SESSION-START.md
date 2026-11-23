@@ -78,7 +78,7 @@ next.
    detailed reference; skim its table of contents (the `##` headings) and
    come back to specific sections as needed rather than reading linearly
    every time.
-4. **`docs/decisions.md`** — every approved decision, D1 through D50 (D3
+4. **`docs/decisions.md`** — every approved decision, D1 through D67 (D3
    and D5 don't exist — never assigned), append-only, each with the
    reasoning behind it. Don't re-litigate something already decided here
    without a new entry. D46–D50 cover all of Day 3 (lead conversion, the
@@ -86,6 +86,7 @@ next.
    D46/D47 were written in a docs-only catch-up pass after the fact (the
    code was already built and committed first; see §7 of
    `docs/PROJECT-STATE.md` for why), D48–D50 as each package was built.
+   D58–D67 cover package 4C (hosted staging, built after Day 4).
 5. **`apps/api/prisma/SCHEMA-SUMMARY.md`** — the factual per-model
    column/index/FK/CHECK reference for the database. Read this instead of
    `schema.prisma` itself when you just need to know what a table looks
@@ -95,7 +96,10 @@ Also worth a skim before starting: **`docs/DAY-1-SUMMARY.md`**,
 **`docs/DAY-2-SUMMARY.md`**, and **`docs/DAY-3-SUMMARY.md`** — plain-
 language look-backs at what was built and how it was verified each day. Not
 required reading like the five files above, but faster than re-deriving the
-same picture from `PROJECT-STATE.md`'s session log.
+same picture from `PROJECT-STATE.md`'s session log. **If you're about to
+touch anything staging-related, read `docs/STAGING.md` in full first** — it
+is the walkthrough, not just a summary, and this file's own staging section
+below is deliberately short.
 
 Only after those should you start reading application code for the
 specific package you're about to work on.
@@ -173,22 +177,42 @@ yet detailed in this repo — confirm exact scope with the user before
 starting it. Per the roadmap, Days 6–7 (testing, stabilisation, demo) stay
 out of scope until the build days are done.
 
-## Day 4: staging deployment (as currently planned)
+## Staging deployment (package 4C — built, database steps confirmed working)
 
-Not yet started. As currently planned (per the user, 2026-11-19):
+Built on 2026-11-23, after Day 4. Full detail in `docs/decisions.md`
+D58–D67 and the complete walkthrough in `docs/STAGING.md` — read that file
+before touching staging, not this summary.
 
-- Hosted staging around **Day 4**: the API and web app on **Render**, the
-  database on **Supabase**, using a **separate `sales` schema** (not the
-  website's own schema) and its **own database role** — i.e. genuinely
-  isolated from the live Grow Spark website's data, not just a different
-  table prefix in the same schema.
-- A **create-first-admin command** will be needed for that environment,
-  since the seed script refuses to run in production (by design, D15) and
-  there's no admin account otherwise.
-- **The website-forwarding patch is explicitly NOT approved and NOT
+- API and web on **Render**, database on **Supabase**, in a separate
+  `sales` schema with its own `sales_app` role — genuinely isolated from
+  the live Grow Spark website's data, not just a different table prefix.
+  The schema-targeting mechanism is `@prisma/adapter-pg`'s own `schema`
+  option (D58), not Prisma's `multiSchema` and not the connection string's
+  `?schema=` param alone (that only steers `migrate`).
+- `pnpm staging:migrate` and `pnpm staging:create-admin` **have been run
+  for real by the user and succeeded** against the actual Supabase
+  project (D65) — the organisation and first Admin exist there now. This
+  tool has never touched the real `apps/api/.env.staging.local` and never
+  will without being told to (git-ignored, and deny-listed from this
+  tool's own Read/Edit/Write in `.claude/settings.json`).
+- `pnpm staging:seed-sample -- --confirm` (optional fictional demo data)
+  has **not** been run yet — it needs `APP_ENV=staging` added to the
+  user's own `.env.staging.local` first (D64; the file may predate that
+  line).
+- **Not yet done: deploying either Render service.** `render.yaml` (a
+  Blueprint, both services) and the full clicking walkthrough are written
+  (`docs/STAGING.md`), but nobody has applied it in the Render dashboard
+  yet. That — plus clicking through the deployed app at all — is the next
+  concrete step here, not a new build package.
+- TLS against the real Supabase pooler is confirmed on, via a
+  version-specific `pg-connection-string` behaviour that's scheduled to
+  change later (D66) — a one-line `sslmode=verify-full` edit to the user's
+  own connection string was proposed as the durable fix; not yet confirmed
+  whether the user made that edit.
+- **The website-forwarding patch is still explicitly NOT approved and NOT
   applied.** Nothing in this repo should assume or build toward it without
   a fresh, explicit approval naming the exact file list, per the hard
-  rules above.
+  rules above. Staging is unrelated to this and does not change it.
 
 ## Open items
 
