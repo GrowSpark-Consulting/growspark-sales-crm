@@ -97,4 +97,20 @@ describe('parseEnv', () => {
     const result = parseEnv({ ...BASE_ENV, NODE_ENV: 'test', DATABASE_SSL_REJECT_UNAUTHORIZED: 'nope' });
     expect(result.success).toBe(false);
   });
+
+  it('leaves APP_ENV undefined when unset, not defaulted to any particular value', () => {
+    const result = parseEnv({ ...BASE_ENV, NODE_ENV: 'test' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.APP_ENV).toBeUndefined();
+  });
+
+  it.each(['local', 'staging', 'production'])('accepts APP_ENV=%s', (appEnv) => {
+    const result = parseEnv({ ...BASE_ENV, NODE_ENV: 'test', APP_ENV: appEnv });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an APP_ENV value outside local/staging/production', () => {
+    const result = parseEnv({ ...BASE_ENV, NODE_ENV: 'test', APP_ENV: 'bogus' });
+    expect(result.success).toBe(false);
+  });
 });

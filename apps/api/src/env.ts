@@ -43,6 +43,13 @@ const optionalBooleanFlagSchema = z
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    // Distinct from NODE_ENV on purpose: staging legitimately runs with
+    // NODE_ENV=production (D59 — that's what exempts the local-only database
+    // host guard), so NODE_ENV alone cannot tell staging apart from the real
+    // Render production deployment. No default — "missing" is deliberately
+    // its own case, not silently treated as any particular environment; see
+    // src/lib/sample-seed-guard.ts and docs/decisions.md D64.
+    APP_ENV: z.enum(['local', 'staging', 'production']).optional(),
     PORT: z.coerce.number().int().positive().default(4000),
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
     // Unset in local dev/test (the adapter targets whatever the connection's

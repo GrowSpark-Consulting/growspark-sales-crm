@@ -1,11 +1,17 @@
 import { prisma } from '../src/db/prisma.js';
 import { env } from '../src/env.js';
 import { orgDayBounds, orgDateKey, addOrgDays } from '../src/lib/org-time.js';
+import { checkSampleSeedAllowed } from '../src/lib/sample-seed-guard.js';
 
 const PREFIX = 'Sample CRM';
 
 async function main(): Promise<void> {
-  if (env.NODE_ENV === 'production') throw new Error('The sample CRM seed refuses to run in production.');
+  const refusal = checkSampleSeedAllowed({
+    appEnv: env.APP_ENV,
+    databaseSchema: env.DATABASE_SCHEMA,
+    confirmed: process.argv.includes('--confirm'),
+  });
+  if (refusal) throw new Error(refusal);
   const organization = await prisma.organization.findFirst({ orderBy: { createdAt: 'asc' } });
   if (!organization) throw new Error('No organization found. Run `pnpm db:seed` first.');
   const owner = await prisma.user.findFirst({ where: { organizationId: organization.id, role: 'ADMIN', isActive: true }, orderBy: { createdAt: 'asc' } });
