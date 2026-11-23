@@ -183,9 +183,10 @@ Built on 2026-11-23, after Day 4. Full detail in `docs/decisions.md`
 D58–D67 and the complete walkthrough in `docs/STAGING.md` — read that file
 before touching staging, not this summary.
 
-- API and web on **Render**, database on **Supabase**, in a separate
-  `sales` schema with its own `sales_app` role — genuinely isolated from
-  the live Grow Spark website's data, not just a different table prefix.
+- API on **Render** (one manual Web Service, not a Blueprint — D69), web
+  app on **Vercel**, database on **Supabase**, in a separate `sales` schema
+  with its own `sales_app` role — genuinely isolated from the live Grow
+  Spark website's data, not just a different table prefix.
   The schema-targeting mechanism is `@prisma/adapter-pg`'s own `schema`
   option (D58), not Prisma's `multiSchema` and not the connection string's
   `?schema=` param alone (that only steers `migrate`).
@@ -199,11 +200,13 @@ before touching staging, not this summary.
   has **not** been run yet — it needs `APP_ENV=staging` added to the
   user's own `.env.staging.local` first (D64; the file may predate that
   line).
-- **Not yet done: deploying either Render service.** `render.yaml` (a
-  Blueprint, both services) and the full clicking walkthrough are written
-  (`docs/STAGING.md`), but nobody has applied it in the Render dashboard
-  yet. That — plus clicking through the deployed app at all — is the next
-  concrete step here, not a new build package.
+- **Not yet done: deploying either the Render service or the Vercel
+  project.** The full clicking walkthrough for both is written
+  (`docs/STAGING.md`'s "Render: API" and "Vercel: web" sections — note
+  `render.yaml` is documentation only now, not an applied Blueprint, D69),
+  but nobody has created either yet. That — plus clicking through the
+  deployed app at all — is the next concrete step here, not a new build
+  package.
 - TLS against the real Supabase pooler is confirmed on, via a
   version-specific `pg-connection-string` behaviour that's scheduled to
   change later (D66) — a one-line `sslmode=verify-full` edit to the user's

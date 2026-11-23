@@ -1,10 +1,11 @@
 # Staging
 
-A hosted copy of this CRM for demos and manual testing — the API and web app
-on [Render](https://render.com), the database in a Supabase Postgres
-project, isolated in its own `sales` schema behind its own `sales_app`
-database role. It is **not** production: it exists to click through the app
-outside your own laptop, with fictional data only.
+A hosted copy of this CRM for demos and manual testing — the **web app on
+[Vercel](https://vercel.com)**, the **API on [Render](https://render.com)**
+(one manual Web Service, not a Blueprint — see D69), and the database in a
+Supabase Postgres project, isolated in its own `sales` schema behind its own
+`sales_app` database role. It is **not** production: it exists to click
+through the app outside your own laptop, with fictional data only.
 
 Read this file start to finish before touching anything here for the first
 time. It assumes you already have:
@@ -19,14 +20,15 @@ time. It assumes you already have:
 
 | Piece | Runs on | Notes |
 | --- | --- | --- |
-| API (Express) | Render, service `growspark-crm-api` | Built from `apps/api`; the only thing that ever talks to Supabase. |
-| Web (Next.js) | Render, service `growspark-crm-web` | Proxies `/api/*` to the API service over HTTPS, same-origin from the browser's point of view (D1). |
+| API (Express) | Render, service `growspark-crm-api`, one manual Web Service | Built from `apps/api`; the only thing that ever talks to Supabase. |
+| Web (Next.js) | Vercel, one project | Proxies `/api/*` to the API's public Render URL over HTTPS. The browser only ever talks to the Vercel origin — see "Order of operations" below for why this is same-origin from the browser's point of view even though the two services are on different platforms. |
 | Database | Supabase, project "growspark-workspace", schema `sales` | Shared with two other apps eventually, each in its own schema; this app only ever sees `sales`. |
 
 Nothing runs "staging" automatically. You run the staging scripts from your
 own machine (against `apps/api/.env.staging.local`, which only you can read
-or edit — this tool never touches it), and you deploy the two Render
-services from the `main` branch of this repo whenever you choose to.
+or edit — this tool never touches it), and you deploy the Render service and
+the Vercel project from the `main` branch of this repo whenever you choose
+to.
 
 ## `apps/api/.env.staging.local`
 
@@ -45,7 +47,7 @@ and where its value comes from.
 | `DATABASE_POOL_MAX` | Fixed: `5` | Supabase's free tier has few connections available. |
 | `DATABASE_SSL_CA` | Supabase dashboard → Project Settings → Database → **SSL Configuration** → download the CA certificate | A local file path (e.g. `D:\path\to\supabase-ca.crt`) or the certificate's own text pasted in directly. Required — see "TLS" below. |
 | `DATABASE_SSL_REJECT_UNAUTHORIZED` | Leave unset | The insecure escape hatch; not needed. |
-| `ALLOWED_ORIGINS` | The web service's Render URL, once you know it (e.g. `https://growspark-crm-web.onrender.com`) | Only needed for running things locally against staging; the deployed API service gets this from Render's own env vars (below), not this file. |
+| `ALLOWED_ORIGINS` | The web app's Vercel URL, once you know it (e.g. `https://growspark-crm.vercel.app`) | Only needed for running things locally against staging; the deployed API service gets this from Render's own env vars (below), not this file. |
 | `TRUST_PROXY` | Fixed: `false` | Stays `false` even on Render — see D60. |
 | `SESSION_TTL_DAYS` | Fixed: `7` | Same as local dev. |
 
@@ -158,57 +160,108 @@ activities) for a demo. Refuses without `--confirm`; refuses entirely unless
 Every one of these prints the database host and schema it's about to use —
 check that before it does anything, especially the first time.
 
-## Deploying to Render
+## Deploying — order of operations
 
-This repo has a `render.yaml` at its root (a "Blueprint") that describes both
-services. You only have to click through the setup once; after that, a
-redeploy is one click.
+The API and the web app's URLs are each other's inputs (the API needs the
+web app's URL for `ALLOWED_ORIGINS`; the web app needs the API's URL for
+`API_INTERNAL_URL`), so there's an unavoidable two-pass bootstrap the first
+time. After that, both URLs are fixed and you only ever redeploy, never
+re-wire.
 
-1. Push this repo to GitHub if it isn't already there (this tool never
-   pushes — that's still on you).
-2. Go to [dashboard.render.com](https://dashboard.render.com) and sign in
+1. **Push this repo to GitHub** if it isn't already there (this tool never
+   pushes — that's still on you). Both Render and Vercel deploy from GitHub.
+2. **Create the Render Web Service first** (see "Render: API" below). Render
+   assigns its public URL (`https://<name>.onrender.com`) as soon as you
+   pick the service name, before the first build even finishes — note it
+   down. For `ALLOWED_ORIGINS` on this first pass, you don't know the Vercel
+   URL yet; enter a harmless placeholder like `https://placeholder.invalid`
+   for now. Nothing should be making cross-origin writes against the API
+   yet, so a temporarily-wrong allow-list costs nothing.
+3. **Create the Vercel project second** (see "Vercel: web" below), setting
+   `API_INTERNAL_URL` to the real Render API URL from step 2. Vercel assigns
+   its own project URL (`https://<project>.vercel.app`) on first deploy —
+   note it down.
+4. **Go back to the Render service's Environment tab and fix
+   `ALLOWED_ORIGINS`** to the real Vercel URL from step 3 (exact origin —
+   scheme + host, no trailing slash, no path). Saving an environment
+   variable on Render triggers an automatic redeploy of that service by
+   itself; if it doesn't, use **Manual Deploy** → **Deploy latest commit**.
+5. Once both show **Live** (Render) / **Ready** (Vercel), open the Vercel
+   URL and sign in with the Admin account `pnpm staging:create-admin`
+   created.
+
+Any later change to either URL (a custom domain, a renamed service) means
+repeating step 4 — the API's `ALLOWED_ORIGINS` is the one place the Vercel
+URL is configured, and the Vercel project's `API_INTERNAL_URL` is the one
+place the Render URL is configured. Nothing else in the code hard-codes
+either address.
+
+## Render: API (manual Web Service, not a Blueprint)
+
+`render.yaml` at the repo root documents these exact same settings for
+reference (build/start commands in one place you can diff against) but is
+**not applied as a Blueprint** — create this as one manual service instead,
+per the change of plan recorded in D69.
+
+1. Go to [dashboard.render.com](https://dashboard.render.com) and sign in
    (GitHub sign-in is easiest, since Render needs repo access either way).
-3. Click **New +** → **Blueprint**.
-4. Connect your GitHub account if asked, then pick this repository.
-5. Render reads `render.yaml` and shows you two services:
-   `growspark-crm-api` and `growspark-crm-web`. If either name is already
-   taken by someone else on Render (names become part of the public
-   `.onrender.com` URL, so they're global, not per-account), Render will ask
-   you to change it — pick anything, just note down whatever you end up
-   with, since it changes the URLs below.
-6. Before clicking **Apply**, Render will prompt you for every environment
-   variable the blueprint declares (it lists names, never values — that's
-   `render.yaml`'s `sync: false` on every entry). Fill them in using the
-   table in the next section. You can also leave them blank for now and set
-   them after, under each service's **Environment** tab.
-7. Click **Apply**. Render builds and starts both services — the first
-   build takes several minutes (it's compiling TypeScript and generating the
-   Prisma client, not just installing packages).
-8. Once both services show **Live**, open the web service's URL
-   (`https://<your-web-service-name>.onrender.com`) and sign in with the
-   Admin account `pnpm staging:create-admin` created.
+2. Click **New +** → **Web Service**, connect your GitHub account if asked,
+   and pick this repository.
+3. Fill in these exact settings:
 
-### Environment variables to enter in Render
-
-**`growspark-crm-api`** — every value here comes straight from your own
-`apps/api/.env.staging.local` (the table earlier in this file), with two
-exceptions:
-
-| Variable | Value |
+| Setting | Value |
 | --- | --- |
-| `NODE_ENV` | from `.env.staging.local` |
-| `APP_ENV` | from `.env.staging.local` |
-| `DATABASE_URL` | from `.env.staging.local` |
-| `DATABASE_SCHEMA` | from `.env.staging.local` |
-| `DATABASE_POOL_MAX` | from `.env.staging.local` |
-| `DATABASE_SSL_CA` | **not** the file path from `.env.staging.local` — paste the certificate's own text instead; see "The CA certificate on Render" just below |
-| `DATABASE_SSL_REJECT_UNAUTHORIZED` | leave blank (unused) |
-| `ALLOWED_ORIGINS` | **not** from `.env.staging.local` — use the real `growspark-crm-web` Render URL from step 5 above, e.g. `https://growspark-crm-web.onrender.com` |
-| `TRUST_PROXY` | from `.env.staging.local` (`false`) |
-| `SESSION_TTL_DAYS` | from `.env.staging.local` |
+| Name | `growspark-crm-api` (global across all Render accounts — part of the `.onrender.com` URL; if taken, pick anything and note down what you end up with) |
+| Language/Runtime | **Node** |
+| Branch | `main` |
+| Region | **Singapore** — closest Render region to the Supabase project's Mumbai (`ap-south-1`) region; Render has no Mumbai region itself |
+| Root Directory | **leave blank** (repo root) — the build command below runs `pnpm --filter` commands from the monorepo root; setting a Root Directory of `apps/api` would break that |
+| Build Command | `corepack enable && corepack prepare pnpm@11.10.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @growspark/shared build && pnpm --filter api exec prisma generate && pnpm --filter api build` |
+| Start Command | `node apps/api/dist/index.js` |
+| Health Check Path | `/health` |
+| Instance Type | **Free** |
+| Auto-Deploy | **Yes** (on push to `main` — this tool never pushes, so this only fires when you push yourself) |
 
-`PORT` is not in this list at all — Render assigns and injects its own, and
-the app already reads whatever Render gives it.
+Note on the Start Command: **not** `pnpm --filter api start` — that script
+runs `node --env-file=.env dist/index.js`, and Node's `--env-file` fails hard
+(exit code 9) if the file doesn't exist, which it never will on Render (env
+vars are injected directly into `process.env`, no `.env` file involved at
+all). `src/env.ts` already reads `process.env` directly with no file-loading
+step of its own, so the plain `node apps/api/dist/index.js` just runs the
+compiled output against whatever Render injected.
+
+4. Before clicking **Create Web Service**, add every environment variable
+   below (Render's manual-service form has an **Environment Variables**
+   section right on the create page — you don't need a second trip to the
+   Environment tab unless you want to fix `ALLOWED_ORIGINS` later per step 4
+   of "Order of operations" above).
+
+### Render environment variables (`growspark-crm-api`)
+
+Every value comes straight from your own `apps/api/.env.staging.local` (the
+table earlier in this file), with the exceptions noted:
+
+| Variable | Required/Optional | Exact value to type | From `.env.staging.local`? |
+| --- | --- | --- | --- |
+| `NODE_ENV` | Required | `production` | Yes |
+| `APP_ENV` | Required | `staging` | Yes |
+| `DATABASE_URL` | Required | the full `postgresql://...?schema=sales&sslmode=verify-full` string | Yes — never type this by hand, copy it |
+| `DATABASE_SCHEMA` | Required | `sales` | Yes |
+| `DATABASE_POOL_MAX` | Required | `5` | Yes |
+| `DATABASE_SSL_CA` | Required | **not** the file path — paste the certificate's own PEM text; see "The CA certificate on Render" below | No — the file path in `.env.staging.local` doesn't exist on Render |
+| `DATABASE_SSL_REJECT_UNAUTHORIZED` | Optional | leave unset/blank | No — unused escape hatch |
+| `ALLOWED_ORIGINS` | Required | the real Vercel web app URL, e.g. `https://growspark-crm.vercel.app` (placeholder on the very first create — see "Order of operations") | **No** — this is the one value that is never a secret and never comes from this file; it's the Vercel URL |
+| `TRUST_PROXY` | Required | `false` | Yes |
+| `SESSION_TTL_DAYS` | Required | `7` | Yes |
+
+`PORT` is **not** in this list — Render assigns and injects its own, and
+`src/index.ts` already calls `app.listen(env.PORT, ...)`, which reads
+whatever Render gives it. Adding a `PORT` row yourself would just override a
+value Render needs to control.
+
+None of these values are secrets you should ever paste into chat, a commit,
+or anywhere outside Render's own environment variable fields and your own
+`.env.staging.local`.
 
 #### The CA certificate on Render
 
@@ -232,26 +285,122 @@ With `DATABASE_SSL_CA` set this way, certificate verification is fully on —
 is a separate, independent escape hatch that disables verification entirely;
 leaving it unset on Render keeps verification on regardless of how the CA is supplied.
 
-**`growspark-crm-web`**:
+## Vercel: web
 
-| Variable | Value |
+1. Go to [vercel.com](https://vercel.com) and sign in with GitHub, then
+   **Add New** → **Project** → import this repository.
+2. On the **Configure Project** screen, set:
+
+| Setting | Value |
 | --- | --- |
-| `NODE_ENV` | `production` |
-| `API_INTERNAL_URL` | the real `growspark-crm-api` Render URL from step 5, e.g. `https://growspark-crm-api.onrender.com` |
+| Root Directory | `apps/web` — click **Edit** next to Root Directory and select it |
+| "Include files outside the root directory in the Build Step" | **On** — required: this is a pnpm workspace, so the build needs the repo-root `pnpm-workspace.yaml`, root `pnpm-lock.yaml`, and `packages/shared` to exist alongside `apps/web`. Left off, install fails — Vercel only uploads the Root Directory's own subtree by default. |
+| Framework Preset | **Next.js** (auto-detected once Root Directory is set) |
+| Node.js Version | **22.x** (Project Settings → General → Node.js Version — matches the repo's pinned `engines.node: ">=22.12"`, same major as the `22.20.0` used locally and on Render) |
+| Install Command (override) | `corepack enable && corepack prepare pnpm@11.10.0 --activate && cd ../.. && pnpm install --frozen-lockfile` |
+| Build Command (override) | `cd ../.. && pnpm --filter @growspark/shared build && pnpm --filter web build` |
+| Output Directory | **leave as default** — Next.js preset auto-detects `apps/web/.next` once Root Directory is set; don't override it |
+
+Why the `cd ../..` in both commands: with Root Directory set to `apps/web`,
+Vercel runs the Install/Build commands with that as the working directory.
+`pnpm --filter @growspark/shared build` and `pnpm --filter web build` are
+workspace-filter commands — they only resolve correctly when `pnpm` is
+invoked from the monorepo root (`apps/web` is two levels down from
+`d:\GrowSpark\growspark-sales-crm`, so `cd ../..` reaches it). `pnpm --filter
+@growspark/shared build` must run before `pnpm --filter web build` because
+`apps/web` imports `@growspark/shared`'s **compiled** `dist` output, not its
+TypeScript source (D9) — skipping that step reproduces the exact "stale/
+missing dist" failure mode D12 already hardened against locally, just on
+Vercel instead. Despite the `cd`, the actual `next build` invocation (run
+*by* `pnpm --filter web build`, with its own cwd set to `apps/web`
+internally) still writes `.next` under `apps/web/` — matching where the
+Output Directory setting expects it.
+
+3. Add the one environment variable below, then click **Deploy**.
+
+### Vercel environment variables
+
+| Variable | Exact value to type |
+| --- | --- |
+| `API_INTERNAL_URL` | the real `growspark-crm-api` Render URL, e.g. `https://growspark-crm-api.onrender.com` (no trailing slash) |
+
+Set this for the **Production** environment (the one that serves your
+`main`-branch deployment); leave Preview/Development unset unless you later
+want preview deployments to also reach the staging API.
+
+**Do not add a `NODE_ENV` variable.** Vercel sets `NODE_ENV=production`
+itself for Production builds/runtime automatically; manually adding it only
+risks it diverging from what Vercel's own build pipeline expects.
+
+### `API_INTERNAL_URL` and the `/api/*` rewrite, explained
+
+`apps/web/next.config.ts`'s `rewrites()` is unchanged by this split — it
+still proxies `/api/:path*` to `${API_INTERNAL_URL}/api/:path*`. The only
+difference from the original same-Render-account plan is that
+`API_INTERNAL_URL` now points at a public internet address
+(`https://growspark-crm-api.onrender.com`) rather than a sibling service —
+there never was a private-network address in play even in the original
+plan (`render.yaml` always used the public `.onrender.com` URL for this),
+so nothing here is a new kind of address, just a different platform hosting
+the other end.
+
+**Does this still preserve cookies and the Origin check, now that the two
+halves are on different platforms?** Yes, for the same reason it worked
+when both were on Render: Next.js's `rewrites()` to an external, fully-
+qualified destination is a genuine **proxy**, not an HTTP redirect — the
+browser's request and response both stay on the Vercel origin
+(`https://growspark-crm.vercel.app`) throughout; Next.js's server makes the
+actual call to Render on the browser's behalf and relays the response back
+unchanged in all the ways that matter here:
+
+- The browser's `fetch()` call to `/api/...` is same-origin to the Vercel
+  deployment, so it sends `Origin: https://growspark-crm.vercel.app` (the
+  Fetch standard sends `Origin` on every non-GET/HEAD request, same-origin
+  or not). Next's rewrite forwards that header through to the API
+  unmodified — it isn't something Next's rewrite mechanism rewrites or
+  strips. The API's `enforceOriginAndContentType`
+  (`apps/api/src/middleware/csrf.ts`) sees exactly that Origin and checks it
+  against `ALLOWED_ORIGINS`, which must therefore hold the **Vercel** URL
+  (done in step 4 of "Order of operations" above), not the Render API's own
+  URL.
+- The API's `Set-Cookie` response header (`apps/api/src/lib/cookies.ts`,
+  `buildSessionCookieHeader`) carries no `Domain` attribute, so the browser
+  scopes the cookie to whichever origin it sees the response as coming
+  from — the Vercel origin, since that's the only address the browser ever
+  talks to. Next's rewrite relays `Set-Cookie` back to the browser
+  unmodified, the same way any reverse proxy does (this is the standard,
+  widely-used pattern for exactly this kind of cookie-authenticated BFF
+  proxy — not something specific to this app).
+- `SameSite=Lax` keeps working for the same reason it always did: from the
+  browser's point of view there is still only one origin in play
+  (`growspark-crm.vercel.app`). Render is never a cross-site target the
+  browser itself talks to.
+
+This is reasoned through from Next.js's documented external-rewrite proxy
+behavior, not yet confirmed by an actual login against the live Vercel +
+Render pair — add that to "What's still unverified" below until you've
+clicked through a real sign-in once both are deployed.
 
 ### Redeploying after a code change
 
-Once connected, Render redeploys automatically on every push to `main` (this
-tool never pushes, so this only happens when you push yourself). To redeploy
-manually without a new commit — e.g. after changing an environment variable
-— open the service in the Render dashboard and click **Manual Deploy** →
-**Deploy latest commit**.
+Both platforms redeploy automatically on every push to `main` (this tool
+never pushes, so this only happens when you push yourself):
+
+- **Render**: redeploys on push, and also redeploys automatically whenever
+  you save a changed environment variable. To force one without a new
+  commit, open the service and click **Manual Deploy** → **Deploy latest
+  commit**.
+- **Vercel**: redeploys on push, and also redeploys automatically whenever
+  you save a changed Project Settings environment variable (Vercel prompts
+  you to redeploy, it isn't fully automatic the way Render's is — click
+  **Redeploy** when it offers). To force one without a new commit, open the
+  project's **Deployments** tab and use **Redeploy** on the latest one.
 
 A schema change needs `pnpm staging:migrate` run again (from your own
-machine, against `.env.staging.local`) — Render redeploying the API service
-does not run migrations by itself; nothing in `buildCommand`/`startCommand`
-does that on purpose, so a migration is always a deliberate, visible step
-you take, never an automatic side effect of a deploy.
+machine, against `.env.staging.local`) either way — neither service's
+build/start command runs migrations by itself, so a migration is always a
+deliberate, visible step you take, never an automatic side effect of a
+deploy.
 
 ## Supabase pausing
 
@@ -286,8 +435,48 @@ the `sales` schema, or truncate its tables), done by you, not run from this
 repo. Ask first if you want help drafting that SQL when the time comes —
 it isn't written here in advance on purpose.
 
+## Did any code assume both services lived together on Render?
+
+Checked deliberately, since splitting the two services across platforms is
+exactly the kind of change that surfaces a hidden same-host assumption.
+Found: **none that needed fixing** — the app was already built assuming the
+API never knows or cares what's on the other side of `ALLOWED_ORIGINS`/the
+proxy, because D21/D23 (package 1.3b) had already established that the
+Next.js rewrite in front of the API doesn't forward real client info, so the
+code never assumed a trusted private network to begin with:
+
+- **Origin checks** (`csrf.ts`) — purely driven by the `ALLOWED_ORIGINS` env
+  var already; no code reads or assumes a Render-specific hostname anywhere.
+  Just needs the real value (the Vercel URL) set, per "Order of operations".
+- **`trust proxy`** (`app.ts`, `env.ts`) — stays `false`, unchanged. D21's
+  finding (the proxying layer in front of the API forwards neither
+  `X-Forwarded-For` nor `X-Forwarded-Proto`) is about Next.js's `rewrites()`
+  mechanism itself, not about which platform runs it — equally true whether
+  that Next.js process is on Render or Vercel.
+- **Secure cookies** (`cookies.ts`) — driven by `NODE_ENV === 'production'`,
+  which Render sets regardless of what's hosting the web app; both Render
+  and Vercel serve over HTTPS, so `Secure` cookies work either way. No
+  `Domain` attribute is set, which is exactly what makes the cross-platform
+  split work at all (see the `/api/*` rewrite explanation above).
+- **The rate limiter** (`rate-limit.ts`) — the global flood ceiling (not a
+  per-IP limiter) was already designed around "the real client IP never
+  reaches this process," per D21/D23. That's unaffected by which platform
+  sits in front of it.
+- **No `cors` package is used anywhere** in `apps/api` — confirmed by
+  searching the source. There was never a CORS allow-list to update, because
+  the browser was never meant to talk to the API's own origin directly, on
+  Render or anywhere else — only ever through the web app's same-origin
+  proxy. That design assumption holds exactly as well with Vercel in front.
+- **`render.yaml`** — this did assume co-location (it was a two-service
+  Blueprint). Updated to describe only the API service, and labelled as
+  documentation only, not an applied Blueprint — see D69.
+
 ## What's still unverified
 
+- A real sign-in against the live Vercel + Render pair, to confirm the
+  cross-platform cookie/Origin passthrough reasoned through above actually
+  behaves as expected end to end (nothing here suggests it wouldn't, but it
+  hasn't been clicked through).
 - The real `sales_app` role's exact grant boundaries beyond what's actually
   been exercised so far (a migration and one admin-user insert) — see D65.
 - The `DATABASE_SSL_CA` fix (D68) was verified by this tool without ever

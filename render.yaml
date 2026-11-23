@@ -1,18 +1,13 @@
-# Render Blueprint — two services, matching the architecture in
-# docs/decisions.md D1: a Next.js web app and a separate Express API, with
-# the browser only ever talking to the web app's own origin (its /api/*
-# proxy reaches the API service over HTTPS, server to server).
-#
-# Every envVars entry below is `sync: false` deliberately — this file names
-# which variables exist, never their values. Applying this blueprint in the
-# Render dashboard prompts you to fill each one in by hand; see
-# docs/STAGING.md for exactly what to put in each one and where it comes
-# from (your own apps/api/.env.staging.local, or a value Render itself
-# assigns once you know the service's name).
+# Documentation only — NOT applied as a Blueprint. See docs/decisions.md D69
+# and the "Render: API" section of docs/STAGING.md for the full story: the
+# web app (apps/web) is hosted on Vercel, not Render, so this file no longer
+# describes a two-service Blueprint to click "Apply" on. It exists only so
+# the API service's exact build/start commands live in one reviewable place
+# you can diff against the actual manual Web Service settings in the Render
+# dashboard — if you ever change one, change the other to match.
 #
 # region: singapore — closest Render region to the Supabase project's own
-# Mumbai (ap-south-1) region; minimises latency between the API and its
-# database. Render has no Mumbai region itself.
+# Mumbai (ap-south-1) region; Render has no Mumbai region itself.
 
 services:
   - type: web
@@ -63,6 +58,8 @@ services:
         sync: false
       - key: DATABASE_SSL_REJECT_UNAUTHORIZED
         sync: false
+      # The web app's Vercel URL (e.g. https://growspark-crm.vercel.app),
+      # not a Render address — see docs/STAGING.md's "Order of operations".
       - key: ALLOWED_ORIGINS
         sync: false
       - key: TRUST_PROXY
@@ -70,21 +67,7 @@ services:
       - key: SESSION_TTL_DAYS
         sync: false
 
-  - type: web
-    name: growspark-crm-web
-    runtime: node
-    plan: free
-    region: singapore
-    buildCommand: >-
-      corepack enable &&
-      corepack prepare pnpm@11.10.0 --activate &&
-      pnpm install --frozen-lockfile &&
-      pnpm --filter @growspark/shared build &&
-      pnpm --filter web build
-    startCommand: pnpm --filter web start
-    healthCheckPath: /login
-    envVars:
-      - key: NODE_ENV
-        sync: false
-      - key: API_INTERNAL_URL
-        sync: false
+# The web app (apps/web) used to be a second service here. It is now a
+# Vercel project instead — see docs/STAGING.md's "Vercel: web" section for
+# its Root Directory, Install/Build Command, and environment variable
+# (API_INTERNAL_URL, pointed at this service's own Render URL).
