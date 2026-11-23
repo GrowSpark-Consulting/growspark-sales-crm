@@ -216,7 +216,7 @@ per the change of plan recorded in D69.
 | Branch | `main` |
 | Region | **Singapore** — closest Render region to the Supabase project's Mumbai (`ap-south-1`) region; Render has no Mumbai region itself |
 | Root Directory | **leave blank** (repo root) — the build command below runs `pnpm --filter` commands from the monorepo root; setting a Root Directory of `apps/api` would break that |
-| Build Command | `corepack enable && corepack prepare pnpm@11.10.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @growspark/shared build && pnpm --filter api exec prisma generate && pnpm --filter api build` |
+| Build Command | `corepack pnpm@11.10.0 install --frozen-lockfile && corepack pnpm@11.10.0 --filter @growspark/shared build && corepack pnpm@11.10.0 --filter api exec prisma generate && corepack pnpm@11.10.0 --filter api build` |
 | Start Command | `node apps/api/dist/index.js` |
 | Health Check Path | `/health` |
 | Instance Type | **Free** |
@@ -229,6 +229,38 @@ vars are injected directly into `process.env`, no `.env` file involved at
 all). `src/env.ts` already reads `process.env` directly with no file-loading
 step of its own, so the plain `node apps/api/dist/index.js` just runs the
 compiled output against whatever Render injected.
+
+**Why the Build Command no longer has `corepack enable`/`corepack prepare
+... --activate` — the real build failure, found and fixed 2026-11-24 (D70):**
+on an actual Render deploy, `corepack enable && corepack prepare
+pnpm@11.10.0 --activate && ...` failed at the very first step with
+`Internal Error: EROFS: read-only file system, unlink '/usr/bin/pnpm'`
+(`corepack`'s own `EnableCommand.generatePosixLink`). Render's current Node
+build image ships a pre-installed `pnpm` at `/usr/bin/pnpm` that the build
+user cannot write to; `corepack enable` (and the shim-installing half of
+`corepack prepare ... --activate`) tries to replace exactly that file.
+Confirmed against Corepack's own README (`nodejs/corepack`, "Utility
+Commands"): `corepack <binary name>[@<version>] [... args]` is a documented
+one-shot form — "this meta-command runs the specified package manager in
+the local folder" — that needs no prior `enable` step, downloads/caches the
+pinned version under `COREPACK_HOME` (`$HOME/.cache/node/corepack`, not a
+system directory), and still checks the project's `packageManager` field
+for consistency. Using `corepack pnpm@11.10.0 ...` for every command
+instead gets the exact pinned pnpm version with no shim-install step at
+all, so there's nothing left trying to write to `/usr/bin`.
+
+**Also found in the same failed deploy's log: Render picked Node 26.13.1,
+not 22.** Render's build log read `Requesting Node.js version >=22.12 ...
+Using Node.js version 26.13.1 via /opt/render/project/src/package.json` —
+the root `package.json`'s `engines.node` (`">=22.12"`, a lower bound only,
+no upper bound) is Render's fallback Node-version source when nothing more
+specific is set, and `>=22.12` is satisfied by the newest available major
+too. Per Render's own current docs (`render.com/docs/node-version`), the
+`NODE_VERSION` environment variable takes the **highest** precedence of
+every way to set a Node version on Render — above a `.node-version` file,
+above `.nvmrc`, above `engines.node` — so setting it directly in the
+service's environment variables (next table) pins Render to the exact same
+Node version used locally, with no repository change at all.
 
 4. Before clicking **Create Web Service**, add every environment variable
    below (Render's manual-service form has an **Environment Variables**
@@ -243,6 +275,7 @@ table earlier in this file), with the exceptions noted:
 
 | Variable | Required/Optional | Exact value to type | From `.env.staging.local`? |
 | --- | --- | --- | --- |
+| `NODE_VERSION` | Required | `22.20.0` | **No** — this isn't in `.env.staging.local` at all (it only matters for local-vs-Render Node resolution, not the app itself); pins Render to the same Node version used locally and overrides the `engines.node` range that otherwise let Render pick a newer major (see the build-failure note above, D70) |
 | `NODE_ENV` | Required | `production` | Yes |
 | `APP_ENV` | Required | `staging` | Yes |
 | `DATABASE_URL` | Required | the full `postgresql://...?schema=sales&sslmode=verify-full` string | Yes — never type this by hand, copy it |
@@ -297,7 +330,7 @@ leaving it unset on Render keeps verification on regardless of how the CA is sup
 | "Include files outside the root directory in the Build Step" | **On** — required: this is a pnpm workspace, so the build needs the repo-root `pnpm-workspace.yaml`, root `pnpm-lock.yaml`, and `packages/shared` to exist alongside `apps/web`. Left off, install fails — Vercel only uploads the Root Directory's own subtree by default. |
 | Framework Preset | **Next.js** (auto-detected once Root Directory is set) |
 | Node.js Version | **22.x** (Project Settings → General → Node.js Version — matches the repo's pinned `engines.node: ">=22.12"`, same major as the `22.20.0` used locally and on Render) |
-| Install Command (override) | `corepack enable && corepack prepare pnpm@11.10.0 --activate && cd ../.. && pnpm install --frozen-lockfile` |
+| Install Command (override) | `cd ../.. && pnpm install --frozen-lockfile` |
 | Build Command (override) | `cd ../.. && pnpm --filter @growspark/shared build && pnpm --filter web build` |
 | Output Directory | **leave as default** — Next.js preset auto-detects `apps/web/.next` once Root Directory is set; don't override it |
 
@@ -316,17 +349,44 @@ Vercel instead. Despite the `cd`, the actual `next build` invocation (run
 internally) still writes `.next` under `apps/web/` — matching where the
 Output Directory setting expects it.
 
-3. Add the one environment variable below, then click **Deploy**.
+**No `corepack enable`/`corepack prepare` here, on purpose (D70) — checked
+against Vercel's own current docs, not assumed from the Render fix above.**
+An earlier draft of this Install Command had the same
+`corepack enable && corepack prepare pnpm@11.10.0 --activate` pair the
+Render Build Command just had to drop over a real `EROFS` failure there.
+Vercel's docs (`vercel.com/docs/deployments/configure-a-build#corepack`,
+`vercel.com/docs/package-managers`) show Corepack support is **opt-in**, not
+automatic: "You can enable Corepack by adding an environment variable with
+name `ENABLE_EXPERIMENTAL_COREPACK` and value `1` to your Project" — once
+that's set, "Vercel will use the package manager specified in the
+`package.json` file's `packageManager` field" **by itself**, as part of
+Vercel's own install step, before your Install Command even runs. Running
+`corepack enable`/`corepack prepare ... --activate` yourself on top of that
+is redundant at best; Vercel's docs don't say whether its build image's
+system paths are writable the way Render's turned out not to be, so there's
+no documented reason to take the risk for no benefit. Without
+`ENABLE_EXPERIMENTAL_COREPACK=1`, Vercel instead infers the package manager
+version from the **lock file**, and its documented lockfile-version-to-pnpm
+mapping doesn't list pnpm 11 at all — exactly the kind of silent
+version-mismatch this repo's "no code change without checking the installed
+major version" rule (`CLAUDE.md`) exists to catch. So the env var is
+required, not optional, even though the Install Command no longer mentions
+Corepack at all.
+
+3. Add both environment variables below, then click **Deploy**.
 
 ### Vercel environment variables
 
 | Variable | Exact value to type |
 | --- | --- |
+| `ENABLE_EXPERIMENTAL_COREPACK` | `1` — required so Vercel's own build step honors the root `package.json`'s `"packageManager": "pnpm@11.10.0"` field; see the Corepack note above (D70) |
 | `API_INTERNAL_URL` | the real `growspark-crm-api` Render URL, e.g. `https://growspark-crm-api.onrender.com` (no trailing slash) |
 
-Set this for the **Production** environment (the one that serves your
+Set both for the **Production** environment (the one that serves your
 `main`-branch deployment); leave Preview/Development unset unless you later
-want preview deployments to also reach the staging API.
+want preview deployments to also reach the staging API or build with the
+same pinned pnpm version (recommended if you ever do use Preview
+deployments, for the same lockfile-mismatch reason above).
 
 **Do not add a `NODE_ENV` variable.** Vercel sets `NODE_ENV=production`
 itself for Production builds/runtime automatically; manually adding it only

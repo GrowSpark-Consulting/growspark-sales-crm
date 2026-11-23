@@ -15,13 +15,22 @@ services:
     runtime: node
     plan: free
     region: singapore
+    # Not `corepack enable && corepack prepare pnpm@11.10.0 --activate &&
+    # pnpm install ...` — that failed on a real Render deploy with
+    # `Internal Error: EROFS: read-only file system, unlink '/usr/bin/pnpm'`
+    # (corepack's EnableCommand trying to replace Render's own pre-installed
+    # pnpm shim at a path the build user can't write to). `corepack
+    # pnpm@11.10.0 <args>` is Corepack's own documented one-shot form (its
+    # README, "Utility Commands": "this meta-command runs the specified
+    # package manager in the local folder") — it needs no `enable` step,
+    # caches the pinned version under $HOME/.cache/node/corepack instead of
+    # any system directory, and still validates against this repo's
+    # `packageManager` field. See docs/decisions.md D70.
     buildCommand: >-
-      corepack enable &&
-      corepack prepare pnpm@11.10.0 --activate &&
-      pnpm install --frozen-lockfile &&
-      pnpm --filter @growspark/shared build &&
-      pnpm --filter api exec prisma generate &&
-      pnpm --filter api build
+      corepack pnpm@11.10.0 install --frozen-lockfile &&
+      corepack pnpm@11.10.0 --filter @growspark/shared build &&
+      corepack pnpm@11.10.0 --filter api exec prisma generate &&
+      corepack pnpm@11.10.0 --filter api build
     # Not `pnpm --filter api start` — that script runs
     # `node --env-file=.env dist/index.js`, and Node's --env-file fails hard
     # (exit code 9) if the file doesn't exist, which it never will on
@@ -31,6 +40,14 @@ services:
     startCommand: node apps/api/dist/index.js
     healthCheckPath: /health
     envVars:
+      # Required — see docs/decisions.md D70. Render's own fallback Node
+      # source (this repo's package.json#engines.node, ">=22.12", no upper
+      # bound) let a real deploy resolve to Node 26 instead of 22.
+      # NODE_VERSION is Render's highest-precedence Node version source
+      # (above .node-version/.nvmrc/engines.node per render.com/docs/
+      # node-version) — pin it to exactly the version used locally.
+      - key: NODE_VERSION
+        value: 22.20.0
       # production — enables Secure cookies (src/lib/cookies.ts) and the
       # permission-map validation; see the "What each variable means" table
       # in docs/STAGING.md.
