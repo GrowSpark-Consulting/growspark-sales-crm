@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Home, Users as UsersIcon, Building2, Contact, Target, Handshake, Sun, Moon, Monitor, LogOut } from "lucide-react";
+import { Home, Users as UsersIcon, Building2, Contact, Target, Handshake, Sun, Moon, Monitor, LogOut, CalendarDays, ListTodo } from "lucide-react";
 import { cn } from "cn";
 import { useMe, ME_QUERY_KEY } from "@/hooks/use-me";
 import { apiPost, ApiError } from "@/lib/api-client";
@@ -25,6 +25,8 @@ import {
 // lookup is fine. Revisit (derive from the route tree) once more pages land.
 const PAGE_TITLES: Record<string, string> = {
   "/": "Home",
+  "/today": "Today",
+  "/tasks": "My Tasks",
   "/users": "Users",
   "/forbidden": "Forbidden",
   "/leads": "Leads",
@@ -116,6 +118,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NavItem href="/" active={pathname === "/"} icon={Home}>
             Home
           </NavItem>
+          <NavItem href="/today" active={pathname === "/today"} icon={CalendarDays}>Today</NavItem>
+          <NavItem href="/tasks" active={pathname === "/tasks"} icon={ListTodo}>My Tasks</NavItem>
           <NavItem href="/leads" active={pathname.startsWith("/leads")} icon={Target}>
             Leads
           </NavItem>

@@ -24,7 +24,7 @@ const ownerField: Record<TimelineOwner, "leadId" | "contactId" | "companyId" | "
   leads: "leadId", contacts: "contactId", companies: "companyId", deals: "dealId",
 };
 
-export function ActivityComposer({ owner, recordId }: { owner: TimelineOwner; recordId: string }) {
+export function ActivityComposer({ owner, recordId, onCreated }: { owner: TimelineOwner; recordId: string; onCreated?: () => void }) {
   const queryClient = useQueryClient();
   const me = useMe().data?.data.user.id;
   const [type, setType] = useState<ActivityType>("TASK");
@@ -74,9 +74,11 @@ export function ActivityComposer({ owner, recordId }: { owner: TimelineOwner; re
       await apiPost("/api/v1/activities", parsed.data);
       await queryClient.invalidateQueries({ queryKey: [TIMELINE_QUERY_KEY_ROOT, owner, recordId] });
       await queryClient.invalidateQueries({ queryKey: [ACTIVITIES_QUERY_KEY_ROOT] });
+      await queryClient.invalidateQueries({ queryKey: ["today"] });
       if (owner === "leads") await queryClient.invalidateQueries({ queryKey: ["leads"] });
       if (owner === "deals") await queryClient.invalidateQueries({ queryKey: ["deals"] });
       setSubject(""); setDescription(""); setDueAt(""); setStartAt(""); setEndAt(""); setPriority("MEDIUM"); setAssigneeId("");
+      onCreated?.();
     } catch (cause) {
       setError(cause instanceof ApiError ? cause.message : "Could not save this activity. Please try again.");
     } finally {

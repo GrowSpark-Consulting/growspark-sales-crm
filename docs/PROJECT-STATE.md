@@ -321,6 +321,7 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
       leads/[id]/edit/page.tsx   (2.6, D39) same thin-wrapper pattern
       deals/page.tsx, deals/new/page.tsx, deals/[id]/page.tsx,
       deals/[id]/edit/page.tsx   (3.3, D48) same thin-wrapper pattern
+      tasks/page.tsx, today/page.tsx   (4.4, D56) same thin-wrapper pattern
   components/
     auth-guard.tsx          useMe()-driven redirect: unauth'd -> /login?
                         next=..., shows a Skeleton while loading; also
@@ -338,7 +339,9 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         showing the current page's title (a flat pathname
                         lookup, PAGE_TITLES — fine for 3 routes, revisit
                         later), user menu with Light/Dark/System
-                        (DropdownMenuRadioGroup) + logout
+                        (DropdownMenuRadioGroup) + logout; (4.4, D56) gained
+                        Today and My Tasks nav items between Home and Leads,
+                        and both routes' titles in PAGE_TITLES
     login-form.tsx          React Hook Form + loginSchema (shared), inline
                         field errors, generic failure banner
     ui/                    shadcn: button, input, label, form, table,
@@ -495,7 +498,20 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         (4.3, D55) — shared Task/Call/Meeting/Note composer
                         and paginated merged timeline, reused by all four
                         record detail pages; completed entries include the
-                        actor and timestamp from existing audit events
+                        actor and timestamp from existing audit events;
+                        add-follow-up-dialog.tsx (4.4, D56) — a controlled
+                        Dialog wrapping the same ActivityComposer, closing
+                        itself via its onCreated callback, used by the Today
+                        workspace's per-row "Add follow-up" action
+    tasks/                  tasks-page-client.tsx (4.4, D56) — /tasks: a
+                        Tabs-driven Open/Overdue/Done switch, Type/Priority/
+                        due-range filters, reusing DataTable and the shared
+                        priority badge helpers; inline Complete/Cancel
+    workspace/               today-page-client.tsx (4.4, D56) — /today: one
+                        card per GET /today section, a Mine/All scope toggle
+                        kept in the URL, Complete on the two task sections,
+                        Add follow-up (via AddFollowUpDialog) on every row
+                        that names a record
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx,
                         users-page-client.tsx (2.0, D31 — the Client
@@ -531,7 +547,9 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     use-deals.ts            (3.3, D48) useDealsList(params), useDeal(id),
                         useDealStageHistory(id)
     use-pipeline.ts         (3.3, D48) usePipelineStages(), usePipelineSummary()
-    use-activities.ts       (4.3, D55) paginated useRecordTimeline() query
+    use-activities.ts       (4.3, D55) paginated useRecordTimeline() query;
+                        (4.4, D56) useActivitiesList() for /tasks' server-side
+                        filters and useToday(scope) for GET /today
   lib/
     api-client.ts           ApiError + apiGet/apiPost/apiPatch, same-origin
                         credentials; onUnauthorized(listener) — apiFetch
@@ -556,6 +574,9 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         Badge README's status-tone mapping (D27)
     deal-presentation.ts    (3.3, D48) dealStatusLabel/dealStatusBadgeVariant
                         — same tone-mapping pattern as lead-presentation.ts
+    activity-presentation.ts (4.4, D56) activityTypeLabel,
+                        activityStatusLabel/activityStatusBadgeVariant — same
+                        tone-mapping pattern, used by /tasks and /today
     datetime-local.ts       (2.6, D39) toDatetimeLocalValue/
                         fromDatetimeLocalValue — bridges the native
                         <input type="datetime-local"> (bare local string,
@@ -1399,6 +1420,45 @@ existing React Hook Form warnings. No schema, migration, permission change or
 dependency added. Browser/theme/focus checks remain unverified; no browser
 was launched. See `docs/decisions.md` D55.
 
+**Package 4.4 (My Tasks and Today workspace UI) is complete — resumed and
+finished after a prior session left it half-built and uncommitted.** The
+prior session's uncommitted backend diffs (a `priority` filter on
+`GET /activities`, and `GET /today` items linking straight to their own
+record via new `recordType`/`recordId` fields instead of a filtered-list
+href) were audited, kept (they match this package's brief and the per-row
+"open the record" requirement), and the existing `workspace.test.ts`
+assertions that still expected the old filtered-list hrefs were corrected
+rather than left to fail. The prior session's partial `/tasks` page was
+rewritten to reuse `DataTable`, the shared `Tabs` primitive (Open/Overdue/
+Done), and the existing `priorityLabel`/`priorityBadgeVariant` helpers,
+rather than a hand-rolled list and raw enum text — it had also imported a
+`formatDateTime` helper that does not exist in `lib/format.ts`, which would
+have failed to compile. `/today` did not exist at all in the prior
+session's work despite the sidebar already linking to it; it is now built:
+one card per section (Overdue, Tasks due today, Meetings this week, New
+leads, Deals closing soon, Deals with no next activity, Recently updated
+deals), a Mine/All scope toggle kept in the URL (`GET /today?scope=`), a
+Complete action on the two task sections, and an "Add follow-up" quick
+action on every row with a record (a new `AddFollowUpDialog` reusing the
+existing `ActivityComposer` inside a controlled `Dialog`, closing itself via
+`ActivityComposer`'s own new `onCreated` callback — that callback was the
+one part of the prior session's `ActivityComposer` diff this package
+actually needed). New `apps/web/lib/activity-presentation.ts` mirrors the
+existing `lead-presentation.ts` pattern for activity type/status labels and
+badge variants. Tests: 5 new `apps/web` component tests for `/tasks`, 3 for
+`/today`, 1 new `apps/api` test for the priority filter, plus the corrected
+`workspace.test.ts` assertions — **296 `apps/api` + 87 `apps/web` = 383
+total.** `pnpm typecheck`, `pnpm lint`, `pnpm --filter api test`, `pnpm
+--filter web test`, and `pnpm build` all passed (Docker Desktop needed a
+manual restart first — it was not already running at session start, same
+as previously documented in §4). Lint retains the same three pre-existing
+React Hook Form warnings. No schema, migration, permission, or dependency
+change. One jsdom-only finding worth knowing: Radix's `Tabs.Trigger`
+activates on `mousedown`/`focus`, not `click` — `fireEvent.mouseDown` is
+needed in tests, the same class of jsdom quirk already recorded for the
+pipeline board's dropdown in D49. Browser/theme/focus/keyboard checks
+remain unverified; no browser was launched. See `docs/decisions.md` D56.
+
 ## 8. Database
 
 - **Migrations applied via** `prisma migrate deploy` (root: `pnpm db:migrate`,
@@ -1507,6 +1567,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D52 — Package 4.1: Activities API/timelines and organisation calendar bounds; no migration
 - D53 — Package 4.2: approved Today/dashboard metrics, independent SQL checks and fictional sample seed
 - D54 — Package 4.2b: detail next activity, activity due/overdue filters, expanded tests and Today sample coverage
+- D55 — Package 4.3: shared activity composer and merged record timelines, completion actor/time enrichment, no schema change
+- D56 — Package 4.4: My Tasks and Today workspace UI, resumed from a half-built uncommitted session; Today items link straight to their own record
 
 ## 10. Gotchas and lessons learned
 
@@ -1665,7 +1727,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   plus package 4.3's `tests/components/activity-composer.test.tsx` (4 — selected
   type/link, Note without due date, completion refresh with actor/time, and
   overdue label), and `apps/api` (`vitest run`) — **295 `apps/api` tests + 79
-  `apps/web` tests, 374 total**, all passing after package 4.3. Package 2.7
+  `apps/web` tests, 374 total**, all passing after package 4.3 (package 4.4
+  brought this to 296 + 87 = 383 — see below). Package 2.7
   (items 1–4) brought the count to 244 + 53 =
   297 (D42's reset-on-hide tests, D41's phone-validation and `PhoneInput`
   composition tests, D40/D43's "More details"/Source-preselect/Contact-
@@ -1687,7 +1750,10 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   (`convert-lead-dialog.test.tsx`, `lead-detail-page-client.test.tsx`,
   D50) for 282 + 74 = 356; package 4.3 added one API test in
   `tests/activities/activities.test.ts` and four web tests above, bringing the
-  current count to 295 + 79 = 374. `apps/web` runs under jsdom (D36) with
+  count to 295 + 79 = 374; package 4.4 added one `apps/api` test (the
+  `priority` filter on `GET /activities`) and eight `apps/web` tests
+  (`tasks-page-client.test.tsx`, `today-page-client.test.tsx`), bringing the
+  current count to **296 + 87 = 383**. `apps/web` runs under jsdom (D36) with
   `tests/setup.ts` registering RTL's `afterEach(cleanup)` (D37) —
   needed because RTL's own auto-cleanup never self-registers without
   vitest's `globals: true`, which this repo doesn't use.
@@ -1881,10 +1947,10 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   same session.** Day 6/7 (testing, stabilisation, demo) remain
   explicitly out of scope until the build days are done.
 
-- **Day 4 backend packages 4.0–4.2b and UI package 4.3 are complete**
-  (details in §7 and decisions D51–D55). The Activity composer and merged
-  record timelines are implemented and automated verification passed.
-  Package 4.4 (My Tasks and Today UI), then 4.5 (dashboard UI) are next.
+- **Day 4 backend packages 4.0–4.2b and UI packages 4.3–4.4 are complete**
+  (details in §7 and decisions D51–D56). The Activity composer, merged
+  record timelines, My Tasks, and the Today workspace are implemented and
+  automated verification passed. Package 4.5 (dashboard on Home) is next.
 
 ## 14. Open questions and unverified items
 

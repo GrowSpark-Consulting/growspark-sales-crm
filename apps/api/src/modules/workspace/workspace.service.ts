@@ -202,18 +202,22 @@ export async function getToday(ctx: RequestContext, query: TodayQuery, now = new
     prisma.deal.findMany({ where: recentlyWhere, orderBy: { updatedAt: 'desc' }, take: 10 }), prisma.deal.count({ where: recentlyWhere }),
   ]);
 
-  const activityItems = (rows: typeof dueRows, href: string) => rows.map((row) => ({ id: row.id, title: row.subject, href, type: row.type, dueAt: row.dueAt?.toISOString() ?? null }));
-  const dealItems = (rows: typeof closingRows, href: string) => rows.map((row) => ({ id: row.id, title: row.name, href, type: 'DEAL' }));
-  const scopeParam = ownerId ? `&ownerId=${ownerId}` : '';
-  const leadItems = leadRows.map((row) => ({ id: row.id, title: [row.firstName, row.lastName].filter(Boolean).join(' '), href: `/leads?status=NEW${scopeParam}`, type: 'LEAD' }));
-  const activityScopeParam = ownerId ? `&assigneeId=${ownerId}` : '';
+  const activityItems = (rows: typeof dueRows) => rows.map((row) => {
+    const linked = row.leadId ? { recordType: 'leads' as const, recordId: row.leadId }
+      : row.contactId ? { recordType: 'contacts' as const, recordId: row.contactId }
+        : row.companyId ? { recordType: 'companies' as const, recordId: row.companyId }
+          : row.dealId ? { recordType: 'deals' as const, recordId: row.dealId } : undefined;
+    return { id: row.id, title: row.subject, href: linked ? `/${linked.recordType}/${linked.recordId}` : '/tasks', type: row.type, dueAt: row.dueAt?.toISOString() ?? null, ...linked };
+  });
+  const dealItems = (rows: typeof closingRows) => rows.map((row) => ({ id: row.id, title: row.name, href: `/deals/${row.id}`, type: 'DEAL', recordType: 'deals' as const, recordId: row.id }));
+  const leadItems = leadRows.map((row) => ({ id: row.id, title: [row.firstName, row.lastName].filter(Boolean).join(' '), href: `/leads/${row.id}`, type: 'LEAD', recordType: 'leads' as const, recordId: row.id }));
   return { data: {
-    tasksDueToday: { items: activityItems(dueRows, `/activities?type=TASK&status=OPEN${activityScopeParam}`), total: dueCount },
-    overdueTasks: { items: activityItems(overdueRows, `/activities?type=TASK&status=OPEN${activityScopeParam}`), total: overdueCount },
-    meetings: { items: activityItems(meetingRows, `/activities?type=MEETING&status=OPEN${activityScopeParam}`), total: meetingCount },
+    tasksDueToday: { items: activityItems(dueRows), total: dueCount },
+    overdueTasks: { items: activityItems(overdueRows), total: overdueCount },
+    meetings: { items: activityItems(meetingRows), total: meetingCount },
     newLeads: { items: leadItems, total: leadCount },
-    closingDeals: { items: dealItems(closingRows, `/deals?status=OPEN${scopeParam}`), total: closingCount },
-    dealsWithoutActivity: { items: dealItems(noActivityRows, `/deals?status=OPEN${scopeParam}`), total: noActivityCount },
-    recentlyUpdatedDeals: { items: dealItems(recentRows, '/deals'), total: recentCount },
+    closingDeals: { items: dealItems(closingRows), total: closingCount },
+    dealsWithoutActivity: { items: dealItems(noActivityRows), total: noActivityCount },
+    recentlyUpdatedDeals: { items: dealItems(recentRows), total: recentCount },
   } };
 }

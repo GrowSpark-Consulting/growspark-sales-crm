@@ -68,6 +68,7 @@ export async function listActivities(ctx: RequestContext, query: ListActivitiesQ
   const where: Prisma.ActivityWhereInput = {
     ...scoped(ctx),
     ...(query.type ? { type: query.type } : {}), ...(query.status ? { status: query.status } : {}),
+    ...(query.priority ? { priority: query.priority } : {}),
     ...(query.assigneeId ? { assigneeId: query.assigneeId } : {}),
     ...(query.leadId ? { leadId: query.leadId } : {}), ...(query.contactId ? { contactId: query.contactId } : {}),
     ...(query.companyId ? { companyId: query.companyId } : {}), ...(query.dealId ? { dealId: query.dealId } : {}),

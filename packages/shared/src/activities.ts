@@ -49,6 +49,7 @@ export const listActivitiesQuerySchema = pageQuerySchema.extend({
   sort: sortQuerySchema(ACTIVITY_SORT_FIELDS),
   type: activityTypeSchema.optional(),
   status: activityStatusSchema.optional(),
+  priority: prioritySchema.optional(),
   dueFrom: z.iso.datetime().optional(),
   dueTo: z.iso.datetime().optional(),
   overdue: booleanQueryParam.optional(),

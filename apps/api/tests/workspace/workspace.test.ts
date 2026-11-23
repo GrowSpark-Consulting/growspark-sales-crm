@@ -137,15 +137,19 @@ describe('Today and dashboard', () => {
     }
     expect(sections.closingDeals.total).toBe(1);
     expect(sections.newLeads.total).toBe(1);
-    expect(sections.tasksDueToday.items[0].href).toBe('/activities?type=TASK&status=OPEN');
-    expect(sections.overdueTasks.items[0].href).toBe('/activities?type=TASK&status=OPEN');
-    expect(sections.meetings.items[0].href).toBe('/activities?type=MEETING&status=OPEN');
-    expect(sections.newLeads.items[0].href).toBe('/leads?status=NEW');
-    expect(sections.closingDeals.items[0].href).toBe('/deals?status=OPEN');
-    expect(sections.dealsWithoutActivity.items[0].href).toBe('/deals?status=OPEN');
-    expect(sections.recentlyUpdatedDeals.items.every((item: { href: string }) => item.href === '/deals')).toBe(true);
+    // Each item links straight to the record it's about (My Tasks' and Today's
+    // own "open each record" requirement, D56) rather than to a filtered list —
+    // an activity's record is whichever of lead/contact/company/deal it's
+    // linked to; `task` above is linked to `lead`, `overdue`/`meeting` to `company`.
+    expect(sections.tasksDueToday.items[0]).toMatchObject({ href: `/leads/${lead.id}`, recordType: 'leads', recordId: lead.id });
+    expect(sections.overdueTasks.items[0]).toMatchObject({ href: `/companies/${company.id}`, recordType: 'companies', recordId: company.id });
+    expect(sections.meetings.items[0]).toMatchObject({ href: `/companies/${company.id}`, recordType: 'companies', recordId: company.id });
+    expect(sections.newLeads.items[0]).toMatchObject({ href: `/leads/${lead.id}`, recordType: 'leads', recordId: lead.id });
+    expect(sections.closingDeals.items[0]).toMatchObject({ href: `/deals/${openDeal.id}`, recordType: 'deals', recordId: openDeal.id });
+    expect(sections.dealsWithoutActivity.items[0]).toMatchObject({ href: `/deals/${openDeal.id}`, recordType: 'deals', recordId: openDeal.id });
+    expect(sections.recentlyUpdatedDeals.items.every((item: { id: string; href: string; recordType?: string }) => item.href === `/deals/${item.id}` && item.recordType === 'deals')).toBe(true);
     const mine = await get(token, '/api/v1/today?scope=mine');
-    expect(mine.body.data.newLeads.items[0].href).toBe(`/leads?status=NEW&ownerId=${tenant.adminUser.id}`);
+    expect(mine.body.data.newLeads.items[0]).toMatchObject({ href: `/leads/${lead.id}`, recordType: 'leads', recordId: lead.id });
     expect((await get(staff.token, '/api/v1/today')).status).toBe(200);
   });
 

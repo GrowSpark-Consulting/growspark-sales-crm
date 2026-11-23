@@ -119,6 +119,20 @@ describe('Activities API', () => {
     expect(created.body.data.companyId).toBe(ownCompany.id);
   });
 
+  it('filters a list of activities by priority', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const company = await prisma.company.create({ data: { organizationId: tenant.organization.id, name: 'Priority Co', nameNormalized: 'priority co' } });
+    const high = await prisma.activity.create({ data: { organizationId: tenant.organization.id, type: 'TASK', subject: 'High priority', status: 'OPEN', priority: 'HIGH', companyId: company.id, createdById: tenant.adminUser.id } });
+    const low = await prisma.activity.create({ data: { organizationId: tenant.organization.id, type: 'TASK', subject: 'Low priority', status: 'OPEN', priority: 'LOW', companyId: company.id, createdById: tenant.adminUser.id } });
+
+    const response = await api(token).get('/api/v1/activities?priority=HIGH');
+    expect(response.status).toBe(200);
+    const ids = response.body.data.map((row: { id: string }) => row.id);
+    expect(ids).toContain(high.id);
+    expect(ids).not.toContain(low.id);
+  });
+
   it('completes once, gives notes DONE status, and allows Staff read/write', async () => {
     const tenant = await createTestTenant();
     const company = await prisma.company.create({ data: { organizationId: tenant.organization.id, name: 'Acme', nameNormalized: 'acme' } });

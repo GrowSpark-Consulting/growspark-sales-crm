@@ -8,7 +8,7 @@ export { activityTypeSchema, activityStatusSchema, nextActivitySummarySchema, cr
 export type { NextActivitySummary, CreateActivityInput, UpdateActivityInput, ListActivitiesQuery, ActivityResponse, TimelineEntry } from './activities.js';
 export type { ActivityType, ActivityStatus } from './activities.js';
 export { todayQuerySchema, dashboardQuerySchema, todayResponseSchema, dashboardResponseSchema } from './workspace.js';
-export type { TodayQuery, DashboardQuery } from './workspace.js';
+export type { TodayQuery, TodayResponse, DashboardQuery } from './workspace.js';
 export type { Permission } from './permissions.js';
 export { loginSchema, changePasswordSchema, meResponseSchema } from './auth.js';
 export type { LoginInput, ChangePasswordInput, MeResponse } from './auth.js';

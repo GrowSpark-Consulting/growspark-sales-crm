@@ -12,6 +12,7 @@ export const dashboardQuerySchema = z.object({
 export const todayItemSchema = z.object({
   id: z.string(), title: z.string(), href: z.string(), type: z.string().optional(),
   dueAt: z.string().nullable().optional(),
+  recordType: z.enum(['leads', 'contacts', 'companies', 'deals']).optional(), recordId: z.string().optional(),
 });
 export type DashboardQuery = z.infer<typeof dashboardQuerySchema>;
 const todaySectionSchema = z.object({ items: z.array(todayItemSchema), total: z.number().int().nonnegative() });
@@ -22,6 +23,7 @@ export const todayResponseSchema = z.object({
     recentlyUpdatedDeals: todaySectionSchema,
   }),
 });
+export type TodayResponse = z.infer<typeof todayResponseSchema>;
 
 const countValueSchema = z.object({ count: z.number().int().nonnegative(), value: z.string(), weightedValue: z.string() });
 export const dashboardResponseSchema = z.object({
