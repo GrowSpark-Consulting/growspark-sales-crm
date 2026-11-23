@@ -14,20 +14,17 @@ import { useActivitiesList, ACTIVITIES_QUERY_KEY_ROOT } from "@/hooks/use-activi
 import { useListUrlState } from "@/hooks/use-list-url-state";
 import { apiPost, ApiError } from "@/lib/api-client";
 import { formatDate, formatTime } from "@/lib/format";
-import { activityTypeLabel, activityStatusBadgeVariant, activityStatusLabel } from "@/lib/activity-presentation";
+import {
+  activityRecordHref,
+  activityTypeLabel,
+  activityStatusBadgeVariant,
+  activityStatusLabel,
+} from "@/lib/activity-presentation";
 import { priorityBadgeVariant, priorityLabel } from "@/lib/lead-presentation";
 
 const ANY = "ANY";
 const FOLLOW_UP_TYPES = activityTypeSchema.options.filter((type) => type !== "NOTE");
 type Tab = "OPEN" | "OVERDUE" | "DONE";
-
-function recordHref(activity: ActivityResponse): string | null {
-  if (activity.leadId) return `/leads/${activity.leadId}`;
-  if (activity.contactId) return `/contacts/${activity.contactId}`;
-  if (activity.companyId) return `/companies/${activity.companyId}`;
-  if (activity.dealId) return `/deals/${activity.dealId}`;
-  return null;
-}
 
 /** A date-only `<input>` value, turned into the UTC instant of that local day's start or end-of-day. */
 function dayBound(day: string, end: boolean): string | undefined {
@@ -80,7 +77,7 @@ export function TasksPageClient() {
       key: "subject",
       header: "Subject",
       render: (activity) => {
-        const href = recordHref(activity);
+        const href = activityRecordHref(activity);
         return href ? (
           <Link href={href} className="body-strong text-ink hover:underline">
             {activity.subject}

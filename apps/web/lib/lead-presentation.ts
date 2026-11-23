@@ -28,6 +28,19 @@ export function leadStatusBadgeVariant(status: LeadStatus): "accent" | "info" | 
   return STATUS_BADGE_VARIANTS[status];
 }
 
+const BADGE_VARIANT_CHART_COLORS: Record<"accent" | "info" | "success" | "danger" | "default", string> = {
+  accent: "var(--accent)",
+  info: "var(--info)",
+  success: "var(--success)",
+  danger: "var(--danger)",
+  default: "var(--ink-muted)",
+};
+
+/** The same status tone as the badge, as a chart-fill colour — for the leads-by-status dashboard chart. */
+export function leadStatusChartColor(status: LeadStatus): string {
+  return BADGE_VARIANT_CHART_COLORS[leadStatusBadgeVariant(status)];
+}
+
 const PRIORITY_LABELS: Record<Priority, string> = {
   LOW: "Low",
   MEDIUM: "Medium",

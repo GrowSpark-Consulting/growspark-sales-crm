@@ -43,3 +43,4 @@ export const dashboardResponseSchema = z.object({
     recentActivity: z.array(activityResponseSchema),
   }),
 });
+export type DashboardResponse = z.infer<typeof dashboardResponseSchema>;

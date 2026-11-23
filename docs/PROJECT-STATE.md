@@ -304,7 +304,9 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         Components' instant-navigation dev validation;
                         can't be set on users/page.tsx itself, a Client
                         Component, so it's set once here instead)
-      page.tsx              Home — plain placeholder; no own <h1> (the top
+      page.tsx              Home — (4.5, D57) the real dashboard now, via
+                        DashboardPageClient behind a <Suspense> boundary
+                        (useSearchParams, D26's rule); no own <h1> (the top
                         bar carries the page title — D27)
       forbidden/page.tsx     403 page; same, no own <h1>
       users/page.tsx         the Users page (see below); search box is now
@@ -368,7 +370,10 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         wherever phone appears; collapsible.tsx (2.7 item 3,
                         D40/D45) — not yet in docs/design-system/, built
                         from its tokens/motion rules, used so far only by
-                        Company's "More details" section
+                        Company's "More details" section; stat-card.tsx
+                        (4.5, D57) — a KPI tile per the design system's
+                        StatCard README, no delta line (nothing to compare
+                        against yet)
     pickers/                owner-select.tsx, company-select.tsx (2.4, D37)
                         — OwnerSelect wraps Select over GET /users/options
                         (form use only); CompanySelect is a hand-built
@@ -512,6 +517,15 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         kept in the URL, Complete on the two task sections,
                         Add follow-up (via AddFollowUpDialog) on every row
                         that names a record
+    dashboard/               dashboard-page-client.tsx (4.5, D57) — the Home
+                        dashboard: date-range (month default/30 days/custom)
+                        and All/Mine scope, both in the URL; nine StatCard
+                        KPIs and a recent-activity list straight from GET
+                        /dashboard; dashboard-bar-chart.tsx — one shared
+                        single-series Recharts bar chart (decorative,
+                        aria-hidden) plus a sr-only data table, used four
+                        times (leads by source/status, pipeline by stage,
+                        monthly won revenue)
     users/                 create-user-dialog.tsx, edit-user-dialog.tsx,
                         reset-password-dialog.tsx,
                         users-page-client.tsx (2.0, D31 — the Client
@@ -550,6 +564,8 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
     use-activities.ts       (4.3, D55) paginated useRecordTimeline() query;
                         (4.4, D56) useActivitiesList() for /tasks' server-side
                         filters and useToday(scope) for GET /today
+    use-dashboard.ts        (4.5, D57) useDashboard({from, to, scope}) — GET
+                        /dashboard
   lib/
     api-client.ts           ApiError + apiGet/apiPost/apiPatch, same-origin
                         credentials; onUnauthorized(listener) — apiFetch
@@ -571,12 +587,18 @@ apps/web/              Next.js 16 App Router app (port 3000) — package 1.5,
                         literal empty string
     lead-presentation.ts    (2.6, D39) leadStatusLabel/leadStatusBadgeVariant,
                         priorityLabel/priorityBadgeVariant — reuses the
-                        Badge README's status-tone mapping (D27)
+                        Badge README's status-tone mapping (D27);
+                        leadStatusChartColor (4.5, D57) — the same tone
+                        mapping as a chart-fill colour, for the dashboard's
+                        leads-by-status chart
     deal-presentation.ts    (3.3, D48) dealStatusLabel/dealStatusBadgeVariant
                         — same tone-mapping pattern as lead-presentation.ts
     activity-presentation.ts (4.4, D56) activityTypeLabel,
                         activityStatusLabel/activityStatusBadgeVariant — same
-                        tone-mapping pattern, used by /tasks and /today
+                        tone-mapping pattern, used by /tasks and /today;
+                        activityRecordHref (4.5, D57) — promoted here from a
+                        private copy in tasks-page-client.tsx so the
+                        dashboard's recent-activity list could reuse it too
     datetime-local.ts       (2.6, D39) toDatetimeLocalValue/
                         fromDatetimeLocalValue — bridges the native
                         <input type="datetime-local"> (bare local string,
@@ -1459,6 +1481,34 @@ needed in tests, the same class of jsdom quirk already recorded for the
 pipeline board's dropdown in D49. Browser/theme/focus/keyboard checks
 remain unverified; no browser was launched. See `docs/decisions.md` D56.
 
+**Package 4.5 (dashboard on Home) is complete — Day 4 is now done.** The
+Home placeholder is replaced by the real dashboard: a date-range control
+(This month default, Last 30 days, Custom range) and an All (default)/Mine
+scope toggle, both kept in the URL; nine `StatCard` KPI tiles (new
+`components/ui/stat-card.tsx`, built from the design system's own
+`StatCard` README — the brief's nine cards exceed that README's stated
+six-card cap, logged as a conflict resolved in the brief's favour, D57);
+four single-series `DashboardBarChart`s (new, `components/dashboard/`) —
+leads by source, leads by status (coloured per bar by status tone, reusing
+the Leads list's own `leadStatusBadgeVariant` mapping), pipeline by stage
+(`OPEN` stages only, matching the Kanban board's Won/Lost exclusion), and
+monthly won revenue — each a decorative chart plus a screen-reader-only
+data table, both populated straight from `GET /dashboard`, no recomputation
+in the browser; and a recent-activity list reusing the same
+`activityRecordHref` helper `/tasks` already had (promoted to
+`activity-presentation.ts` so both share one copy). `recharts@3.11.0`
+(already pinned in `064a0f7`) is used for the first time. No `apps/api`
+change — the dashboard endpoint and its metrics were already built in
+4.2/4.2b; `packages/shared` gained only a missing `DashboardResponse` type
+export (the schema already existed). Tests: 4 new `apps/web` component
+tests (`dashboard-page-client.test.tsx`). `pnpm typecheck`, `pnpm lint`,
+`pnpm --filter api test`, `pnpm --filter web test`, and `pnpm build` all
+passed — **296 `apps/api` + 91 `apps/web` = 387 total.** Lint retains the
+same three pre-existing React Hook Form warnings. No schema, migration,
+permission, or dependency change. Browser/theme/focus/keyboard checks, and
+an actual look at the rendered charts, remain unverified — no browser was
+launched. See `docs/decisions.md` D57.
+
 ## 8. Database
 
 - **Migrations applied via** `prisma migrate deploy` (root: `pnpm db:migrate`,
@@ -1569,6 +1619,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D54 — Package 4.2b: detail next activity, activity due/overdue filters, expanded tests and Today sample coverage
 - D55 — Package 4.3: shared activity composer and merged record timelines, completion actor/time enrichment, no schema change
 - D56 — Package 4.4: My Tasks and Today workspace UI, resumed from a half-built uncommitted session; Today items link straight to their own record
+- D57 — Package 4.5: dashboard on Home, nine StatCard KPIs (a logged conflict with the design system's six-card guidance), four single-series bar charts with a sr-only table alternative each, no schema/dependency change
 
 ## 10. Gotchas and lessons learned
 
@@ -1728,7 +1779,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   type/link, Note without due date, completion refresh with actor/time, and
   overdue label), and `apps/api` (`vitest run`) — **295 `apps/api` tests + 79
   `apps/web` tests, 374 total**, all passing after package 4.3 (package 4.4
-  brought this to 296 + 87 = 383 — see below). Package 2.7
+  brought this to 296 + 87 = 383, and package 4.5 to 296 + 91 = 387 — see
+  below). Package 2.7
   (items 1–4) brought the count to 244 + 53 =
   297 (D42's reset-on-hide tests, D41's phone-validation and `PhoneInput`
   composition tests, D40/D43's "More details"/Source-preselect/Contact-
@@ -1753,7 +1805,9 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   count to 295 + 79 = 374; package 4.4 added one `apps/api` test (the
   `priority` filter on `GET /activities`) and eight `apps/web` tests
   (`tasks-page-client.test.tsx`, `today-page-client.test.tsx`), bringing the
-  current count to **296 + 87 = 383**. `apps/web` runs under jsdom (D36) with
+  count to 296 + 87 = 383; package 4.5 added four more `apps/web` tests
+  (`dashboard-page-client.test.tsx`), bringing the current count to
+  **296 + 91 = 387**. `apps/web` runs under jsdom (D36) with
   `tests/setup.ts` registering RTL's `afterEach(cleanup)` (D37) —
   needed because RTL's own auto-cleanup never self-registers without
   vitest's `globals: true`, which this repo doesn't use.
@@ -1947,10 +2001,13 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   same session.** Day 6/7 (testing, stabilisation, demo) remain
   explicitly out of scope until the build days are done.
 
-- **Day 4 backend packages 4.0–4.2b and UI packages 4.3–4.4 are complete**
-  (details in §7 and decisions D51–D56). The Activity composer, merged
-  record timelines, My Tasks, and the Today workspace are implemented and
-  automated verification passed. Package 4.5 (dashboard on Home) is next.
+- **Day 4 is complete — all packages 4.0–4.5 are built** (details in §7 and
+  decisions D51–D57). The Activity composer, merged record timelines, My
+  Tasks, the Today workspace, and the Home dashboard are implemented and
+  automated verification passed (296 `apps/api` + 91 `apps/web` = 387
+  tests). No manual browser pass has been run on any Day 4 screen yet —
+  that's the next thing to do, per the roadmap's own Day 4 acceptance
+  checklist.
 
 ## 14. Open questions and unverified items
 
