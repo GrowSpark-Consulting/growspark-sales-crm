@@ -101,6 +101,7 @@ describe("Home dashboard (package 4.5)", () => {
     renderWithClient(<DashboardPageClient />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(await screen.findByText("Leads created")).toBeTruthy();
+    expect(screen.getByText(/Showing/).textContent).toContain("1 Nov 2026");
     expect(statValue("Leads created")).toBe("5");
     expect(statValue("Qualified leads")).toBe("3");
     expect(statValue("Active leads")).toBe("4");

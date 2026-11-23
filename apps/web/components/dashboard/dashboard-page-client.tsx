@@ -162,6 +162,10 @@ function DashboardContent({ data }: { data: NonNullable<ReturnType<typeof useDas
 
   return (
     <>
+      <p className="small text-ink-muted">
+        Showing {formatDate(data.range.from)} – {formatDate(data.range.to)}
+      </p>
+
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         {kpis.map((kpi) => (
           <StatCard key={kpi.label} label={kpi.label} value={kpi.value} />
