@@ -18,7 +18,8 @@
     "db:seed:sample": "tsx --env-file=.env scripts/db-seed-sample.ts",
     "staging:migrate": "tsx scripts/staging-migrate.ts",
     "staging:create-admin": "tsx scripts/staging-create-admin.ts",
-    "staging:seed-sample": "tsx scripts/staging-seed-sample.ts"
+    "staging:seed-sample": "tsx scripts/staging-seed-sample.ts",
+    "staging:check-db": "tsx scripts/staging-check-db.ts"
   },
   "dependencies": {
     "@growspark/shared": "workspace:*",

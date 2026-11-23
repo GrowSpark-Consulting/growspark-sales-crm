@@ -1630,6 +1630,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D65 — Milestone: `staging:migrate` and `staging:create-admin` ran successfully against the real Supabase project, confirmed by the user — the first real-world validation of D58's mechanism and D62's bootstrap flow
 - D66 — TLS against the real Supabase pooler is verified (on), but via a version-specific `pg-connection-string` aliasing of `sslmode=require`→`verify-full` that is scheduled to change in a future major version; recommended fix is a one-line connection-string edit (`sslmode=verify-full` explicitly) in the user's own `.env.staging.local`, not a code change
 - D67 — Package 4C Part D: `render.yaml` (two services, `region: singapore`, every env var `sync: false`) and `docs/STAGING.md`; the API's `startCommand` had to bypass its own `package.json` `start` script (`node --env-file=.env`, which crashes with no `.env` file present, as every Render deployment has)
+- D68 — Fix: `DATABASE_SSL_CA` was being silently discarded whenever `sslmode` appeared in `DATABASE_URL` (confirmed by reading `pg-connection-string`'s source); fixed by stripping `sslmode`-family params from the URL whenever an explicit SSL config is supplied; also consolidated a second, pre-existing connection factory (`src/db/pool.ts`, used by `/health/db`, had neither the pool-size limit nor any SSL config) into the one in `src/db/prisma.ts`; new read-only `pnpm staging:check-db` diagnostic
 
 ## 10. Gotchas and lessons learned
 

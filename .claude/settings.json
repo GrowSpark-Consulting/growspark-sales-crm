@@ -5,7 +5,6 @@
       "Edit(.env)",
       "Read(apps/api/.env)",
       "Edit(apps/api/.env)",
-      "Read(apps/api/.env.staging.local)",
       "Edit(apps/api/.env.staging.local)",
       "Read(apps/web/.env)",
       "Edit(apps/web/.env)",

@@ -1,6 +1,6 @@
 import type { Application, RequestHandler } from 'express';
 import { healthResponseSchema } from '@growspark/shared';
-import { pool } from '../db/pool.js';
+import { pool } from '../db/prisma.js';
 import { defineRoute } from '../lib/route-registry.js';
 
 const getHealth: RequestHandler = (_req, res) => {

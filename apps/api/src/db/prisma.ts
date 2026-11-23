@@ -2,13 +2,15 @@ import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { env } from '../env.js';
-import { resolveDatabaseSsl } from '../lib/database-ssl.js';
+import { buildDatabasePoolConfig } from '../lib/database-ssl.js';
 
-const pool = new Pool({
-  connectionString: env.DATABASE_URL,
-  max: env.DATABASE_POOL_MAX,
-  ssl: resolveDatabaseSsl(env),
-});
+/**
+ * The only `pg.Pool` in this app — `src/routes/health.ts`'s `/health/db`
+ * raw query reuses this exact instance rather than building its own (it
+ * used to, in a now-removed src/db/pool.ts, with neither the pool-size
+ * limit nor any SSL config applied — see docs/decisions.md D68).
+ */
+export const pool = new Pool(buildDatabasePoolConfig(env));
 // Unset in local dev/test — adapter-pg then uses the connection's own
 // default schema, unchanged. Set to "sales" in staging via DATABASE_SCHEMA;
 // this is the adapter's own `schema` option (generates schema-qualified

@@ -55,6 +55,10 @@ services:
         sync: false
       - key: DATABASE_POOL_MAX
         sync: false
+      # Paste the downloaded Supabase CA certificate's own PEM text here
+      # directly (the whole -----BEGIN CERTIFICATE----- block), not a file
+      # path -- Render has no filesystem path you control to point at. See
+      # "The CA certificate on Render" in docs/STAGING.md.
       - key: DATABASE_SSL_CA
         sync: false
       - key: DATABASE_SSL_REJECT_UNAUTHORIZED
