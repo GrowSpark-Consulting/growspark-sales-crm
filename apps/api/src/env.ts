@@ -22,6 +22,24 @@ const trustProxySchema = z
     return hops;
   });
 
+/**
+ * Plain "true"/"false" strings only — not z.coerce.boolean(), which coerces
+ * via JS's `Boolean(value)` and would make the literal string "false" parse
+ * as `true` (any non-empty string is truthy). That footgun matters
+ * specifically here because this flag's whole purpose is to be exactly
+ * "false" by default.
+ */
+const optionalBooleanFlagSchema = z
+  .string()
+  .optional()
+  .transform((value, ctx) => {
+    if (value === undefined) return undefined;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    ctx.addIssue({ code: 'custom', message: 'must be "true" or "false"' });
+    return z.NEVER;
+  });
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -32,6 +50,15 @@ const envSchema = z
     // DATABASE_URL's own ?schema= param — see docs/decisions.md D58 and the
     // checkDatabaseSchemaConsistency guard below for why both must agree.
     DATABASE_SCHEMA: z.string().min(1).optional(),
+    // pg.Pool's own default (10) in local dev, unchanged. Staging sets this
+    // to 5 — Supabase's free tier has few connections available.
+    DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
+    // Unset in local dev (no TLS config passed to pg at all). A file path or
+    // pasted PEM in staging verifies Supabase's certificate chain; see
+    // src/lib/database-ssl.ts for the full behaviour and the insecure
+    // DATABASE_SSL_REJECT_UNAUTHORIZED escape hatch.
+    DATABASE_SSL_CA: z.string().min(1).optional(),
+    DATABASE_SSL_REJECT_UNAUTHORIZED: optionalBooleanFlagSchema,
     ALLOWED_ORIGINS: z
       .string()
       .default('http://localhost:3000')

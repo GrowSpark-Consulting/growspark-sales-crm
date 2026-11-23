@@ -74,4 +74,27 @@ describe('parseEnv', () => {
     const result = parseEnv({ ...BASE_ENV, NODE_ENV: 'development' });
     expect(result.success).toBe(true);
   });
+
+  it('defaults DATABASE_POOL_MAX to 10 (pg.Pool\'s own default) when unset', () => {
+    const result = parseEnv({ ...BASE_ENV, NODE_ENV: 'test' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.DATABASE_POOL_MAX).toBe(10);
+  });
+
+  it('accepts a smaller DATABASE_POOL_MAX, e.g. the staging value of 5', () => {
+    const result = parseEnv({ ...BASE_ENV, NODE_ENV: 'test', DATABASE_POOL_MAX: '5' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.DATABASE_POOL_MAX).toBe(5);
+  });
+
+  it('parses DATABASE_SSL_REJECT_UNAUTHORIZED="false" as the boolean false, not JS-truthy coercion', () => {
+    const result = parseEnv({ ...BASE_ENV, NODE_ENV: 'test', DATABASE_SSL_REJECT_UNAUTHORIZED: 'false' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.DATABASE_SSL_REJECT_UNAUTHORIZED).toBe(false);
+  });
+
+  it('rejects a DATABASE_SSL_REJECT_UNAUTHORIZED value that is neither "true" nor "false"', () => {
+    const result = parseEnv({ ...BASE_ENV, NODE_ENV: 'test', DATABASE_SSL_REJECT_UNAUTHORIZED: 'nope' });
+    expect(result.success).toBe(false);
+  });
 });

@@ -2,8 +2,13 @@ import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { env } from '../env.js';
+import { resolveDatabaseSsl } from '../lib/database-ssl.js';
 
-const pool = new Pool({ connectionString: env.DATABASE_URL });
+const pool = new Pool({
+  connectionString: env.DATABASE_URL,
+  max: env.DATABASE_POOL_MAX,
+  ssl: resolveDatabaseSsl(env),
+});
 // Unset in local dev/test — adapter-pg then uses the connection's own
 // default schema, unchanged. Set to "sales" in staging via DATABASE_SCHEMA;
 // this is the adapter's own `schema` option (generates schema-qualified
