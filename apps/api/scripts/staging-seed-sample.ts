@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { loadStagingEnv } from './lib/load-staging-env.js';
 
 if (!process.argv.includes('--confirm')) {
@@ -9,11 +8,14 @@ if (!process.argv.includes('--confirm')) {
 
 loadStagingEnv();
 
-// Runs the exact same script local dev uses (pnpm db:seed:sample), unchanged
-// — only the environment it inherits differs. Child processes inherit
-// process.env by default, so the staging values loadStagingEnv() just loaded
-// reach it without this script needing to know anything about its internals.
-execFileSync('pnpm', ['exec', 'tsx', 'scripts/db-seed-sample.ts'], {
-  stdio: 'inherit',
-  cwd: new URL('..', import.meta.url),
-});
+// Dynamic import, not a child process spawning `pnpm exec tsx ...` — that
+// resolves to pnpm's .cmd shim on Windows, which Node 22 refuses to spawn
+// without a shell (same ENOENT class of problem as staging-migrate.ts, see
+// scripts/lib/run-cli.ts). db-seed-sample.ts's own top-level
+// main().catch().finally() runs as a side effect of importing it — the
+// exact same script local dev's `pnpm db:seed:sample` already runs,
+// unchanged — using whatever loadStagingEnv() already put in process.env,
+// the same "dynamic import after an env override" pattern tests/setup.ts
+// already established (a static import here would be hoisted above
+// loadStagingEnv() above).
+await import('./db-seed-sample.js');

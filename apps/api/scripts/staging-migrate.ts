@@ -1,9 +1,6 @@
-import { execFileSync } from 'node:child_process';
 import { loadStagingEnv } from './lib/load-staging-env.js';
+import { runPrismaCli } from './lib/run-cli.js';
 
 loadStagingEnv();
 
-execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'deploy'], {
-  stdio: 'inherit',
-  cwd: new URL('..', import.meta.url),
-});
+runPrismaCli(['migrate', 'deploy'], new URL('..', import.meta.url));
