@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { runPrismaCli } from './lib/run-cli.js';
 
 // Manual, human-run check that crm_test migrates cleanly from zero. NOT part
 // of the automated test suite (`pnpm test`) — this drops and recreates the
@@ -38,10 +38,16 @@ if (!hostAllowed || !nameAllowed) {
 
 console.log('db:verify-fresh: resetting crm_test and reapplying all migrations from zero...');
 
-execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'reset', '--force'], {
-  stdio: 'inherit',
-  cwd: new URL('..', import.meta.url),
-  env: { ...process.env, DATABASE_URL: rawUrl },
-});
+// DATABASE_URL must be TEST_DATABASE_URL for the child process — the .env
+// file loaded above sets DATABASE_URL to the dev database, so it is
+// overridden here, before runPrismaCli's child process inherits it.
+process.env.DATABASE_URL = rawUrl;
+
+// D63: run the real Prisma CLI file directly via `node` (runPrismaCli), not
+// `execFileSync('pnpm', ...)` — that resolves to pnpm's `.cmd` shim on
+// Windows, which Node refuses to spawn without a shell, failing with
+// `spawnSync pnpm ENOENT` before ever reaching the database. This script had
+// the same latent bug as `staging-migrate.ts` (fixed in D63) until now.
+runPrismaCli(['migrate', 'reset', '--force'], new URL('..', import.meta.url));
 
 console.log('db:verify-fresh: success — crm_test migrated cleanly from zero.');

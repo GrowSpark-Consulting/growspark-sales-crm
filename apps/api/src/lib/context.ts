@@ -9,6 +9,17 @@ export interface RequestContext {
 }
 
 /**
+ * Attached by attachApiKeyContext (middleware/api-key-auth.ts) once a valid,
+ * non-revoked API key has been verified — the intake path's equivalent of
+ * RequestContext, since that path has no human user/session/role at all.
+ */
+export interface ApiKeyContext {
+  organizationId: string;
+  apiKeyId: string;
+  keyPrefix: string;
+}
+
+/**
  * Prisma generates its own `Role` enum from schema.prisma — a distinct
  * TypeScript type from `packages/shared`'s hand-written `ROLES`, even though
  * their values are identical strings ('ADMIN' | 'STAFF'). The Postgres enum

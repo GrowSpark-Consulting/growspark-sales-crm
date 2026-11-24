@@ -451,6 +451,7 @@ deal_id → deals.id (nullable).
 | status | submission_status (enum) | NO | 'RECEIVED' |
 | error | text | YES | |
 | lead_id | uuid | YES | |
+| archived_at | timestamptz(3) | YES | |
 | updated_at | timestamptz(3) | NO | |
 
 PK: id. Unique: `website_submissions_organization_id_external_id_key`
@@ -473,7 +474,7 @@ see Phase A report section (b)).
 | deal_status | OPEN, WON, LOST |
 | activity_type | TASK, CALL, MEETING, NOTE |
 | activity_status | OPEN, DONE, CANCELLED |
-| submission_status | RECEIVED, LEAD_CREATED, REJECTED |
+| submission_status | RECEIVED, LEAD_CREATED, REJECTED, SPAM |
 
 Enum values themselves are not snake_cased (only the type names are, per the
 brief's "Enums mapped to snake_case type names").

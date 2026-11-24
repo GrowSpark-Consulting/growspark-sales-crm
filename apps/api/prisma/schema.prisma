@@ -91,6 +91,7 @@ enum SubmissionStatus {
   RECEIVED
   LEAD_CREATED
   REJECTED
+  SPAM
 
   @@map("submission_status")
 }
@@ -585,6 +586,7 @@ model WebsiteSubmission {
   status         SubmissionStatus @default(RECEIVED)
   error          String?
   leadId         String?          @map("lead_id") @db.Uuid
+  archivedAt     DateTime?        @map("archived_at") @db.Timestamptz(3)
   updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)

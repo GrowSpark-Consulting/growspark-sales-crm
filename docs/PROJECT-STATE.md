@@ -146,6 +146,60 @@ code change, resolved by the user rebooting their machine) in
 `apps/web` tests (up from 65), 356 total, all passing. Nothing pushed.
 **Day 3 (lead conversion, deals, pipeline) is done.**
 
+**Note: this section's narrative was not kept current for Day 4 or package
+4C (hosted staging)** — read §7/§9/§15 for those instead of assuming
+continuity here. Picking back up at the next thing this section *was* kept
+current for:
+
+**Update, 2026-11-24 — Day 5a (website intake, API keys, the Enquiries
+inbox) is done.** Resumed from a mid-build checkpoint (migration applied,
+two unused shared-package files, `docs/decisions.md` D71's full design — see
+the note at the start of §13's old Day 5a bullet, now updated). Built this
+session, in full: `lib/api-key.ts` (key generation/hashing/timing-safe
+verification); `middleware/api-key-auth.ts` (`attachApiKeyContext`) and the
+`csrf.ts` Origin-check exemption conditioned on a verified key, never on
+path alone; `'apiKey'` added to `route-registry.ts`'s `RouteAuth`; two new
+intake-specific rate limiters (60/min per key, 120/min per IP); an
+`Idempotency-Key` log-redact entry; `modules/api-keys/` (Admin-only create/
+list/revoke/rotate, the raw key shown exactly once); `modules/intake/`
+(the lenient field mapper, the idempotency-before-validation service, the
+one route in this app with no declarative body `validate`); `modules/
+enquiries/` (list/detail/mark-spam/archive/restore, same visibility as
+Leads); all three wired into `app.ts`. A pre-existing Windows bug in
+`pnpm db:verify-fresh`/`db:reset` (the same `.cmd`-shim `ENOENT` D63 had
+already fixed for `staging-migrate.ts`, but left unfixed here) was found and
+fixed first, at the user's own request. Frontend: an Admin-only
+`/settings/api-keys` screen (create/rotate both need a "shown once" raw-key
+reveal, not just a toast) and an `/enquiries` screen (list + detail, visible
+to both roles) using the existing `DataTable`/`RecordLayout` components.
+Full detail, every judgment call, and the full test-by-test breakdown are in
+`docs/decisions.md` D72 (backend) and D73 (frontend). **409 `apps/api` tests
+(up from 359) + 91 `apps/web` tests (unchanged — no new component tests for
+either screen, matching this repo's established Day 2 precedent) = 500
+total, all passing.** `pnpm typecheck`/`pnpm lint` clean throughout.
+
+**Update, same session — a user-requested audit closed two real test gaps
+(D74).** Asked for a plain, per-refinement accounting of D71's eight
+binding items (tested vs. documented-only), which found the key-hash/
+compare mechanism and the audit/log-redaction behaviour were implemented
+correctly but never independently unit-tested — only proven end to end.
+Closed with `tests/lib/api-key.test.ts` (new), `tests/intake/audit.test.ts`
+(new), `tests/logger.test.ts` (new, after exporting `LOG_REDACT_PATHS` from
+`logger.ts`), and a per-IP rate-limit test enabled by refactoring
+`lib/rate-limit.ts`'s per-IP limiter into a ceiling-parameterised factory
+(`createIntakeIpRateLimiter`, same pattern as the existing
+`createGlobalLoginFloodLimiter`) — honestly scoped in that test's own
+comment: it proves the limiter mechanism works, not what `req.ip` actually
+is on Render. **427 `apps/api` tests (up from 409) + 91 `apps/web` = 518
+total, all passing.** Full detail in `docs/decisions.md` D74;
+`docs/DAY-5A-SUMMARY.md` now has an explicit tested-vs-reasoning-only table,
+one row per refinement. `pnpm typecheck`/`pnpm lint` clean throughout.
+Nothing pushed; nothing run against staging. Manual verification is still
+limited to a clean-server-start/200-response/401-through-proxy smoke
+check — no browser
+exists in this environment, so neither new screen has actually been clicked
+through; see `docs/MANUAL-TEST-DAY5A.md`.
+
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
@@ -1509,6 +1563,113 @@ permission, or dependency change. Browser/theme/focus/keyboard checks, and
 an actual look at the rendered charts, remain unverified — no browser was
 launched. See `docs/decisions.md` D57.
 
+**Day 5a (website intake, API keys, Enquiries inbox) is complete — built and
+verified 2026-11-24, resumed from a mid-build checkpoint the same day.** The
+full design (D71) was built exactly, with two flagged judgment calls where
+the plan's literal text left a gap: a replay of a previously-`REJECTED`
+submission re-throws the same stored error (read as "idempotency wins"
+applying to every outcome, not only a success), and the Enquiries list
+endpoint got a `sort` param even though D71's item 10 text didn't name one
+explicitly (every other list endpoint in this app has one).
+
+- **API keys**: `lib/api-key.ts` (`gsk_live_` + 32 random bytes, base64url;
+  SHA-256 hash, same pattern as `session.ts`; `crypto.timingSafeEqual` on
+  top of the exact indexed DB lookup). `modules/api-keys/` — Admin only
+  (`SETTINGS_MANAGE`): create/list/revoke/rotate, rotate = revoke-old-plus-
+  create-new in one transaction, the raw key returned exactly once in a
+  response shape distinct from the list shape.
+- **Authentication for the intake path**: `middleware/api-key-auth.ts`
+  (`attachApiKeyContext`) mounted globally but scoped to `/api/v1/intake`,
+  **before** `enforceOriginAndContentType` — on any missing/invalid/revoked
+  key it rejects 401 immediately, before the Origin check is ever reached.
+  `csrf.ts`'s Origin exemption is conditioned on `req.apiKeyCtx` already
+  being set (never on the request path alone), so a session cookie with no
+  key is still rejected upstream. `route-registry.ts` gained a new
+  `'apiKey'` `RouteAuth` value — no session or permission middleware for
+  those routes, since `attachApiKeyContext` already handled auth.
+- **Rate limiting**: two new limiters on the intake route only — 60/min per
+  verified key (the real protection) and a much looser 120/min per IP
+  (documented as honestly weak given `TRUST_PROXY=false`, D60, untouched).
+- **The intake endpoint** (`modules/intake/`): a lenient field mapper
+  (`intake-mapping.ts` — a short alias list per target field, formType →
+  sourceDetail via a lookup table with a sensible fallback, everything
+  unrecognised preserved in `capturedFields`); `intake.service.ts`
+  (`processWebsiteIntake`) — the `(organizationId, externalId)` idempotency
+  lookup runs against the raw body *before* `websiteEnquiryIntakeSchema`
+  is ever parsed, so a repeat `Idempotency-Key` always returns the original
+  result, even with a different and invalid replayed body; a honeypot hit
+  stores `SPAM` (never `REJECTED`) and responds with the exact same shape
+  as a real success; a genuine mapping failure (no email/phone after
+  mapping) or a malformed envelope stores `REJECTED` with the error and
+  responds 422 — nothing is lost silently. On success: one transaction
+  creates the Lead (source "Website", looked up the same way the existing
+  "Manual" lookup works) and the `WebsiteSubmission` row already as
+  `LEAD_CREATED` (one insert), then `findDuplicateLeads` (now callable with
+  just `{ orgId }`, per groundwork laid before this session) supplies
+  `possibleDuplicateLeadIds`. Audit rows for every outcome (success,
+  honeypot, rejection) bypass the shared `writeAudit()` helper — that
+  helper hard-codes a human `actorId`, which doesn't exist on this
+  no-user path — and carry only `{ submissionId, apiKeyPrefix }`, `actorId:
+  null`, never the raw key/Idempotency-Key/any enquiry field.
+  `intake.routes.ts` is the one route in this app with no declarative
+  `validate: { body }`, by design, flagged inline.
+- **The Enquiries inbox** (`modules/enquiries/`), same visibility as Leads
+  (`LEADS_READ`/`LEADS_WRITE`) plus the standard `RECORDS_ARCHIVE`
+  convention for archive/restore: list (status/formType/archived/date-range
+  filters, sortable), detail (adds the raw payload and a linked-lead
+  summary list rows don't pay for), mark-spam (409 on a second call;
+  archives the linked Lead too, in the same transaction, if one exists and
+  isn't already archived).
+- **Frontend**: `/settings/api-keys` (the first `/settings` route, Admin-
+  gated like `/users`) — create and rotate both reveal their raw key
+  exactly once, in a dedicated dialog with a copy button, since neither can
+  reuse the plain `ConfirmActionDialog`. `/enquiries` (visible to both
+  roles, next to Deals in the nav) — the existing `DataTable`/`RecordLayout`
+  components, a Raw Payload tab (pretty-printed JSON, deliberately no
+  syntax highlighting — not asked for), mark-spam/archive/restore via
+  `ConfirmActionDialog`.
+- **A pre-existing bug fixed first, at the user's own request**:
+  `pnpm db:verify-fresh`/`pnpm db:reset` had the exact Windows `.cmd`-shim
+  `spawnSync ENOENT` bug D63 already diagnosed and fixed for
+  `staging-migrate.ts`, but explicitly left unfixed in these two scripts at
+  the time. Both now use the same already-tested `runPrismaCli()` helper.
+- **Testing**: added throughout, not batched to the end — API-key hashing/
+  rotation/revocation (a revoked/rotated key stops working on its very next
+  request), the CSRF exemption's own unit tests, the route-registry
+  allow-list, a full intake suite (happy-path mapping across all four form
+  types, duplicate warnings, idempotency including the required
+  replay-with-an-invalid-body test, honeypot, validation/rejection, the
+  three Origin-exemption scenarios, per-key rate limiting, cross-
+  organisation isolation), a full enquiries suite (filters, detail,
+  mark-spam's linked-Lead archive, archive/restore, Staff-equal-access,
+  cross-org 404 isolation). 409 `apps/api` tests (up from 359) + 91
+  `apps/web` tests (unchanged) = 500 total, all passing at that point.
+  `pnpm typecheck`/`pnpm lint` clean throughout. Full detail, every
+  judgment call, and a per-checkpoint test-count breakdown (359 → 402 →
+  409) are in `docs/decisions.md` D72 (backend) and D73 (frontend). Docs:
+  `docs/intake-contract.md` (new) and `apps/api/scripts/replay-intake.sh`
+  (new, syntax-checked but not run live against a real key, to avoid
+  creating persistent demo data in the shared local `crm_dev` database
+  without asking first).
+
+  **A user-requested audit then closed two real test-coverage gaps
+  (D74)**: asked for a plain, per-refinement accounting of D71's eight
+  binding items against actual test files, which found the key-hash/
+  compare mechanism and the audit/log-redaction behaviour were correctly
+  implemented but never independently unit-tested. Closed with
+  `tests/lib/api-key.test.ts`, `tests/intake/audit.test.ts`,
+  `tests/logger.test.ts` (after exporting `LOG_REDACT_PATHS` from
+  `logger.ts`), and a per-IP rate-limit test enabled by refactoring
+  `lib/rate-limit.ts`'s per-IP limiter into a ceiling-parameterised
+  factory (`createIntakeIpRateLimiter`, same pattern as the existing
+  `createGlobalLoginFloodLimiter`) — the test is explicit that it proves
+  the limiter mechanism, not what `req.ip` actually is on Render. **427
+  `apps/api` + 91 `apps/web` = 518 total, all passing.**
+  `docs/DAY-5A-SUMMARY.md` now has an explicit tested-vs-reasoning-only
+  table, one row per refinement. Manual browser verification is still
+  unstarted — no browser-automation tool exists in this environment; see
+  `docs/MANUAL-TEST-DAY5A.md`.
+
 ## 8. Database
 
 - **Migrations applied via** `prisma migrate deploy` (root: `pnpm db:migrate`,
@@ -1631,6 +1792,12 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D66 — TLS against the real Supabase pooler is verified (on), but via a version-specific `pg-connection-string` aliasing of `sslmode=require`→`verify-full` that is scheduled to change in a future major version; recommended fix is a one-line connection-string edit (`sslmode=verify-full` explicitly) in the user's own `.env.staging.local`, not a code change
 - D67 — Package 4C Part D: `render.yaml` (two services, `region: singapore`, every env var `sync: false`) and `docs/STAGING.md`; the API's `startCommand` had to bypass its own `package.json` `start` script (`node --env-file=.env`, which crashes with no `.env` file present, as every Render deployment has)
 - D68 — Fix: `DATABASE_SSL_CA` was being silently discarded whenever `sslmode` appeared in `DATABASE_URL` (confirmed by reading `pg-connection-string`'s source); fixed by stripping `sslmode`-family params from the URL whenever an explicit SSL config is supplied; also consolidated a second, pre-existing connection factory (`src/db/pool.ts`, used by `/health/db`, had neither the pool-size limit nor any SSL config) into the one in `src/db/prisma.ts`; new read-only `pnpm staging:check-db` diagnostic
+- D69 — Change of plan: web app moves to Vercel, API stays on Render as a manual Web Service, not a Blueprint
+- D70 — First real Render deploy attempt failed at the build step; fixed the Build Command and Node version, and pre-emptively corrected the same risk in the Vercel instructions
+- D71 — Day 5a kickoff: the full design for API keys/intake/Enquiries, including eight binding mid-build refinements (honeypot invisibility, timing-safe key comparison, the Origin exemption conditioned on a verified key not just the path, idempotency winning over body validation, log/audit minimisation, per-IP limiting's honest weakness, spam/rejected retention deferred, nothing run against staging) — recorded before most of it was actually built; see D72/D73 for the build
+- D72 — Day 5a completed, backend: API keys, the intake endpoint, and Enquiries built exactly per D71 (two flagged judgment calls: a replayed-`REJECTED` submission re-throws its original error, and the Enquiries list got a `sort` param D71's text didn't name explicitly); a pre-existing Windows `db:verify-fresh`/`db:reset` bug (D63's same `.cmd`-shim `ENOENT`) fixed first at the user's request; 359 → 402 → 409 `apps/api` tests across this session's two backend checkpoints
+- D73 — Day 5a completed, frontend: the Admin-only API Keys screen (create/rotate both reveal a raw key exactly once) and the Enquiries screen (visible to both roles, reusing `DataTable`/`RecordLayout`); `docs/intake-contract.md` and `apps/api/scripts/replay-intake.sh` written; manual browser verification explicitly unstarted (no browser-automation tool in this environment)
+- D74 — Day 5a audit follow-up: a user-requested per-refinement accounting of D71's eight items against actual test files found two real gaps (key-hash/compare mechanism, audit/log-redaction content) — closed with `tests/lib/api-key.test.ts`, `tests/intake/audit.test.ts`, `tests/logger.test.ts` (new `LOG_REDACT_PATHS` export), and a per-IP rate-limit test enabled by a `createIntakeIpRateLimiter` ceiling-parameterised factory refactor (same pattern as `createGlobalLoginFloodLimiter`); 409 → **427** `apps/api` tests; `docs/DAY-5A-SUMMARY.md` gained an explicit tested-vs-reasoning-only table
 
 ## 10. Gotchas and lessons learned
 
@@ -1855,6 +2022,17 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   — it drops and recreates `crm_test` from zero, and Prisma's own CLI refuses
   to run that without fresh human consent each time anyway. Run it yourself
   before a release: `pnpm db:verify-fresh`.
+- **Day 5a (2026-11-24) brought the total to 427 `apps/api` + 91 `apps/web`
+  = 518.** No new `apps/web` tests this phase — matching this repo's
+  established, deliberate choice for list/detail page clients (Companies/
+  Contacts/Leads, Day 2) rather than an oversight. New `apps/api` coverage:
+  API-key hashing/rotation/revocation (including dedicated unit tests of
+  the hash/compare functions themselves, D74), the CSRF Origin exemption,
+  the route-registry `apiKey` allow-list, a full intake suite (idempotency,
+  honeypot, validation/rejection, rate limiting — both per-key and, via a
+  low-ceiling factory test, per-IP — cross-org isolation), audit-row
+  content and log redaction (D74), and a full enquiries suite. Full
+  breakdown in `docs/decisions.md` D72 and D74.
 - **Known gaps**: `apps/web`'s test coverage is still only pure-logic
   (`lib/format.ts`, `lib/api-client.ts`'s `onUnauthorized`) — no component/
   integration tests for `SearchInput`, `SessionExpiryHandler`, `AuthGuard`,
@@ -2034,6 +2212,27 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   This tool has never run a staging script itself and never will without
   being told to — `apps/api/.env.staging.local` is git-ignored and
   deny-listed from this tool's own Read/Edit/Write.
+- **Day 5a (website intake, API keys, Enquiries inbox) is done, 2026-11-24.**
+  Resumed from the mid-build checkpoint the same day, once the user
+  confirmed `crm_test` had migration
+  `20261123194049_add_submission_spam_and_archive` applied
+  (`pnpm db:verify-fresh` — which needed a small Windows bug fixed first,
+  see `docs/decisions.md` D72). Everything D71 designed is now built and
+  tested: API keys (generation, hashing, an Admin-only management screen),
+  the intake endpoint (idempotent, honeypot-aware, lenient field mapping),
+  and the Enquiries inbox (list/detail/mark-spam/archive/restore, a screen
+  visible to both roles). A later same-day follow-up (D74) closed two real
+  test-coverage gaps a user audit found (the key-hash/compare mechanism and
+  audit/log-redaction content had no dedicated test), plus added a per-IP
+  rate-limit test. Full detail in §7, `docs/decisions.md` D72–D74, and
+  `docs/DAY-5A-SUMMARY.md` (rewritten from its mid-build placeholder into a
+  real finished-day summary, same style as Days 1–4, now with an explicit
+  tested-vs-reasoning-only table). `pnpm typecheck`/`pnpm lint` clean;
+  `pnpm test` is **apps/api 427/427, apps/web 91/91** (518 total). Nothing
+  pushed; nothing run against staging. The rest of Day 5 (CSV export,
+  Docker packaging, the P0 freeze) is not yet
+  detailed in this repo — confirm exact scope with the user before starting
+  it.
 
 ## 14. Open questions and unverified items
 
@@ -2954,3 +3153,125 @@ log just records that a session happened and what it covered.
   needs adding to the user's own `.env.staging.local` before
   `pnpm staging:seed-sample` can run; deploying the two Render services
   from the Blueprint; clicking through the deployed app.
+- **2026-11-24 — Day 5a (website intake, API keys, Enquiries inbox) started,
+  then paused mid-build at the user's own checkpoint request.** Plan
+  approved first (auto-create a Lead on intake; Enquiries visible to both
+  roles same as Leads; document API keys as intake-only rather than add an
+  unused `scope` column; keep the shared 100KB body limit rather than a
+  separate 64KB one for intake). Built so far: migration
+  `20261123194049_add_submission_spam_and_archive` (`website_submissions`
+  gains `archived_at` and a `SPAM` status; applied to `crm_dev` only),
+  `apps/api/prisma/SCHEMA-SUMMARY.md` updated to match, `scoped()` and the
+  three duplicate finders (`apps/api/src/lib/scoped.ts`,
+  `apps/api/src/lib/duplicates.ts`) widened to take `{ orgId }` instead of a
+  full `RequestContext` (backward compatible — no existing call site
+  changed), and two new, not-yet-exported shared schema files
+  (`packages/shared/src/api-keys.ts`, `packages/shared/src/intake.ts`).
+  Mid-build, the user sent eight binding refinements to the approved plan
+  (honeypot responses must be indistinguishable from success; API keys need
+  a constant-time hash comparison; the Origin-check exemption must depend
+  on a *verified* key, not just the URL path, and needs a test proving a
+  cookie-without-a-key is still rejected; the per-IP rate limit must be
+  honestly documented as weak on Render given `TRUST_PROXY=false`, D60,
+  which is not being changed; no key/idempotency-value/personal data may
+  reach the logs, and audit rows may hold only a submission id and key
+  prefix; a repeated Idempotency-Key must win over body validation, which
+  changes how the route has to validate its input; spam/rejected rows are
+  kept forever for now, a retention policy is explicitly deferred as a
+  note, not built; nothing is run against staging by this tool, the exact
+  migration name for the user's own `pnpm staging:migrate` is recorded).
+  All eight are fully designed, with the reasoning, in `docs/decisions.md`
+  D71 — none of the actual intake endpoint, API-key management, or
+  Enquiries screens exist in code yet. Checkpoint actions: full check suite
+  run (`pnpm typecheck`/`pnpm lint` clean; `pnpm test` — `apps/web` 91/91,
+  `apps/api` 358/359, the one failure being the pre-existing
+  `website-submissions.test.ts` schema test against `crm_test`, which
+  doesn't have today's migration yet and which this tool does not apply
+  itself without being asked); `docs/DAY-5A-SUMMARY.md`,
+  `docs/MANUAL-TEST-DAY5A.md` (placeholder — nothing user-facing exists
+  yet), and `docs/DAY-5A-HANDOVER-PROMPT.md` (the ready-to-paste prompt for
+  the session that resumes this) written. Nothing committed or pushed.
+- **2026-11-24 (continuation) — Day 5a resumed and completed.** The user
+  confirmed Docker was running and `pnpm db:verify-fresh` had succeeded
+  against `crm_test`, but that script itself failed first on Windows with
+  `spawnSync pnpm ENOENT` — the same `.cmd`-shim bug D63 had already fixed
+  for `staging-migrate.ts` but explicitly left unfixed in `db-verify-fresh.ts`/
+  `db-reset.ts`. Fixed first, at the user's own request, using the same
+  already-tested `runPrismaCli()` helper (no new test needed — the only
+  change is which already-tested helper does the spawning). Confirmed via
+  `pnpm test` that the one previously-failing schema test now passes (apps/api
+  359/359 at that point). Then built the rest of `docs/DAY-5A-HANDOVER-PROMPT.md`'s
+  plan (items 2–13) in order, without stopping for approval between
+  packages, reporting only at four checkpoints as instructed: `packages/shared/
+  src/enquiries.ts` and the three missing `index.ts` export blocks (checkpoint
+  after item 1); API-key crypto, the `attachApiKeyContext` middleware, the
+  `csrf.ts` Origin exemption, `route-registry.ts`'s new `'apiKey'` auth type,
+  two intake rate limiters, a log-redact entry, the API Keys module, and the
+  full intake module (checkpoint after item 9 — 402 `apps/api` tests);
+  the Enquiries module and a full re-read of `app.ts`'s wiring (checkpoint
+  after item 11 — 409 `apps/api` tests); the Admin-only API Keys screen and
+  the both-roles Enquiries screen (checkpoint after item 13). Two deviations
+  flagged to the user rather than silently decided: a replayed-`REJECTED`
+  submission re-throws its original error (read as "idempotency wins"
+  applying to every outcome, not only a success), and the Enquiries list
+  endpoint got a `sort` param the plan's text didn't name explicitly (kept,
+  per the user's reply). Finished with docs: `docs/decisions.md` D72
+  (backend) and D73 (frontend), this file (§1, §7, §9, §11, §13, here),
+  `docs/NEXT-SESSION-START.md`, `docs/DAY-5A-SUMMARY.md` (rewritten from its
+  mid-build placeholder into a real finished-day summary), `docs/
+  MANUAL-TEST-DAY5A.md` (filled in with real, runnable steps — still
+  unchecked, since nothing was verified in an actual browser), `docs/
+  intake-contract.md` (new), and `apps/api/scripts/replay-intake.sh` (new,
+  syntax-checked, not run live against a real key — avoided creating
+  persistent demo data in the shared local `crm_dev` database without
+  asking first). Final state: `pnpm typecheck`/`pnpm lint` clean across the
+  whole repo throughout; **`pnpm test` — apps/api 409/409, apps/web 91/91,
+  500 total.** Two dev servers were started for a manual smoke check (both
+  new screens return 200 through the proxy, both new API routes correctly
+  401 unauthenticated through the proxy) and then shut down cleanly by exact
+  PID, with ports 3000/4000 confirmed clear afterward — no browser-
+  automation tool exists in this environment, so neither screen has
+  actually been clicked through. Nothing committed or pushed.
+- **2026-11-24 (further same-day follow-up) — a user-requested audit closed
+  two real test-coverage gaps.** The user asked for a short, plain,
+  per-refinement accounting of D71's eight binding items: DONE-and-proven
+  (naming the exact test), or documented-only. That answer, built by
+  actually grepping the test files rather than from memory, found two
+  genuine gaps: `lib/api-key.ts`'s hash/constant-time-compare functions had
+  no dedicated unit test (only end-to-end proof via the real middleware),
+  and nothing read back a real `auditEvent` row to confirm D71's
+  logging/audit-minimisation promise (nor was the new `Idempotency-Key`
+  log-redact path tested). The user then asked for small tests closing
+  both, plus a real test for the per-IP rate limiter (previously untested
+  at all — only the per-key limiter had one, via 61 cheap real requests).
+  Closed with: new `tests/lib/api-key.test.ts` (11 tests — key
+  generation/prefix/length/uniqueness, hash determinism and format,
+  `verifyApiKeyHash` true/false/mismatched-length-without-throwing); new
+  `tests/intake/audit.test.ts` (3 tests — reads back the real `auditEvent`
+  row after a success, a honeypot hit, and a rejection, asserting
+  `actorId: null`, `metadata` deep-equals exactly `{ submissionId,
+  apiKeyPrefix }`, and that the raw key/Idempotency-Key value/submitted
+  name/email/phone/message appear nowhere in the row); `logger.ts` gained a
+  named export `LOG_REDACT_PATHS` (the single source of truth for the real
+  `pino()` config) and new `tests/logger.test.ts` (3 tests — asserts the
+  path list names both headers, then proves a `pino` instance built from
+  that exact config actually censors them in a parsed log line while an
+  unrelated field passes through); `lib/rate-limit.ts`'s per-IP limiter
+  refactored from a fixed singleton into `createIntakeIpRateLimiter(ceiling,
+  windowMs?)` (the same ceiling-parameterised-factory pattern this file's
+  own `createGlobalLoginFloodLimiter` already used for the login flood
+  limiter), with a new test in `tests/intake/auth-and-rate-limit.test.ts`
+  proving the mechanism trips at a low test ceiling (3) — its own comment
+  states plainly that this proves the code works as written, not what
+  `req.ip` actually resolves to once deployed on Render (still reasoning
+  only, per D60/D71/D72, unchanged by this test). The one remaining D71
+  item (the spam/rejected retention note) stayed reasoning-only by design —
+  it is a decision not to build something, with no behaviour to assert on.
+  `docs/decisions.md` D74 records all of this; `docs/DAY-5A-SUMMARY.md`
+  gained an explicit "What is tested vs. reasoning only" table, one row per
+  refinement, naming the exact test file for each. Final state: `pnpm
+  typecheck`/`pnpm lint` clean across the whole repo (same 3 pre-existing
+  `apps/web` warnings, 0 errors); full repo `pnpm test` — **apps/api
+  427/427 (up from 409), apps/web 91/91, 518 total, all passing.** No
+  schema, migration, permission, or dependency change. Nothing committed
+  or pushed; nothing run against staging.

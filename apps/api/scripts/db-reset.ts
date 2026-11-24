@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { runPrismaCli } from './lib/run-cli.js';
 
 try {
   process.loadEnvFile(new URL('../.env', import.meta.url));
@@ -30,7 +30,9 @@ if (!hostAllowed || !nameAllowed) {
   process.exit(1);
 }
 
-execFileSync('pnpm', ['exec', 'prisma', 'migrate', 'reset', '--force'], {
-  stdio: 'inherit',
-  cwd: new URL('..', import.meta.url),
-});
+// D63: run the real Prisma CLI file directly via `node` (runPrismaCli), not
+// `execFileSync('pnpm', ...)` — that resolves to pnpm's `.cmd` shim on
+// Windows, which Node refuses to spawn without a shell, failing with
+// `spawnSync pnpm ENOENT` before ever reaching the database. This script had
+// the same latent bug as `staging-migrate.ts` (fixed in D63) until now.
+runPrismaCli(['migrate', 'reset', '--force'], new URL('..', import.meta.url));

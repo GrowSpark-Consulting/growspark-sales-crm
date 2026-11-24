@@ -86,3 +86,77 @@ export const loginGlobalFloodLimiter = defaultGlobalFlood.limiter;
 export async function resetLoginRateLimiters(): Promise<void> {
   await Promise.all([loginEmailStore.resetAll(), defaultGlobalFlood.reset()]);
 }
+
+const INTAKE_WINDOW_MS = 60 * 1000;
+
+/**
+ * Per-verified-API-key limit on the website intake route — the real
+ * protection in production (D71). Unlike the login limiters above, every
+ * request counts here (no skipSuccessfulRequests): this bounds request
+ * *volume* per key, not failed-attempt brute-forcing. Matches the original
+ * roadmap's own number.
+ */
+export const INTAKE_KEY_MAX_REQUESTS_PER_MINUTE = 60;
+
+/**
+ * A secondary, much looser per-IP layer on the same route. Honestly
+ * expected to do little to nothing once this runs on Render (D71):
+ * TRUST_PROXY stays false (D60, not being changed here), and Render's own
+ * edge/load balancer almost certainly still sits in front of the Express
+ * service even for a direct server-to-server hit, so req.ip there likely
+ * shows Render's edge address, not the real calling website's — collapsing
+ * this into one shared counter in practice, the same failure mode D21
+ * already found and abandoned for login. Kept anyway as a cheap extra
+ * layer, never relied on as the real defense.
+ */
+export const INTAKE_IP_MAX_REQUESTS_PER_MINUTE = 120;
+
+function tooManyIntakeRequests(): ApiError {
+  return new ApiError(429, 'RATE_LIMITED', 'Too many requests. Try again later.');
+}
+
+const intakeKeyStore = new MemoryStore();
+export const intakeKeyRateLimiter = rateLimit({
+  windowMs: INTAKE_WINDOW_MS,
+  limit: INTAKE_KEY_MAX_REQUESTS_PER_MINUTE,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: intakeKeyStore,
+  // Runs after attachApiKeyContext (app.ts), so req.apiKeyCtx is always set
+  // by the time this executes — 'unknown' is unreachable in practice, kept
+  // only so a missing key can never collapse into "no limit" instead.
+  keyGenerator: (req: Request): string => `key:${req.apiKeyCtx?.apiKeyId ?? 'unknown'}`,
+  handler: (_req, _res, next) => next(tooManyIntakeRequests()),
+});
+
+/**
+ * A ceiling-parameterised factory, same reasoning as
+ * createGlobalLoginFloodLimiter above: lets a test prove the mechanism trips
+ * at a configured threshold without sending 120+ real requests against the
+ * production ceiling. The production singleton below is just this factory
+ * called once with the real ceiling.
+ */
+export function createIntakeIpRateLimiter(
+  ceiling: number,
+  windowMs: number = INTAKE_WINDOW_MS,
+): { limiter: RequestHandler; reset: () => Promise<void> } {
+  const store = new MemoryStore();
+  const limiter = rateLimit({
+    windowMs,
+    limit: ceiling,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store,
+    keyGenerator: (req: Request): string => `ip:${req.ip ?? 'unknown'}`,
+    handler: (_req, _res, next) => next(tooManyIntakeRequests()),
+  });
+  return { limiter, reset: () => store.resetAll() };
+}
+
+const defaultIntakeIp = createIntakeIpRateLimiter(INTAKE_IP_MAX_REQUESTS_PER_MINUTE);
+export const intakeIpRateLimiter = defaultIntakeIp.limiter;
+
+/** Test-only: see resetLoginRateLimiters above. */
+export async function resetIntakeRateLimiters(): Promise<void> {
+  await Promise.all([intakeKeyStore.resetAll(), defaultIntakeIp.reset()]);
+}

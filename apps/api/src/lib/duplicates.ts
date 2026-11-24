@@ -1,8 +1,10 @@
 import type { DuplicateMatch } from '@growspark/shared';
 import { prisma } from '../db/prisma.js';
 import { scoped } from './scoped.js';
-import type { RequestContext } from './context.js';
 import type { Prisma } from '../generated/prisma/client.js';
+
+/** See scoped.ts — the narrowest shape, so the intake path can call these with a plain `{ orgId }`. */
+type OrgScoped = { orgId: string };
 
 /**
  * D29: duplicate detection warns, it never blocks. Exact match (after
@@ -26,7 +28,7 @@ export interface DuplicateFinderOptions {
 }
 
 export async function findDuplicateCompanies(
-  ctx: RequestContext,
+  ctx: OrgScoped,
   nameNormalized: string | null,
   options: DuplicateFinderOptions = {},
 ): Promise<DuplicateMatch[]> {
@@ -46,7 +48,7 @@ export async function findDuplicateCompanies(
 }
 
 export async function findDuplicateContacts(
-  ctx: RequestContext,
+  ctx: OrgScoped,
   fields: { emailNormalized: string | null; phoneNormalized: string | null },
   options: DuplicateFinderOptions = {},
 ): Promise<DuplicateMatch[]> {
@@ -77,7 +79,7 @@ export async function findDuplicateContacts(
 }
 
 export async function findDuplicateLeads(
-  ctx: RequestContext,
+  ctx: OrgScoped,
   fields: {
     emailNormalized: string | null;
     phoneNormalized: string | null;

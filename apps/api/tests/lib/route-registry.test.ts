@@ -32,14 +32,26 @@ describe('route registry', () => {
     expect(clean.unregistered).toEqual([]);
   });
 
-  it('every registered route declares "public", "authenticated", or a real permission string', () => {
+  it('every registered route declares "public", "authenticated", "apiKey", or a real permission string', () => {
     createApp();
     const permissionValues: string[] = Object.values(PERMISSIONS);
     for (const route of getRegisteredRoutes()) {
       const isValid =
-        route.auth === 'public' || route.auth === 'authenticated' || permissionValues.includes(route.auth);
+        route.auth === 'public' ||
+        route.auth === 'authenticated' ||
+        route.auth === 'apiKey' ||
+        permissionValues.includes(route.auth);
       expect(isValid, `route ${route.method} ${route.path} has invalid auth: ${route.auth}`).toBe(true);
     }
+  });
+
+  it('the apiKey-auth routes are exactly the expected allow-list (just the one intake route, today)', () => {
+    createApp();
+    const apiKeyRoutes = getRegisteredRoutes()
+      .filter((route) => route.auth === 'apiKey')
+      .map((route) => `${route.method.toUpperCase()} ${route.path}`)
+      .sort();
+    expect(apiKeyRoutes).toEqual(['POST /api/v1/intake/website-enquiries']);
   });
 
   it('the public routes are exactly the documented allow-list (plus the /api/v1 health/db mirror)', () => {

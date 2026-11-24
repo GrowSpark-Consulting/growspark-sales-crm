@@ -14,11 +14,12 @@ next.
   people (stated by the user; not independently verifiable from this repo
   alone).
 - The build is a **7-day plan**: Days 1–5 build, Day 6 testing, Day 7
-  stabilise and demo. **Days 1, 2, and 3 are all done** (see below). **Day
-  4** (activities, timelines, Today workspace, dashboard) is next, but not
-  yet detailed in this repo — confirm exact scope with the user before
+  stabilise and demo. **Days 1 through 5a are all done** (see below). The
+  rest of Day 5 (CSV export, Docker packaging, the P0 freeze) is next, but
+  not yet detailed in this repo — confirm exact scope with the user before
   starting it.
-- A **staging deployment is planned for around Day 4** — see "Day 4" below.
+- A **staging deployment was built after Day 4** — see "Staging deployment"
+  below.
 - Single developer, nothing reviewed by anyone else: correctness over
   speed, and every package stops for review before the next one starts.
 - TypeScript strict everywhere; `packages/shared`'s Zod schemas are the
@@ -170,12 +171,36 @@ specific package you're about to work on.
   `docs/DAY-4-SUMMARY.md` for a plain-language look back at the whole day,
   including exactly what has and hasn't been verified.
 
+- **Day 5a (website intake, API keys, Enquiries inbox) is done — built and
+  verified 2026-11-24, resumed and completed from a same-day mid-build
+  checkpoint.** API keys (generation, SHA-256 hashing, timing-safe
+  verification, an Admin-only management screen at `/settings/api-keys`
+  with create/revoke/rotate, the raw key shown exactly once); the website
+  intake endpoint (`POST /api/v1/intake/website-enquiries` — idempotent,
+  honeypot-aware, a lenient best-effort field mapper, duplicate-lead
+  warnings); and the Enquiries inbox (`/enquiries`, visible to both roles —
+  list/detail/mark-spam/archive/restore). Full design reasoning in
+  `docs/decisions.md` D71 (the plan), D72/D73 (the build, including two
+  flagged judgment calls), and D74 (a user-requested audit that closed two
+  real test-coverage gaps — the key-hash/compare mechanism and audit/log-
+  redaction content had no dedicated test — plus added a per-IP rate-limit
+  test). `docs/DAY-5A-SUMMARY.md` is now a real finished-day summary (same
+  style as Days 1–4, not the mid-build placeholder it used to be), with an
+  explicit tested-vs-reasoning-only table for all eight of D71's
+  refinements. `pnpm typecheck`/`pnpm lint` clean; **`pnpm test` — apps/api
+  427/427, apps/web 91/91, 518 total.** Nothing pushed; nothing run against
+  staging. `docs/MANUAL-TEST-DAY5A.md` is filled in
+  with real, runnable steps but **unchecked** — this environment has no
+  browser-automation tool, so neither new screen has actually been clicked
+  through yet; that, plus `apps/api/scripts/replay-intake.sh`'s curl-based
+  demonstration, is the user's to run.
+
 ## The next work, in order
 
-Day 5 (website intake, CSV export, Docker packaging, the P0 freeze) is not
-yet detailed in this repo — confirm exact scope with the user before
-starting it. Per the roadmap, Days 6–7 (testing, stabilisation, demo) stay
-out of scope until the build days are done.
+Day 5a is done (see above). The rest of Day 5 (CSV export, Docker
+packaging, the P0 freeze) is not yet detailed in this repo — confirm exact
+scope with the user before starting it. Per the roadmap, Days 6–7 (testing,
+stabilisation, demo) stay out of scope until the build days are done.
 
 ## Staging deployment (package 4C — built, database steps confirmed working)
 

@@ -13,7 +13,7 @@ if (process.env.TEST_DATABASE_URL) {
 // singleton it feeds) capture the un-overridden crm_dev URL instead.
 const { beforeEach } = await import('vitest');
 const { resetDatabase } = await import('./helpers/reset-database.js');
-const { resetLoginRateLimiters } = await import('../src/lib/rate-limit.js');
+const { resetLoginRateLimiters, resetIntakeRateLimiters } = await import('../src/lib/rate-limit.js');
 
 // Every test in every file starts from a known-empty database. Existing
 // per-test cleanup (cleanupOrganization in afterEach hooks) still runs and
@@ -26,3 +26,6 @@ beforeEach(resetDatabase);
 // singletons, so without this, one test's login attempts would count
 // towards another test's limit.
 beforeEach(resetLoginRateLimiters);
+
+// Same again for the intake rate limiters (D71).
+beforeEach(resetIntakeRateLimiters);

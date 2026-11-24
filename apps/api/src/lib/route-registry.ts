@@ -10,9 +10,11 @@ export type HttpMethod = 'get' | 'post' | 'patch' | 'put' | 'delete';
  * 'public': no session required (health checks, login).
  * 'authenticated': any signed-in user, no specific permission (logout, me,
  * change-password).
+ * 'apiKey': authenticated by attachApiKeyContext (middleware/api-key-auth.ts)
+ * before the route's own chain runs — no session, no permission check here.
  * A Permission string: session required AND that permission.
  */
-export type RouteAuth = 'public' | 'authenticated' | Permission;
+export type RouteAuth = 'public' | 'authenticated' | 'apiKey' | Permission;
 
 export interface RouteRecord {
   method: HttpMethod;
@@ -65,10 +67,14 @@ export function defineRoute(options: DefineRouteOptions): void {
   registry.push({ method, path, auth });
 
   const chain: RequestHandler[] = [];
-  if (auth !== 'public') {
+  // 'apiKey' routes are already authenticated by attachApiKeyContext, mounted
+  // globally on their path before defineRoute's own chain ever runs (see
+  // app.ts and docs/decisions.md D71) — no session context, no permission
+  // check here.
+  if (auth !== 'public' && auth !== 'apiKey') {
     chain.push(attachSessionContext);
   }
-  if (auth !== 'public' && auth !== 'authenticated') {
+  if (auth !== 'public' && auth !== 'authenticated' && auth !== 'apiKey') {
     chain.push(requirePermission(auth));
   }
   if (validate) {

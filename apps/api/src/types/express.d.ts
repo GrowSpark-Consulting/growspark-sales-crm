@@ -1,5 +1,5 @@
 import type { Logger } from 'pino';
-import type { RequestContext } from '../lib/context.js';
+import type { RequestContext, ApiKeyContext } from '../lib/context.js';
 
 declare module 'express-serve-static-core' {
   interface Request {
@@ -7,6 +7,8 @@ declare module 'express-serve-static-core' {
     log: Logger;
     /** Set by the session middleware for every non-public route. */
     ctx?: RequestContext;
+    /** Set by attachApiKeyContext for the intake path only, on a verified, non-revoked API key. */
+    apiKeyCtx?: ApiKeyContext;
     /**
      * Query params after Zod validation. Express 5 defines `req.query` as a
      * getter-only accessor (no setter) — verified against the installed

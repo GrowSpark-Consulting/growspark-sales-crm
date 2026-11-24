@@ -2259,3 +2259,563 @@ reconstructed from memory, and cross-checked against each commit's own message.
 - **Pre-emptively checked whether the Vercel instructions (also written this session, D69) had the identical latent bug** — they did: the Vercel Install Command override also read `corepack enable && corepack prepare pnpm@11.10.0 --activate && cd ../.. && pnpm install --frozen-lockfile`. Rather than assume Vercel's build image has the same read-only-system-path behaviour as Render's (plausible, but not confirmed either way — Vercel's docs don't mention it), checked Vercel's own current docs (`vercel.com/docs/deployments/configure-a-build#corepack`, `vercel.com/docs/package-managers`) for the documented way to pin a Corepack-managed package manager version there, and found the manual `corepack enable`/`corepack prepare` pair was wrong on Vercel for a different reason than on Render: **Corepack support on Vercel is opt-in**, via a project environment variable — "You can enable Corepack by adding an environment variable with name `ENABLE_EXPERIMENTAL_COREPACK` and value `1` to your Project" — and once set, Vercel's own install step (which runs *before* the project's configured Install Command) already honours the root `package.json`'s `"packageManager"` field itself, with no `corepack enable`/`prepare` needed in the Install Command at all. Without that env var, Vercel instead infers the package manager version from the lock file, and its documented lockfile-version → pnpm-version mapping does not list pnpm 11 — a silent version mismatch risk, not just redundant commands. **Fix**: the Vercel Install Command override is now just `cd ../.. && pnpm install --frozen-lockfile` (no Corepack commands at all), and a new required `ENABLE_EXPERIMENTAL_COREPACK=1` Vercel project environment variable was added alongside `API_INTERNAL_URL`.
 - **Both fixes are Render/Vercel dashboard-only changes — neither needs a repository change or a push.** `NODE_VERSION`/the corrected Build Command are entered directly on the existing Render service (Settings → Build & Deploy, or Environment); `ENABLE_EXPERIMENTAL_COREPACK`/the corrected Install Command are entered when the Vercel project is first created (it hasn't been yet). `render.yaml` and `docs/STAGING.md` were updated so the next read of either already reflects the fix, but the running Render service itself still needs these edited by hand in its dashboard and redeployed — not done by this tool (no dashboard access).
 - **Not independently re-verified against a live Render build by this tool** — the original failure was read from a screenshot, and the fix (Corepack's one-shot invocation form, Render's `NODE_VERSION` precedence, Vercel's Corepack opt-in) is confirmed against each platform's own current documentation, not from watching a corrected deploy succeed. Flagged for the user to confirm on the next real deploy attempt.
+
+## D71 — Day 5 part (a) kickoff: plan approved, schema migration applied, mid-build design refinements recorded before a checkpoint stop (2026-11-24)
+
+Day 5a (website intake, API keys, Enquiries inbox) started this session. The
+user approved a plan (auto-create a Lead on intake, Enquiries visible to
+both roles same as Leads, document API keys as intake-only rather than add
+an unused scope column, keep the shared 100KB body limit rather than a
+separate 64KB one for intake) and then, mid-build, sent eight binding
+refinements. This entry records the approved design as it now stands,
+**before most of it is actually built** — see `docs/DAY-5A-SUMMARY.md` for
+exactly what code exists versus what is still only designed here.
+
+- **Schema change — applied to `crm_dev` only, not yet to `crm_test` or
+  staging.** Migration `20261123194049_add_submission_spam_and_archive`:
+  adds `website_submissions.archived_at` (nullable timestamptz, same
+  archive/restore pattern every other business record already has) and a
+  `SPAM` value to the `submission_status` enum (alongside the existing
+  `RECEIVED`/`LEAD_CREATED`/`REJECTED`). No other schema change — `ApiKey`
+  already had every column this day's work needs (built Day 1), including
+  on reflection no `scope` column, per the user's own "document only, don't
+  add it" choice, since intake is the only purpose keys serve today.
+  `apps/api/prisma/SCHEMA-SUMMARY.md` updated to match. **This migration has
+  not been applied to `crm_test`** (confirmed by a failing pre-existing
+  schema test, `tests/schema/website-submissions.test.ts`, once the shared
+  package's two new unused files were added and the full suite re-run) —
+  this tool does not read real `.env` files and does not run `prisma
+  migrate reset`/`migrate deploy` against a database other than `crm_dev`
+  without being asked each time (CLAUDE.md, and the Prisma AI-agent consent
+  gate, D15); applying it to `crm_test` is the user's to do, documented as
+  the first item in `docs/DAY-5A-HANDOVER-PROMPT.md`. **It must also be
+  applied to staging eventually, by the user running `pnpm staging:migrate`
+  themselves — not run against staging by this tool, per explicit
+  instruction.** Exact migration name for that command:
+  `20261123194049_add_submission_spam_and_archive`.
+- **`scoped()` (`apps/api/src/lib/scoped.ts`) and the three duplicate
+  finders (`apps/api/src/lib/duplicates.ts`) now take `{ orgId: string }`
+  instead of the full `RequestContext`.** A deliberate, backward-compatible
+  widening (every real `RequestContext` already has `orgId`, so no existing
+  call site changes) — the intake code path has no human user at all (an
+  API key, not a session), so it has no `userId`/`role` to put in a
+  `RequestContext` and would otherwise need a fabricated fake one just to
+  reuse this already-built duplicate-warning logic. Confirmed via
+  `pnpm typecheck` (clean) that this change alone touches nothing else.
+- **Enquiry → Lead flow (approved plan, not yet built)**: the intake
+  endpoint creates a `Lead` immediately on a successful submission —
+  exactly like the original Day-5 roadmap already specified — rather than
+  leaving enquiries as a separate not-yet-a-lead state awaiting manual
+  conversion. "Mark as spam" on an already-processed enquiry will also
+  archive the `Lead` it created, in one transaction.
+- **Honeypot handling — refined mid-build by direct instruction, overriding
+  this entry's own first draft**: a tripped honeypot (`hp` field,
+  non-empty) stores the submission with status **`SPAM`** (not `REJECTED`
+  — `REJECTED` is reserved for a submission that fails real validation,
+  e.g. no email or phone after mapping) and creates no `Lead`. The HTTP
+  response is **identical in shape** to a real success (`201`, same
+  envelope, `leadId: null`, `duplicate: false`) — the sender is never told
+  it was caught. Noted honestly: a sufficiently determined prober could in
+  principle notice that honeypot-triggered responses always carry a null
+  `leadId` while a real, non-honeypot success practically never does
+  (mapping requires an email or phone before a 201 is possible at all) —
+  accepted as standard honeypot practice (fail invisibly, not
+  undetectably-perfectly), not worth more engineering against.
+- **API key format and verification (design finalised, implementation
+  pending)**: a key is a long random value with a recognisable literal
+  prefix (`gsk_live_` + 32 random bytes, base64url) — the prefix is
+  cosmetic/recognisable only, not a lookup mechanism. Only a SHA-256 hash is
+  ever stored (`keyHash`, already `@unique` on `ApiKey`), the same pattern
+  `apps/api/src/lib/session.ts` already uses for session tokens. Lookup is
+  `findUnique({ where: { keyHash } })` (exact, indexed), **plus** a
+  `crypto.timingSafeEqual` comparison of the computed hash against the
+  found row's stored hash before trusting it, per explicit instruction.
+  Honestly scoped in the code comment: this is defense-in-depth layered on
+  top of an already-exact indexed DB match, not a claim that it closes a
+  timing side-channel the database index lookup itself might still have.
+  `revokedAt` is checked on every single request (no caching) and rotation
+  is revoke-old-plus-create-new in one transaction, so a revoked or rotated
+  key stops working on its very next use, immediately.
+- **Origin-check exemption — redesigned mid-build to be conditioned on
+  success, not on path alone**: the first draft would have exempted the
+  `/api/v1/intake/*` path from the Origin check unconditionally, before
+  authentication ran. Corrected per direct instruction ("only when a valid
+  API key is present... a request with a session cookie but no key must
+  still be rejected"). The real design: a new middleware,
+  `attachApiKeyContext`, is mounted globally but scoped to the intake path
+  only (`app.use('/api/v1/intake', attachApiKeyContext)`), **before**
+  `enforceOriginAndContentType` in `app.ts`'s middleware order. On a
+  missing/invalid/revoked key it immediately rejects with `401` — the
+  request never reaches the Origin check at all in that case, so a bad or
+  absent key can never be masked by, or benefit from, a `403 Origin not
+  allowed` instead. Only on success does it attach `req.apiKeyCtx`;
+  `enforceOriginAndContentType` then exempts the Origin check (Content-Type
+  is still required) if, and only if, `req.apiKeyCtx` is already set —
+  which by construction can only be true on this one path, after
+  authentication already succeeded. A session cookie with no
+  `Authorization` header hitting this route is rejected at the
+  `attachApiKeyContext` step with `401`, before CSRF logic is even reached
+  — satisfying "must still be rejected" directly. A dedicated test for this
+  (cookie-but-no-key → 401; no-Origin-but-valid-key → succeeds;
+  valid-key-but-wrong-Content-Type → still `415`) is pending, tracked in
+  `docs/DAY-5A-HANDOVER-PROMPT.md`.
+- **Idempotency must win over body validation, not lose to it — a real
+  design change from the first draft.** A repeat `Idempotency-Key` must
+  return the original result and ignore the new body entirely, **even if
+  the new body would otherwise fail validation** (direct instruction, with
+  a test required: same key, different — and in the test, invalid — body,
+  must still return the original result). This means the intake route
+  cannot use `defineRoute`'s normal declarative `validate: { body: ... }`
+  option, which runs unconditionally before any handler code: the
+  (organizationId, externalId) lookup must run first, inside the service
+  function, against the raw body, and only *after* finding no existing row
+  does the service call `websiteEnquiryIntakeSchema.parse()` itself. This
+  is a deliberate, documented exception to the "every route validates
+  declaratively" convention, not an oversight — flagged inline in the
+  route file once written. A genuinely malformed JSON body (not just a
+  body that fails the Zod shape) is still caught earlier, by
+  `express.json()` itself, before any of this runs — idempotency cannot
+  rescue a body Express itself couldn't parse at all, which is an honest,
+  unavoidable boundary, not a gap in this design.
+- **Per-IP rate limiting on intake: implemented, but honestly caveated, not
+  relied on as the real protection.** `TRUST_PROXY` stays `false`, per
+  direct instruction not to change it without asking, and per D60's own
+  finding that nothing in this deployment's network path gives Express a
+  genuine client IP to trust. D60 only examined the *browser* path (through
+  Next's rewrite); intake is called server-to-server directly against the
+  API's own URL, which does skip that particular hop — but on Render, the
+  platform's own edge/load balancer almost certainly still sits in front of
+  the Express service for a direct hit too, so `req.ip` there likely shows
+  Render's edge address, not the real calling website's address, collapsing
+  the per-IP bucket into one shared counter in practice — the same failure
+  mode D21 already found and abandoned for login, for a materially similar
+  reason. **The per-key limiter is the real protection**; the per-IP
+  limiter is kept as a cheap second layer that is honestly expected to do
+  little to nothing once this runs on Render, not claimed otherwise.
+  Documented in `docs/intake-contract.md` once written, not just here.
+- **Logging and audit minimisation (direct instruction)**: `pino`'s
+  existing redact list (`apps/api/src/logger.ts`) already covers
+  `req.headers.authorization` (the API key) and never logs a request body
+  at all (`request-log.ts` logs method/route/status/duration/userId only)
+  — the `Idempotency-Key` header gets an explicit redact-path entry added
+  too, defense-in-depth, consistent with the file's existing "in case a
+  future change does" reasoning for headers nothing currently logs
+  directly. Audit rows written for intake-created records carry only
+  `submissionId` and the key's `keyPrefix` in `metadata` — never the raw
+  key, the `Idempotency-Key` value, or any enquiry field (name/email/phone/
+  payload). `actorId` is `null` on these rows (no human acted); the
+  attribution is the API key, recorded by prefix only.
+- **Rejected and spam submissions are kept, not deleted — explicitly a note
+  for later, not a task for this session.** Every `WebsiteSubmission` row,
+  whatever its status, stays in the table indefinitely (archiving only
+  hides it from a default list view, per the column added above). No
+  retention/deletion policy exists for any status, spam included. Whether
+  one is needed is an open question for later — the PRD itself defers
+  backup/retention/privacy policy to Day 7 documentation, not engineering,
+  and this entry does not change that. Recorded here only as an explicit
+  note, per direct instruction not to build anything for it now.
+- **Nothing has been run against staging, and nothing will be by this
+  tool.** The user runs `pnpm staging:migrate` themselves, against
+  migration `20261123194049_add_submission_spam_and_archive`.
+- **Checkpoint stop**: per the user's own instruction, build work paused
+  here — mid-plan, with the schema change applied and two new unused
+  shared-package files on disk (`packages/shared/src/api-keys.ts`,
+  `packages/shared/src/intake.ts`, neither yet exported from `index.ts` or
+  imported anywhere) — to run the full check suite and bring the docs up to
+  date before continuing. `pnpm typecheck` and `pnpm lint` are clean (0
+  errors; 3 pre-existing warnings in files untouched this session). `pnpm
+  test`: `apps/web` 91/91 pass; `apps/api` 358/359 pass, the one failure
+  being the pre-existing `website-submissions.test.ts` schema test hitting
+  `crm_test`, which does not yet have this session's migration applied —
+  not a code defect, and not something this tool can fix itself per the
+  constraint above. Full remaining work list in
+  `docs/DAY-5A-HANDOVER-PROMPT.md`.
+
+## D72 — Day 5a resumed and completed: API keys, website intake, and the Enquiries backend built per D71 (2026-11-24)
+
+The user confirmed `crm_test` had the migration applied (`pnpm db:verify-fresh`,
+run by the user themselves after this tool found and fixed an unrelated
+Windows bug in that script — see the paragraph below), then asked this
+session to build the entire remaining D71 plan in order, reporting only at
+named checkpoints rather than after every package. This entry covers items
+2–12 of `docs/DAY-5A-HANDOVER-PROMPT.md`: everything backend. D73 covers the
+frontend (item 13).
+
+- **Pre-existing bug fixed first, at the user's own request, before any of
+  D71's plan**: `pnpm db:verify-fresh` failed with `spawnSync pnpm ENOENT` —
+  the exact Windows `.cmd`-shim/CVE-2024-27980 problem D63 already diagnosed
+  and fixed for `staging-migrate.ts`, but explicitly left unfixed in
+  `db-verify-fresh.ts`/`db-reset.ts` at the time ("not fixed here, out of
+  this package's scope"). Both now use the same `runPrismaCli()` helper
+  (`scripts/lib/run-cli.ts`) D63 already built and tested — `db-reset.ts` is
+  a direct swap (it never needed a custom `env`), `db-verify-fresh.ts` sets
+  `process.env.DATABASE_URL` to `TEST_DATABASE_URL` before calling it, since
+  `runPrismaCli` has no `env` parameter and `execFileSync` inherits
+  `process.env` by default. No new test added — the only thing that changed
+  is which already-tested helper does the spawning (`tests/lib/run-cli.test.ts`
+  already covers `runPrismaCli` itself), and neither script had, or per the
+  `staging-migrate.ts` precedent needs, its own dedicated test.
+- **`lib/api-key.ts`**: `generateApiKey()` (`gsk_live_` + 32 random bytes,
+  base64url — `API_KEY_PREFIX` is a named export, cosmetic only, never used
+  for lookup), `hashApiKey()` (SHA-256, identical pattern to
+  `session.ts`'s `hashSessionToken`), `verifyApiKeyHash()`
+  (`crypto.timingSafeEqual`, length-checked first since that function throws
+  on mismatched buffer lengths). `keyPrefix` stored for display is the first
+  15 characters of the generated key (`gsk_live_` plus 6 random chars) — a
+  judgment call not specified in D71: enough to tell keys apart in the list
+  screen, nowhere near enough to reconstruct the real key.
+- **`middleware/api-key-auth.ts`** (`attachApiKeyContext`) and a new
+  `ApiKeyContext` type in `lib/context.ts` (mirrors `RequestContext` but for
+  the no-human-user intake path): parses `Authorization: Bearer <key>`,
+  hashes it, `findUnique({ where: { keyHash } })`, checks `revokedAt` fresh
+  on every request (no caching), then the `timingSafeEqual` comparison
+  before trusting the match. On any failure: `401`, immediately, before
+  anything else runs. On success: updates `lastUsedAt` and attaches
+  `req.apiKeyCtx = { organizationId, apiKeyId, keyPrefix }`.
+- **`middleware/csrf.ts`**: the Origin-check exemption, exactly as D71
+  specified — conditioned on `req.apiKeyCtx` already being set, never on the
+  request path. The Content-Type check is never exempted. Mounted in
+  `app.ts` as `app.use('/api/v1/intake', attachApiKeyContext)`, **before**
+  `enforceOriginAndContentType` and before `express.json()` (neither of
+  those needs the parsed body, so the ordering has no other side effect).
+- **`lib/route-registry.ts`**: `'apiKey'` added to the `RouteAuth` union;
+  `defineRoute` skips both `attachSessionContext` and `requirePermission`
+  for it (auth already happened in the global middleware above by the time
+  an `'apiKey'` route's own chain runs). `route-registry.test.ts` updated
+  per D71's instructions: the existing "declares public/authenticated/a real
+  permission" test now also allows `'apiKey'`, plus a new test asserting the
+  apiKey-auth allow-list is exactly `['POST /api/v1/intake/website-enquiries']`.
+- **`lib/rate-limit.ts`**: `intakeKeyRateLimiter` (60/minute per
+  `req.apiKeyCtx.apiKeyId` — every request counts, not just failed ones,
+  unlike the login limiters: this bounds request *volume*, not brute-forcing)
+  and `intakeIpRateLimiter` (120/minute per `req.ip`), both documented
+  inline with D71's honest caveat about the per-IP one on Render given
+  `TRUST_PROXY=false` (D60, untouched).
+- **`logger.ts`**: added `'req.headers["idempotency-key"]'` to the existing
+  redact list, defense-in-depth consistent with the file's own "in case a
+  future change does" reasoning. Confirmed (did not re-add)
+  `req.headers.authorization` was already redacted, and that
+  `request-log.ts` only ever logs method/route/status/duration/userId —
+  never a header or body directly.
+- **`modules/api-keys/`** (Admin only, `PERMISSIONS.SETTINGS_MANAGE`):
+  `createApiKey`, `listApiKeys` (never returns a hash or the raw key —
+  `keyPrefix` only), `revokeApiKey` (409 `ALREADY_REVOKED` on a second
+  call, same convention as every other archive-style 409), `rotateApiKey`
+  (revoke-old-plus-create-new in one transaction, new key keeps the old
+  key's name). `POST`/rotate return the raw key exactly once, in
+  `apiKeyCreatedResponseSchema`'s distinct shape — never the same shape
+  `GET` returns.
+- **`modules/intake/`** — three files, per D71's own breakdown:
+  - `intake-mapping.ts` (`mapIntakeFields`): the lenient field mapper. A
+    short alias list per target field (e.g. email only ever tries `email`;
+    phone tries `phone`/`phone_number`/`phoneNumber`/`mobile`), everything
+    else copied into `capturedFields` unchanged. `formType` → `sourceDetail`
+    via a lookup table for the roadmap's four named form types, falling
+    back to `Website / <formType>` for anything else — not a rejection, so
+    a form type the website adds later still produces a reasonable label
+    instead of failing.
+  - `intake.service.ts` (`processWebsiteIntake`): the `(organizationId,
+    externalId)` lookup runs first, against the raw body, exactly as D71
+    specifies — `websiteEnquiryIntakeSchema.parse()` is never called until
+    that lookup finds nothing. **A judgment call beyond D71's literal text**:
+    a replay of a previously-`REJECTED` submission re-throws the *same*
+    stored error as the same `422`, rather than being treated as a
+    not-applicable case — read as a natural extension of "a repeat
+    Idempotency-Key must return the original result," applied to every
+    outcome the original call could have had, not only a success. Flagged
+    here in case a narrower reading was intended. Honeypot hits store
+    `SPAM` via a dedicated path that never calls the Lead-creation
+    transaction at all. A genuine mapping failure (no email or phone)
+    stores `REJECTED` with the Zod/mapping error message. On success: one
+    `$transaction` creates the Lead (source "Website", looked up by name
+    exactly like `leads.service.ts`'s existing "Manual" lookup) and the
+    `WebsiteSubmission` row already as `LEAD_CREATED` with `leadId` set (one
+    insert, not create-then-update) and writes the audit row; outside that
+    transaction, `findDuplicateLeads({ orgId }, ...)` (no full
+    `RequestContext` needed, per the groundwork already laid before this
+    session) supplies `possibleDuplicateLeadIds`. **Audit rows for intake
+    deliberately bypass the shared `writeAudit()` helper** — that helper
+    hard-codes `actorId` to a `RequestContext`'s `userId`, which does not
+    exist on this no-human-user path; a small local `writeIntakeAudit()` in
+    `intake.service.ts` writes `actorId: null` and
+    `metadata: { submissionId, apiKeyPrefix }` directly, for every outcome
+    (success, honeypot, and rejection — "intake rejections" is explicitly
+    one of the architecture doc's own audited actions, not just successes).
+  - `intake.routes.ts`: the one route in this app with no `validate: {
+    body }`, with an inline comment explaining why, per D71's instruction
+    to flag the deviation in the file itself, not just here.
+- **`modules/enquiries/`** (same visibility as Leads — `LEADS_READ` for
+  list/detail, `LEADS_WRITE` for mark-spam, `RECORDS_ARCHIVE` for
+  archive/restore, identical convention to every other archivable
+  resource): list (status/formType/archived/date-range filters, plus `sort`
+  — kept for consistency with every other list endpoint even though D71's
+  item 10 text didn't name it explicitly, flagged to the user and kept per
+  their reply); detail (adds the raw `payload` and a small linked-lead
+  summary, list rows never carry `payload`); `mark-spam` (409
+  `ALREADY_SPAM` on a second call; archives the linked Lead in the same
+  transaction if one exists and isn't already archived — a no-op, not an
+  error, if it's already archived); archive/restore (the same
+  `ALREADY_ARCHIVED`/`NOT_ARCHIVED` convention every other resource uses).
+- **Wired into `app.ts`**: the global `attachApiKeyContext` mount and all
+  three new route registrations (`registerApiKeysRoutes`,
+  `registerIntakeRoutes`, `registerEnquiriesRoutes`) — built incrementally
+  alongside each module for testability, then re-read end to end as a final
+  confirmation pass (item 11).
+- **Testing, added throughout, not batched to the end**: API-key
+  hashing/rotation/revocation including "a revoked/rotated key stops working
+  on its very next request" (`tests/middleware/api-key-auth.test.ts`,
+  testing `attachApiKeyContext` directly, the same way `csrf.test.ts` tests
+  `enforceOriginAndContentType` directly); the CSRF exemption's own unit
+  tests; the route-registry allow-list; a full intake suite
+  (`tests/intake/`) — happy-path field mapping across all four form types,
+  duplicate-email/phone warnings, idempotency (including the required "same
+  key, second time with an invalid body, returns the original untouched"
+  test, and a replayed-`REJECTED`-stays-`REJECTED` case), honeypot (`SPAM`
+  status, no Lead, byte-identical success shape — asserted via an exact key
+  set, not just a few fields), validation/rejection (missing
+  `Idempotency-Key`, mapping failure, malformed envelope, oversized body),
+  the three D71 Origin-exemption scenarios (cookie-no-key → 401,
+  no-Origin-valid-key → 201, valid-key-wrong-Content-Type → 415), per-key
+  rate limiting (429 on request 61, using requests that fail fast inside the
+  handler so the test doesn't need 61 real Lead-creation transactions), and
+  cross-organisation isolation; a full enquiries suite covering list
+  filters, detail, mark-spam (including the linked-Lead archive and the
+  409), archive/restore, Staff-equal-access (these routes aren't
+  role-restricted, so this proves Staff isn't *accidentally* blocked,
+  mirroring the Admin-only sweep done for api-keys), 404 isolation across
+  organisations. `apps/api` test count: 359 (start of this session) → 402
+  (after the intake endpoint, item 9's checkpoint) → **409** (after
+  enquiries, item 10).
+- **Verified (real output, every checkpoint)**: `pnpm typecheck`/`pnpm lint`
+  clean across the whole repo at every stage, 0 errors throughout (the same
+  3 pre-existing React Compiler warnings in files this work never touched).
+  Final full-repo `pnpm test`: **apps/api 409/409, apps/web 91/91.**
+
+## D73 — Day 5a frontend: the API Keys and Enquiries screens (2026-11-24)
+
+- **`/settings/api-keys`** (the first route under `/settings` in this app —
+  `apps/web/app/(protected)/settings/api-keys/`), Admin-gated the same way
+  `/users` already is: a client-side redirect to `/forbidden` for Staff
+  (the real control is the API's own `settings:manage` permission check;
+  this is only so Staff don't see a broken page if they land here directly),
+  plus a new nav item in `app-shell.tsx` gated on `isAdmin`, placed right
+  after Users.
+  - **Create and rotate both need a "shown exactly once" raw key reveal,
+    not just a toast or a plain confirm** — `CreateApiKeyDialog` is a single
+    `Dialog` with two internal steps (the name form, then — on success,
+    without closing — the raw key in a read-only, auto-selecting input with
+    a copy button and an explicit warning that it won't be shown again).
+    `RotateApiKeyDialog` needed its own component, not a reuse of the
+    existing `ConfirmActionDialog`, for the same reason: rotating also
+    returns a brand-new raw key that needs the identical reveal treatment,
+    which a plain confirm-dialog has no way to show.
+  - Revoke reuses `ConfirmActionDialog` unchanged (a true one-action-behind-
+    one-confirmation case, like every archive/deactivate action already in
+    this app).
+  - The list table shows `keyPrefix` (never a hash, never the raw key after
+    the reveal closes), an Active/Revoked badge, `lastUsedAt`, and
+    `createdAt` — no search or filtering, since D71's plan didn't ask for
+    any and the roadmap's own API-key feature (Day 5, package 5.1) has no UI
+    at all in the original brief, only a CLI script; this session's earlier
+    decision to build an Admin-only in-app screen instead (the Day 5a plan
+    recorded in D71) is the entire reason one exists.
+- **`/enquiries`** (`apps/web/app/(protected)/enquiries/`), visible to both
+  roles — a new nav item placed next to Deals, no role gating at all (the
+  API itself has none for these routes either; see D72).
+  - List: the shared `DataTable` component (the same one Leads/Companies/
+    Contacts/Deals already use), URL-synced filters via the existing
+    `useListUrlState` hook (status, form type as a free-text filter — there
+    is no fixed form-type list to build a `Select` from, since the real
+    website's form types are only known from the roadmap's documentation,
+    not confirmed against real code — received-date range, archived
+    toggle), sortable columns, a direct link to the linked Lead when one
+    exists.
+  - Detail: the shared `RecordLayout` component (the same key-fields-strip-
+    plus-tabs shell Companies/Contacts/Leads/Deals already use) — an
+    Overview tab (external id, submission id, any stored error, and the
+    linked Lead's own key fields inline) and a Raw Payload tab (the stored
+    JSON, pretty-printed in a `<pre>` block — deliberately the simplest
+    possible viewer; nothing in D71's plan asked for syntax highlighting or
+    a collapsible tree, and adding one would be scope beyond what was
+    asked). Mark-spam, archive, and restore are all `ConfirmActionDialog`
+    reuses, same pattern as every other archivable resource's detail page.
+  - `lib/enquiry-presentation.ts`: a new status-label/badge-variant mapping
+    file, mirroring `lib/lead-presentation.ts`'s existing tone logic exactly
+    (a successful outcome is "success"/green, a failed one "danger"/red,
+    spam "warning"/amber).
+- **No new component tests added for either screen** — matching this
+  project's own established, deliberate scope choice for Companies/
+  Contacts/Leads' list and detail page clients in Day 2 (manual coverage
+  instead; see `docs/PROJECT-STATE.md`'s open-items list), not an oversight
+  specific to this session.
+- **Manual verification is limited, and this is stated plainly rather than
+  implied otherwise**: this environment has no browser-automation tool (see
+  `docs/NEXT-SESSION-START.md`'s "Open items"), so neither screen has
+  actually been clicked through. What *was* checked: both dev servers were
+  started, `/enquiries`, `/settings/api-keys`, `/`, and `/login` all
+  returned `200` through the Next.js proxy (no server-side crash in the new
+  routes), and `GET /api/v1/enquiries`/`GET /api/v1/api-keys` both correctly
+  returned `401` unauthenticated through that same proxy, confirming the new
+  API routes are reachable end to end — then both servers were shut down
+  cleanly by exact PID, with ports 3000/4000 confirmed clear afterward.
+  Actually using either screen (dialogs, copy-to-clipboard, filters, the
+  payload viewer, both themes) is unverified and needs the user.
+- **Docs for this whole feature**: `docs/intake-contract.md` (new — the full
+  written contract: headers, body shape, the field-mapping table, response
+  table, idempotency and honeypot behaviour) and
+  `apps/api/scripts/replay-intake.sh` (new — a small, human-run `curl`
+  script walking through a success, a replay-with-an-invalid-body, a
+  honeypot hit, and a rejection, against a local API only; per the original
+  brief's ask for "a documented curl example and a small test script"
+  instead of touching the real website). The script's syntax was checked
+  (`bash -n`) and its four scenarios mirror cases the automated intake suite
+  already exercises line-for-line; it was not run live against a real
+  server and a real key, to avoid creating persistent demo data in the
+  shared local `crm_dev` database without asking first — the user can run
+  it themselves against their own key.
+
+## D74 — Day 5a audit follow-up: closing two real test-coverage gaps the user found by asking for proof, item by item (2026-11-24)
+
+After D72/D73's report, the user asked for a plain, per-refinement
+accounting of D71's eight binding items: DONE-and-proven, or
+documented-only. That audit (done by actually grepping the test files, not
+from memory) found two genuine gaps — implemented correctly, but never
+independently verified by a test — and two items that were already fully
+proven. The user then asked for small tests closing the two real gaps, plus
+one item (per-IP rate limiting) that needed a new testable seam to prove at
+all without 120+ real requests. This entry records what was added; D72/D73
+are left as written, as the accurate checkpoint reports they were at the
+time, rather than edited retroactively.
+
+- **Gap 1 — the key-hashing/comparison mechanism itself had no dedicated
+  unit test**, only end-to-end proof via the real middleware (right key
+  works, wrong key doesn't). New `tests/lib/api-key.test.ts`: `generateApiKey`
+  (correct literal prefix, a `keyPrefix` that is itself a prefix of the full
+  key and longer than the bare literal prefix, a consistent key length, 50
+  consecutive calls all distinct); `hashApiKey` (deterministic, different
+  keys hash differently, never equals the raw key, a 64-character lowercase
+  hex SHA-256 digest); `verifyApiKeyHash` (`true` for a matching pair,
+  `false` for a mismatched same-length pair, and — the specific case this
+  function exists to guard, per its own doc comment about
+  `crypto.timingSafeEqual` throwing on mismatched buffer lengths — `false`
+  without throwing for differently-sized input in both directions).
+- **Gap 2 — nothing read back a real `auditEvent` row to confirm D71's
+  logging/audit-minimisation promise, and the new `Idempotency-Key` redact
+  path had no test either** (consistent with the pre-existing
+  `authorization` redact line, which also had none — but the user asked for
+  it tested here regardless). New `tests/intake/audit.test.ts`: after a
+  successful intake, a honeypot hit, and a rejection, reads back the real
+  `auditEvent` row for that submission and asserts `actorId` is `null`,
+  `metadata` deep-equals exactly `{ submissionId, apiKeyPrefix }` (not just
+  "contains" — `toEqual`, so an accidental extra field would fail this too),
+  and that the raw key, the `Idempotency-Key` value, and the submitted
+  name/email/phone/message appear nowhere in the serialised row, for all
+  three outcomes. **`logger.ts` refactored**: the redact path array is now
+  a named export, `LOG_REDACT_PATHS`, used by the real `pino()` call instead
+  of an inline literal — the single source of truth needed so a test could
+  both assert on the exact path list *and* feed that exact config into a
+  throwaway `pino` instance writing to a capturable stream, proving the
+  `Idempotency-Key` and `Authorization` headers are actually censored (not
+  just named in a list somewhere), while an unrelated field passes through
+  untouched — new `tests/logger.test.ts`.
+- **Per-IP rate limiting — the mechanism itself had no test at all**
+  (only the per-key limiter did, via 61 real requests, which is cheap since
+  they fail before touching the database). Hitting the real 120/minute
+  per-IP ceiling the same way would need 121 real requests per test run;
+  instead, `lib/rate-limit.ts`'s per-IP limiter was refactored from a fixed
+  singleton into `createIntakeIpRateLimiter(ceiling, windowMs?)`, the exact
+  same ceiling-parameterised-factory pattern this file's own
+  `createGlobalLoginFloodLimiter` already established for the login flood
+  limiter — the production singleton is just that factory called once with
+  the real 120 ceiling. New test in `tests/intake/auth-and-rate-limit.test.ts`
+  (`describe('intake per-IP rate limiting (isolated, low-ceiling)')`)
+  proves the mechanism trips at a low test ceiling (3). **Said as plainly in
+  the test's own comment as here**: this proves the rate-limiting *code*
+  works as written. It does not and cannot prove that `req.ip` is a genuine,
+  distinct value per real-world caller once this runs on Render —
+  `TRUST_PROXY` stays `false` (D60, untouched), and nothing in a local test
+  process can simulate Render's actual edge/load-balancer network path. That
+  remains reasoning only (D60/D71/D72), exactly as already documented, now
+  with an explicit note that the new test doesn't change that.
+- **The one item that is, honestly, reasoning-only by design and needs no
+  test**: the spam/rejected-rows retention note (D71) is a recorded decision
+  *not* to build a retention policy — there is no behaviour to assert on.
+- **`docs/DAY-5A-SUMMARY.md` gained an explicit "What is tested vs.
+  reasoning only" table**, one row per one of D71's eight refinements,
+  naming the exact test file (or stating plainly that an item is
+  documentation-only) — so a future reader never has to reconstruct this
+  from `decisions.md`'s prose.
+- **Testing**: 18 new tests (11 in `tests/lib/api-key.test.ts`, 3 in
+  `tests/intake/audit.test.ts`, 3 in `tests/logger.test.ts`, 1 in
+  `tests/intake/auth-and-rate-limit.test.ts`'s new per-IP describe block).
+  `pnpm typecheck`/`pnpm lint` clean across the whole repo (same 3
+  pre-existing `apps/web` warnings, 0 errors). Full repo `pnpm test`:
+  **apps/api 427/427 (up from 409), apps/web 91/91 — 518 total.** No
+  schema, migration, permission, or dependency change.
+
+## D75 — Bug fix, found in manual testing: Rotate on the API Keys screen never showed the new raw key (2026-11-24)
+
+The user found this by actually clicking through the app: creating a key
+correctly showed the "shown once" reveal view, but rotating one revoked the
+old key and created the new one (both visible in the list, and in the
+database) without ever showing the new raw key to copy — silently locking
+the integration out of ever seeing it.
+
+- **Root cause**: `RotateApiKeyDialog` is only rendered for a row whose
+  `apiKey.revokedAt` is falsy (`ApiKeysPageClient`'s
+  `{!apiKey.revokedAt && (<RotateApiKeyDialog .../>...)}`). The original
+  `handleRotate` called `queryClient.invalidateQueries(...)` to refresh the
+  list **immediately** on a successful rotation, *before* `setNewKey(...)`.
+  That refetch resolves almost instantly; the resulting re-render shows the
+  just-rotated-out old key's row as revoked, so the `!apiKey.revokedAt`
+  guard goes false and React **unmounts** `RotateApiKeyDialog` — destroying
+  its `open`/`newKey` state and tearing the open dialog out of the DOM —
+  right as, or just after, it should have shown the reveal view.
+  `CreateApiKeyDialog` never had this problem: it is rendered
+  unconditionally at the top of the page, never gated on any row's data, so
+  the same immediate-invalidate-on-success never unmounts it.
+- **Fix**: in both dialogs, the list is now invalidated only when the
+  dialog actually **closes** (inside `onOpenChange(false)`, and only if a
+  key was in fact created/rotated — i.e., `newKey`/`createdKey` is set),
+  never the instant the mutation succeeds. The reveal view is shown first,
+  on its own, with nothing refetching underneath it; only once the user
+  clicks Done (or dismisses the dialog any other way — Radix routes every
+  close path through the same `onOpenChange`) does the list refresh and the
+  now-revoked old row disappear from the active set. `CreateApiKeyDialog`
+  got the identical treatment even though it was never actually broken —
+  same reveal-once dialog class, kept symmetric so neither can regress into
+  this bug if either component's rendering context ever changes (e.g. if a
+  future refactor moved the Create button inside a conditionally-rendered
+  wrapper the way Rotate always was).
+- **Verified as a real regression, not assumed**: before restoring the fix,
+  the new frontend test (below) was run against the reverted, original
+  buggy code and failed exactly as reported — the reveal view disappeared
+  and the row showed "Revoked" instead. The fix was then restored and the
+  same test passed. This is recorded here because it is read-only safety
+  practice for a bug-fix session, not boilerplate: a test that cannot be
+  shown to fail against the bug it claims to guard is not trustworthy.
+- **Testing**:
+  - Backend (`tests/api-keys/crud.test.ts`, new test): confirms the rotate
+    response carries the raw key exactly once in the whole JSON payload
+    (counted via a literal substring search, not just presence), and that
+    neither the just-rotated-out old row nor the new row ever carries `key`
+    or `keyHash` in a subsequent list fetch — the invariant the whole
+    frontend fix depends on holding.
+  - Frontend (`tests/components/api-keys-page-client.test.tsx`, new file):
+    renders the real `ApiKeysPageClient` (not `RotateApiKeyDialog` in
+    isolation — the bug was about the *parent's* conditional rendering, so
+    an isolated component test could never have caught it), stubs
+    `fetch` to serve a changing list (one active key, then that key revoked
+    plus a new one, mirroring what a real refetch would return), clicks
+    through Rotate → confirm → asserts the reveal view appears with the
+    exact new key value, asserts it is **still** showing after a short
+    delay (long enough for a wrongly-immediate refetch to have resolved and
+    re-rendered, if the bug were still present), then clicks Done and
+    confirms the list *then* refreshes to show the old row as Revoked.
+  - `pnpm typecheck`/`pnpm lint` clean across the whole repo (same 3
+    pre-existing `apps/web` warnings, 0 errors). Full repo `pnpm test`:
+    **apps/api 428/428 (up from 427), apps/web 92/92 (up from 91) — 520
+    total.** No schema, migration, permission, or dependency change.
+    `docs/MANUAL-TEST-DAY5A.md` needed no edit — its rotate step already
+    described the correct (now actually working) behaviour; only the code
+    was wrong, not the script.

@@ -4,6 +4,7 @@ import { requestId } from './middleware/request-id.js';
 import { requestLog } from './middleware/request-log.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { enforceOriginAndContentType } from './middleware/csrf.js';
+import { attachApiKeyContext } from './middleware/api-key-auth.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuthRoutes } from './modules/auth/auth.routes.js';
 import { registerUsersRoutes } from './modules/users/users.routes.js';
@@ -16,6 +17,9 @@ import { registerDealsRoutes } from './modules/deals/deals.routes.js';
 import { registerPipelineRoutes } from './modules/pipeline/pipeline.routes.js';
 import { registerActivitiesRoutes } from './modules/activities/activities.routes.js';
 import { registerWorkspaceRoutes } from './modules/workspace/workspace.routes.js';
+import { registerApiKeysRoutes } from './modules/api-keys/api-keys.routes.js';
+import { registerIntakeRoutes } from './modules/intake/intake.routes.js';
+import { registerEnquiriesRoutes } from './modules/enquiries/enquiries.routes.js';
 import { resetRouteRegistry } from './lib/route-registry.js';
 import { env } from './env.js';
 
@@ -46,6 +50,13 @@ export function createApp(options: CreateAppOptions = {}): Express {
   app.use(helmet());
   app.use(requestId);
   app.use(requestLog);
+  // D71: scoped to the intake path only, and mounted BEFORE
+  // enforceOriginAndContentType — on a missing/invalid/revoked key this
+  // rejects with 401 immediately, so the request never reaches the Origin
+  // check at all in that case. Only on success does it attach
+  // req.apiKeyCtx, which csrf.ts then uses to exempt the Origin check
+  // (never the Content-Type check) for this one path.
+  app.use('/api/v1/intake', attachApiKeyContext);
   app.use(enforceOriginAndContentType);
   app.use(express.json({ limit: '100kb' }));
 
@@ -61,6 +72,9 @@ export function createApp(options: CreateAppOptions = {}): Express {
   registerPipelineRoutes(app);
   registerActivitiesRoutes(app);
   registerWorkspaceRoutes(app);
+  registerApiKeysRoutes(app);
+  registerIntakeRoutes(app);
+  registerEnquiriesRoutes(app);
   options.extraRoutes?.(app);
 
   app.use(errorHandler);
