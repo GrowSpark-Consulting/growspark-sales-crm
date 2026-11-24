@@ -20,6 +20,89 @@ services:
       timeout: 5s
       retries: 10
 
+  # The "full" profile (`docker compose --profile full up`) runs the whole
+  # stack — Postgres plus both apps, built from their own Dockerfiles — in
+  # one command, per Day 5 part (b). A plain `docker compose up -d` (no
+  # --profile) still starts only Postgres, unchanged from every earlier day:
+  # services with no `profiles:` key (postgres, above) always run regardless
+  # of which --profile flags are passed, so native dev-mode on Windows keeps
+  # working exactly as before.
+  #
+  # Published on 3100/4100 by default, not 3000/4000 — deliberately
+  # different from native `pnpm dev`'s ports. Found the hard way: Windows
+  # will quietly let a container's 127.0.0.1:3000 mapping and a native
+  # process's 0.0.0.0:3000 both bind at once, and then route `localhost`
+  # traffic to whichever it prefers (observed: the native one) rather than
+  # erroring — so sharing ports didn't fail loudly, it silently served the
+  # wrong server. DOCKER_WEB_PORT/DOCKER_API_PORT below are overridable if
+  # 3100/4100 are themselves taken for some other reason.
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: growspark-sales-crm-api
+    profiles: ["full"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      # Allows `docker compose --profile full exec api pnpm db:seed:sample`
+      # (optional, richer fictional demo data) to run without needing
+      # --confirm — see apps/api/src/lib/sample-seed-guard.ts. Genuinely
+      # true: this is a local Docker instance, not staging or production.
+      APP_ENV: local
+      PORT: "4000"
+      # "postgres", not 127.0.0.1 — the api container reaches the same
+      # Postgres container over the Compose network, by service name.
+      # checkLocalDatabaseHost() (src/lib/database-config-guards.ts) treats
+      # this hostname as local for exactly this reason.
+      #
+      # ALWAYS "crm_docker" — a database of its own, separate from crm_dev
+      # and crm_test, created alongside them (docker/init-db.sh). This is
+      # deliberately NOT ${POSTGRES_DB:-crm_dev}: the full profile must never
+      # be able to resolve to the same database a developer's native
+      # `pnpm dev` uses. See docs/decisions.md for why this matters — an
+      # earlier version of this file pointed here by mistake and a manual
+      # seed run overwrote a real local Admin/Staff login as a result.
+      DATABASE_URL: postgresql://${POSTGRES_USER:-growspark_dev}:${POSTGRES_PASSWORD:-growspark_dev_password}@postgres:5432/crm_docker
+      # Must be the host port the browser actually uses (below) — the
+      # Origin header the browser sends includes the port, and the CSRF
+      # check (enforceOriginAndContentType) requires an exact match.
+      ALLOWED_ORIGINS: http://localhost:${DOCKER_WEB_PORT:-3100}
+      TRUST_PROXY: "false"
+      SESSION_TTL_DAYS: "7"
+      # Fixed, documented, non-secret demo credentials — this database is
+      # a throwaway sandbox nobody else uses, re-seeded idempotently on
+      # every container start (apps/api/Dockerfile's CMD). A reviewer running
+      # only `docker compose --profile full up` gets a working login with no
+      # manual step. Same placeholder values as apps/api/.env.example.
+      SEED_ADMIN_PASSWORD: dev-only-admin-password
+      SEED_STAFF_PASSWORD: dev-only-staff-password
+    ports:
+      - "127.0.0.1:${DOCKER_API_PORT:-4100}:4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: growspark-sales-crm-web
+    profiles: ["full"]
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      # Docker-network service name and *container-internal* port (4000) —
+      # unaffected by DOCKER_API_PORT above, which only changes the
+      # host-published port. The web container's own /api/* rewrite proxy
+      # reaches the api container directly over the Compose network, never
+      # through either container's host-mapped port.
+      API_INTERNAL_URL: http://api:4000
+    ports:
+      - "127.0.0.1:${DOCKER_WEB_PORT:-3100}:3000"
+
 volumes:
   growspark-sales-crm-pgdata:
     name: growspark-sales-crm-pgdata

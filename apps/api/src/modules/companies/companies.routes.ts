@@ -14,6 +14,7 @@ import {
   type ListCompaniesQuery,
 } from '@growspark/shared';
 import { defineRoute } from '../../lib/route-registry.js';
+import { rowsToCsv } from '../../lib/csv.js';
 import * as companiesService from './companies.service.js';
 
 export function registerCompaniesRoutes(app: Application): void {
@@ -48,6 +49,31 @@ export function registerCompaniesRoutes(app: Application): void {
         res
           .status(201)
           .json(companyWithDuplicatesResponseSchema.parse({ data: company, duplicates }));
+      } catch (err) {
+        next(err);
+      }
+    },
+  });
+
+  // Registered before /api/v1/companies/:id so "export" isn't captured as :id.
+  defineRoute({
+    app,
+    method: 'get',
+    path: '/api/v1/companies/export',
+    auth: PERMISSIONS.REPORTS_EXPORT,
+    validate: { query: listCompaniesQuerySchema },
+    handler: async (req, res, next) => {
+      try {
+        const rows = await companiesService.exportCompanies(req.ctx!, req.validatedQuery as ListCompaniesQuery);
+        const csv = rowsToCsv(rows, companiesService.COMPANY_EXPORT_COLUMNS);
+        res
+          .status(200)
+          .set('Content-Type', 'text/csv; charset=utf-8')
+          .set(
+            'Content-Disposition',
+            `attachment; filename="companies-export-${new Date().toISOString().slice(0, 10)}.csv"`,
+          )
+          .send(csv);
       } catch (err) {
         next(err);
       }

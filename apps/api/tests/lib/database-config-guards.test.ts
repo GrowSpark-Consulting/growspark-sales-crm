@@ -49,6 +49,10 @@ describe('checkLocalDatabaseHost', () => {
     expect(checkLocalDatabaseHost(`postgresql://u:p@${host}:5433/crm_dev`)).toBeNull();
   });
 
+  it('accepts "postgres", the Docker Compose service name used by the "full" profile', () => {
+    expect(checkLocalDatabaseHost('postgresql://u:p@postgres:5432/crm_dev')).toBeNull();
+  });
+
   it('rejects a remote host with a message naming the host but not the credentials', () => {
     const message = checkLocalDatabaseHost('postgresql://realuser:realpassword@db.example.supabase.co:5432/postgres');
     expect(message).toContain('db.example.supabase.co');

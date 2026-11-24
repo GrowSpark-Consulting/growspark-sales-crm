@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, LayoutGrid, List as ListIcon } from "lucide-react";
+import { Plus, LayoutGrid, List as ListIcon, Download } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { SearchInput } from "@/components/ui/search-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -13,6 +13,7 @@ import { usePipelineStages } from "@/hooks/use-pipeline";
 import { useUserOptions } from "@/hooks/use-user-options";
 import { useCompaniesList } from "@/hooks/use-companies";
 import { useListUrlState } from "@/hooks/use-list-url-state";
+import { buildExportHref } from "@/lib/export";
 import { formatDate, formatINR } from "@/lib/format";
 import { dealStatusBadgeVariant, dealStatusLabel } from "@/lib/deal-presentation";
 import type { DealResponse, DealStatus } from "@growspark/shared";
@@ -32,6 +33,16 @@ export function DealsPageClient() {
   const archived = searchParams.get("archived") === "true";
   const sortField = searchParams.get("sort")?.split(":")[0] ?? "createdAt";
   const sortDirection = (searchParams.get("sort")?.split(":")[1] as "asc" | "desc" | undefined) ?? "desc";
+
+  const exportHref = buildExportHref("/api/v1/deals/export", {
+    q: q || undefined,
+    status,
+    stageId,
+    companyId,
+    ownerId,
+    archived,
+    sort: `${sortField}:${sortDirection}`,
+  });
 
   const listQuery = useDealsList({
     page,
@@ -139,12 +150,20 @@ export function DealsPageClient() {
             Board
           </Button>
         </div>
-        <Button asChild>
-          <Link href="/deals/new">
-            <Plus className="size-(--icon-md)" aria-hidden="true" />
-            Add deal
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <a href={exportHref}>
+              <Download className="size-(--icon-md)" aria-hidden="true" />
+              Download CSV
+            </a>
+          </Button>
+          <Button asChild>
+            <Link href="/deals/new">
+              <Plus className="size-(--icon-md)" aria-hidden="true" />
+              Add deal
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {view === "board" ? (

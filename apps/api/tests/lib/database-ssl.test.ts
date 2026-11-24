@@ -88,7 +88,17 @@ describe('buildDatabasePoolConfig', () => {
 
   it('local dev: no SSL config set, DATABASE_URL passed through unchanged', () => {
     const config = buildDatabasePoolConfig(BASE);
-    expect(config).toEqual({ connectionString: BASE.DATABASE_URL, max: 10, ssl: undefined });
+    expect(config).toEqual({
+      connectionString: BASE.DATABASE_URL,
+      max: 10,
+      ssl: undefined,
+      connectionTimeoutMillis: 10_000,
+    });
+  });
+
+  it('always sets a bounded connectionTimeoutMillis, not pg\'s own default of 0 (wait forever)', () => {
+    const config = buildDatabasePoolConfig(BASE);
+    expect(config.connectionTimeoutMillis).toBeGreaterThan(0);
   });
 
   it('the bug this fixes: strips sslmode when we also supply an explicit CA, so pg-connection-string cannot discard it', () => {

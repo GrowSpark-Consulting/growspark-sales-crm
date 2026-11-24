@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -13,6 +13,7 @@ import { useCompaniesList, COMPANIES_QUERY_KEY_ROOT } from "@/hooks/use-companie
 import { useUserOptions } from "@/hooks/use-user-options";
 import { useListUrlState } from "@/hooks/use-list-url-state";
 import { apiPost } from "@/lib/api-client";
+import { buildExportHref } from "@/lib/export";
 import { formatDate, formatPhoneForDisplay } from "@/lib/format";
 import type { CompanyResponse } from "@growspark/shared";
 
@@ -39,6 +40,13 @@ export function CompaniesPageClient() {
   const ownerId = searchParams.get("ownerId") ?? undefined;
   const sortField = searchParams.get("sort")?.split(":")[0] ?? "createdAt";
   const sortDirection = (searchParams.get("sort")?.split(":")[1] as "asc" | "desc" | undefined) ?? "desc";
+
+  const exportHref = buildExportHref("/api/v1/companies/export", {
+    q: q || undefined,
+    archived,
+    ownerId,
+    sort: `${sortField}:${sortDirection}`,
+  });
 
   const listQuery = useCompaniesList({
     page,
@@ -127,7 +135,13 @@ export function CompaniesPageClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button asChild variant="outline">
+          <a href={exportHref}>
+            <Download className="size-(--icon-md)" aria-hidden="true" />
+            Download CSV
+          </a>
+        </Button>
         <Button asChild>
           <Link href="/companies/new">
             <Plus className="size-(--icon-md)" aria-hidden="true" />

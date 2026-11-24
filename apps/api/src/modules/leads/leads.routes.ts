@@ -24,6 +24,7 @@ import {
   type ConvertLeadInput,
 } from '@growspark/shared';
 import { defineRoute } from '../../lib/route-registry.js';
+import { rowsToCsv } from '../../lib/csv.js';
 import * as leadsService from './leads.service.js';
 import * as leadConversionService from './lead-conversion.service.js';
 
@@ -75,6 +76,28 @@ export function registerLeadsRoutes(app: Application): void {
           req.validatedQuery as LeadDuplicateCheckQuery,
         );
         res.status(200).json(leadDuplicatesResponseSchema.parse({ data }));
+      } catch (err) {
+        next(err);
+      }
+    },
+  });
+
+  // Registered before /api/v1/leads/:id, same reason as /duplicates above.
+  defineRoute({
+    app,
+    method: 'get',
+    path: '/api/v1/leads/export',
+    auth: PERMISSIONS.REPORTS_EXPORT,
+    validate: { query: listLeadsQuerySchema },
+    handler: async (req, res, next) => {
+      try {
+        const rows = await leadsService.exportLeads(req.ctx!, req.validatedQuery as ListLeadsQuery);
+        const csv = rowsToCsv(rows, leadsService.LEAD_EXPORT_COLUMNS);
+        res
+          .status(200)
+          .set('Content-Type', 'text/csv; charset=utf-8')
+          .set('Content-Disposition', `attachment; filename="leads-export-${new Date().toISOString().slice(0, 10)}.csv"`)
+          .send(csv);
       } catch (err) {
         next(err);
       }

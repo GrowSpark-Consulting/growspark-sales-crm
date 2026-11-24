@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { Pencil, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -14,6 +14,7 @@ import { useContactsList, CONTACTS_QUERY_KEY_ROOT } from "@/hooks/use-contacts";
 import { useUserOptions } from "@/hooks/use-user-options";
 import { useListUrlState } from "@/hooks/use-list-url-state";
 import { apiPost } from "@/lib/api-client";
+import { buildExportHref } from "@/lib/export";
 import { formatPhoneForDisplay } from "@/lib/format";
 import type { ContactResponse } from "@growspark/shared";
 
@@ -28,6 +29,13 @@ export function ContactsPageClient() {
   const ownerId = searchParams.get("ownerId") ?? undefined;
   const sortField = searchParams.get("sort")?.split(":")[0] ?? "createdAt";
   const sortDirection = (searchParams.get("sort")?.split(":")[1] as "asc" | "desc" | undefined) ?? "desc";
+
+  const exportHref = buildExportHref("/api/v1/contacts/export", {
+    q: q || undefined,
+    archived,
+    ownerId,
+    sort: `${sortField}:${sortDirection}`,
+  });
 
   const listQuery = useContactsList({
     page,
@@ -125,7 +133,13 @@ export function ContactsPageClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button asChild variant="outline">
+          <a href={exportHref}>
+            <Download className="size-(--icon-md)" aria-hidden="true" />
+            Download CSV
+          </a>
+        </Button>
         <ContactFormDialog trigger={<Button>Add contact</Button>} />
       </div>
 

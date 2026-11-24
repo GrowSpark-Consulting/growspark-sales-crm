@@ -14,6 +14,7 @@ import {
   type ListContactsQuery,
 } from '@growspark/shared';
 import { defineRoute } from '../../lib/route-registry.js';
+import { rowsToCsv } from '../../lib/csv.js';
 import * as contactsService from './contacts.service.js';
 
 export function registerContactsRoutes(app: Application): void {
@@ -46,6 +47,31 @@ export function registerContactsRoutes(app: Application): void {
           req.body as CreateContactInput,
         );
         res.status(201).json(contactWithDuplicatesResponseSchema.parse({ data: contact, duplicates }));
+      } catch (err) {
+        next(err);
+      }
+    },
+  });
+
+  // Registered before /api/v1/contacts/:id so "export" isn't captured as :id.
+  defineRoute({
+    app,
+    method: 'get',
+    path: '/api/v1/contacts/export',
+    auth: PERMISSIONS.REPORTS_EXPORT,
+    validate: { query: listContactsQuerySchema },
+    handler: async (req, res, next) => {
+      try {
+        const rows = await contactsService.exportContacts(req.ctx!, req.validatedQuery as ListContactsQuery);
+        const csv = rowsToCsv(rows, contactsService.CONTACT_EXPORT_COLUMNS);
+        res
+          .status(200)
+          .set('Content-Type', 'text/csv; charset=utf-8')
+          .set(
+            'Content-Disposition',
+            `attachment; filename="contacts-export-${new Date().toISOString().slice(0, 10)}.csv"`,
+          )
+          .send(csv);
       } catch (err) {
         next(err);
       }

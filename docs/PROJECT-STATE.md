@@ -200,6 +200,65 @@ check — no browser
 exists in this environment, so neither new screen has actually been clicked
 through; see `docs/MANUAL-TEST-DAY5A.md`.
 
+**Update, same session — D75: a bug found in manual testing (Rotate on the
+API Keys screen never showed the new raw key) was fixed, with a test that
+was shown to fail against the reverted code first.** 428 `apps/api` + 92
+`apps/web` = 520 total, all passing. Full detail in `docs/decisions.md` D75.
+
+**Update, 2026-11-24, a new session — Day 5 part (b) is done: CSV export,
+a Docker "full" profile, a rewritten README, an RBAC sweep, and a P0
+freeze list.** Read `docs/DAY-5B-SUMMARY.md` for the plain-language
+account — it is substantial, because actually *running* the Docker work
+(not just writing it) surfaced five real problems worth knowing about
+before touching this area again, two of them serious enough to have been
+reported to the user immediately rather than folded quietly into a later
+summary: a brief incident where a verification step overwrote the real
+local Admin/Staff passwords in `crm_dev` (the user restored their own
+password; fixed properly by giving the Docker profile its own database,
+`crm_docker`, which can structurally never resolve to `crm_dev`), and a
+`.dockerignore` mistake that let real `.env`/`.env.staging.local` files
+(local and staging credentials) get copied into a built image (fixed; the
+leaked images and the entire Docker build cache were deleted from this
+machine; a permanent guard script, `pnpm docker:check-env-leak`, now
+proves this can't happen again by asking Docker's own real build, not by
+re-implementing `.dockerignore` matching). Full detail, every incident,
+every fix, and the exact verification commands and output, is in
+`docs/decisions.md` D76–D80 — read that before changing anything
+Docker-related in this repo. The Docker profile now runs on **ports
+3100 (web) / 4100 (api)**, deliberately different from native dev's
+3000/4000 (a real port collision was the root cause of a lot of this
+session's confusion — see D80). RBAC sweep: every route and screen
+checked against the PRD/roadmap role tables; no discrepancy, no
+permission-table change made; one real gap found and reported, not
+silently fixed — there was no frontend page for the audit log
+(`GET /audit-events` was built, tested, and Admin-only, but unreachable
+from the UI). **The user asked for it to be built immediately, same
+session (D81)**: `/settings/audit-log`, Admin-only, filters for actor/
+action/entity type/date range, and a server-side metadata **allowlist**
+(`sanitizeAuditMetadata`, `apps/api/src/lib/audit-metadata.ts`) so the
+free-form `metadata` JSON column can never leak something sensitive into
+this screen even if a future `writeAudit()` call site adds an unsafe
+field — proven with a test that inserts a row with deliberately dangerous
+key names (`rawKey`, `password`, `token`, ...) and confirms none reach the
+JSON response. **No open P0 gap remains.** **apps/api 478/478 (up from
+428), apps/web 101/101 (up from 92) — 579 total, all passing.**
+
+**Update, same session — two bugs found in manual testing, both fixed
+(D82)**: every CSV export's first column was the bare text "ID", which
+Excel on Windows misdetects as an old SYLK file and refuses to open —
+fixed (renamed to "Lead ID"/"Company ID"/"Contact ID"/"Deal ID", a
+structural guard added to `rowsToCsv` against this ever recurring, plus a
+UTF-8 BOM on every export). `pnpm docker:check-env-leak` also failed on
+Windows cmd/PowerShell (needed `sh`, which Windows doesn't have) —
+rewritten as plain Node (`scripts/check-dockerignore.mjs`), proven to still
+catch the original `.dockerignore` bug the same way. **apps/api 483/483
+(up from 478), apps/web 101/101 (unchanged) — 584 total, all passing.**
+`pnpm typecheck`/`pnpm lint` clean throughout. Nothing committed or
+pushed this session (explicit instruction for Day 5b); nothing run
+against staging; `crm_dev` was never written to after the password
+incident was caught and fixed (the user re-seeded their own password
+themselves).
+
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
@@ -252,6 +311,17 @@ through; see `docs/MANUAL-TEST-DAY5A.md`.
 - Ports: web **3000**, API **4000**, Postgres **127.0.0.1:5433** (bound to
   localhost only, not `0.0.0.0`). Databases: **crm_dev**, **crm_test**, in one
   Postgres 17 container (`growspark-sales-crm-postgres`).
+- **Docker "full" profile (Day 5b, `docker compose --profile full up`)**:
+  web **3100**, API **4100** — deliberately different host ports from
+  native dev, and its own database, **crm_docker**, in the *same* Postgres
+  container as crm_dev/crm_test (created once, by hand, on this developer's
+  existing volume; `docker/init-db.sh` creates it automatically on any
+  future brand-new volume). `crm_docker` is seeded automatically, every
+  container start, with fixed demo credentials
+  (`admin@growspark.test`/`dev-only-admin-password`,
+  `staff@growspark.test`/`dev-only-staff-password`) — never run
+  `pnpm db:seed` (or any other write) against `crm_dev` on this tool's own
+  initiative; see `docs/decisions.md` D78 for why that rule exists.
 
 ### Environment variables (names only — never commit or paste real values)
 

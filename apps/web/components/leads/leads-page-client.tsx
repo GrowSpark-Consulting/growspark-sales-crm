@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Download } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { LEAD_STATUSES, PRIORITIES, type LeadResponse, type LeadStatus, type Priority } from "@growspark/shared";
@@ -17,6 +17,7 @@ import { useLeadSources } from "@/hooks/use-lead-sources";
 import { useUserOptions } from "@/hooks/use-user-options";
 import { useListUrlState } from "@/hooks/use-list-url-state";
 import { apiPost } from "@/lib/api-client";
+import { buildExportHref } from "@/lib/export";
 import { formatDate } from "@/lib/format";
 import { leadStatusBadgeVariant, leadStatusLabel, priorityBadgeVariant, priorityLabel } from "@/lib/lead-presentation";
 
@@ -56,6 +57,18 @@ export function LeadsPageClient() {
   const { data: sourcesData } = useLeadSources();
   const sources = sourcesData?.data ?? [];
   const sourceNames = new Map(sources.map((s) => [s.id, s.name]));
+
+  const exportHref = buildExportHref("/api/v1/leads/export", {
+    q: q || undefined,
+    status,
+    sourceId,
+    ownerId,
+    priority,
+    archived,
+    createdFrom: createdFrom ? new Date(createdFrom).toISOString() : undefined,
+    createdTo: createdTo ? new Date(createdTo).toISOString() : undefined,
+    sort: `${sortField}:${sortDirection}`,
+  });
 
   async function archiveLead(lead: LeadResponse) {
     await apiPost(`/api/v1/leads/${lead.id}/archive`);
@@ -146,7 +159,13 @@ export function LeadsPageClient() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button asChild variant="outline">
+          <a href={exportHref}>
+            <Download className="size-(--icon-md)" aria-hidden="true" />
+            Download CSV
+          </a>
+        </Button>
         <Button asChild>
           <Link href="/leads/new">
             <Plus className="size-(--icon-md)" aria-hidden="true" />

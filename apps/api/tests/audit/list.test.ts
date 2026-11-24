@@ -3,9 +3,63 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { createTestTenant } from '../helpers/tenant.js';
 import { createSession } from '../../src/lib/session.js';
+import { prisma } from '../../src/db/prisma.js';
 import { ALLOWED_ORIGIN, sessionCookieHeader } from '../helpers/http.js';
 
 describe('GET /api/v1/audit-events', () => {
+  it('refuses a Staff user (Admin-only, audit:read)', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.staffUser.id);
+
+    const res = await request(createApp()).get('/api/v1/audit-events').set('Cookie', sessionCookieHeader(token));
+
+    expect(res.status).toBe(403);
+  });
+
+  it('refuses an unauthenticated request', async () => {
+    const res = await request(createApp()).get('/api/v1/audit-events');
+    expect(res.status).toBe(401);
+  });
+
+  it('never exposes a sensitive metadata field, however it got into the row', async () => {
+    // A real writeAudit() call site would never write these keys (verified
+    // by reading every call site — see docs/decisions.md) — this proves the
+    // response-layer allowlist (sanitizeAuditMetadata) holds even if a
+    // future call site, or a bug, ever did.
+    const tenant = await createTestTenant();
+    await prisma.auditEvent.create({
+      data: {
+        organizationId: tenant.organization.id,
+        actorId: tenant.adminUser.id,
+        action: 'test.poisoned_event',
+        entityType: 'test',
+        entityId: null,
+        metadata: {
+          name: 'a safe field',
+          rawKey: 'gsk_live_shouldneverappear',
+          password: 'shouldneverappear',
+          passwordHash: '$argon2id$shouldneverappear',
+          token: 'shouldneverappear',
+          sessionToken: 'shouldneverappear',
+          secret: 'shouldneverappear',
+        },
+      },
+    });
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+
+    const res = await request(createApp())
+      .get('/api/v1/audit-events?action=test.poisoned_event')
+      .set('Cookie', sessionCookieHeader(token));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(1);
+    expect(res.body.data[0].metadata).toEqual({ name: 'a safe field' });
+    const raw = JSON.stringify(res.body);
+    for (const forbidden of ['gsk_live_shouldneverappear', 'shouldneverappear', 'rawKey', 'password', 'secret']) {
+      expect(raw).not.toContain(forbidden);
+    }
+  });
+
   it('returns newest first, and supports action/entityType/actorId filters', async () => {
     const tenant = await createTestTenant();
     const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Home, Users as UsersIcon, Building2, Contact, Target, Handshake, Sun, Moon, Monitor, LogOut, CalendarDays, ListTodo, Inbox, KeyRound } from "lucide-react";
+import { Home, Users as UsersIcon, Building2, Contact, Target, Handshake, Sun, Moon, Monitor, LogOut, CalendarDays, ListTodo, Inbox, KeyRound, History } from "lucide-react";
 import { cn } from "cn";
 import { useMe, ME_QUERY_KEY } from "@/hooks/use-me";
 import { apiPost, ApiError } from "@/lib/api-client";
@@ -35,6 +35,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/deals": "Deals",
   "/enquiries": "Enquiries",
   "/settings/api-keys": "API Keys",
+  "/settings/audit-log": "Audit Log",
 };
 
 // Falls back to a prefix match (so /companies/:id also shows "Companies")
@@ -149,6 +150,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               icon={KeyRound}
             >
               API Keys
+            </NavItem>
+          )}
+          {isAdmin && (
+            <NavItem
+              href="/settings/audit-log"
+              active={pathname.startsWith("/settings/audit-log")}
+              icon={History}
+            >
+              Audit Log
             </NavItem>
           )}
         </nav>

@@ -17,6 +17,7 @@ import { scoped } from '../../lib/scoped.js';
 import { writeAudit } from '../../lib/audit.js';
 import { toSkipTake, buildPaginationMeta } from '../../lib/pagination.js';
 import { buildOrderBy } from '../../lib/list-query.js';
+import { CSV_EXPORT_ROW_LIMIT, type CsvColumn } from '../../lib/csv.js';
 import { getDefaultPipeline, getFirstOpenStage } from '../../lib/pipeline.js';
 import { findNextActivity } from '../../lib/next-activity.js';
 import type { RequestContext } from '../../lib/context.js';
@@ -112,8 +113,9 @@ export interface ListDealsResult {
   meta: { page: number; pageSize: number; total: number };
 }
 
-export async function listDeals(ctx: RequestContext, query: ListDealsQuery): Promise<ListDealsResult> {
-  const where: Prisma.DealWhereInput = {
+/** Shared by listDeals and exportDeals so the two never drift out of sync. */
+function buildDealsWhere(ctx: RequestContext, query: ListDealsQuery): Prisma.DealWhereInput {
+  return {
     ...scoped(ctx),
     archivedAt: query.archived ? { not: null } : null,
     ...(query.status ? { status: query.status } : {}),
@@ -123,6 +125,10 @@ export async function listDeals(ctx: RequestContext, query: ListDealsQuery): Pro
     ...(query.ownerId ? { ownerId: query.ownerId } : {}),
     ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
   };
+}
+
+export async function listDeals(ctx: RequestContext, query: ListDealsQuery): Promise<ListDealsResult> {
+  const where = buildDealsWhere(ctx, query);
 
   const orderBy = buildOrderBy(query.sort, { field: 'createdAt', direction: 'desc' });
 
@@ -133,6 +139,52 @@ export async function listDeals(ctx: RequestContext, query: ListDealsQuery): Pro
 
   return { data: rows.map((deal) => toDealResponse(deal)), meta: buildPaginationMeta(query, total) };
 }
+
+export interface DealExportRow extends Deal {
+  owner: { name: string } | null;
+  company: { name: string };
+  stage: { name: string };
+  source: { name: string } | null;
+}
+
+/** Same filters/sort as listDeals, uncapped by page/pageSize, capped at CSV_EXPORT_ROW_LIMIT instead. */
+export async function exportDeals(ctx: RequestContext, query: ListDealsQuery): Promise<DealExportRow[]> {
+  const where = buildDealsWhere(ctx, query);
+  const orderBy = buildOrderBy(query.sort, { field: 'createdAt', direction: 'desc' });
+
+  return prisma.deal.findMany({
+    where,
+    orderBy,
+    take: CSV_EXPORT_ROW_LIMIT,
+    include: {
+      owner: { select: { name: true } },
+      company: { select: { name: true } },
+      stage: { select: { name: true } },
+      source: { select: { name: true } },
+    },
+  });
+}
+
+export const DEAL_EXPORT_COLUMNS: readonly CsvColumn<DealExportRow>[] = [
+  { header: 'Deal ID', value: (r) => r.id },
+  { header: 'Name', value: (r) => r.name },
+  { header: 'Company', value: (r) => r.company.name },
+  { header: 'Stage', value: (r) => r.stage.name },
+  { header: 'Value', value: (r) => r.value },
+  { header: 'Currency', value: (r) => r.currency },
+  { header: 'Probability', value: (r) => r.probability },
+  { header: 'Expected close date', value: (r) => r.expectedCloseDate },
+  { header: 'Owner', value: (r) => r.owner?.name ?? null },
+  { header: 'Deal type', value: (r) => r.dealType },
+  { header: 'Source', value: (r) => r.source?.name ?? null },
+  { header: 'Status', value: (r) => r.status },
+  { header: 'Closed at', value: (r) => r.closedAt },
+  { header: 'Lost reason', value: (r) => r.lostReason },
+  { header: 'Lost note', value: (r) => r.lostNote },
+  { header: 'Archived at', value: (r) => r.archivedAt },
+  { header: 'Created at', value: (r) => r.createdAt },
+  { header: 'Updated at', value: (r) => r.updatedAt },
+];
 
 export async function createDeal(ctx: RequestContext, input: CreateDealInput): Promise<DealResponse> {
   const created = await prisma.$transaction(async (tx) => {

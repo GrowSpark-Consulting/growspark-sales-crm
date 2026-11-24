@@ -12,6 +12,7 @@ import { scoped } from '../../lib/scoped.js';
 import { writeAudit } from '../../lib/audit.js';
 import { toSkipTake, buildPaginationMeta } from '../../lib/pagination.js';
 import { buildOrderBy } from '../../lib/list-query.js';
+import { CSV_EXPORT_ROW_LIMIT, type CsvColumn } from '../../lib/csv.js';
 import { findDuplicateContacts } from '../../lib/duplicates.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Contact, Prisma } from '../../generated/prisma/client.js';
@@ -74,11 +75,9 @@ export interface ListContactsResult {
   meta: { page: number; pageSize: number; total: number };
 }
 
-export async function listContacts(
-  ctx: RequestContext,
-  query: ListContactsQuery,
-): Promise<ListContactsResult> {
-  const where: Prisma.ContactWhereInput = {
+/** Shared by listContacts and exportContacts so the two never drift out of sync. */
+function buildContactsWhere(ctx: RequestContext, query: ListContactsQuery): Prisma.ContactWhereInput {
+  return {
     ...scoped(ctx),
     archivedAt: query.archived ? { not: null } : null,
     ...(query.companyId ? { companyId: query.companyId } : {}),
@@ -94,6 +93,13 @@ export async function listContacts(
         }
       : {}),
   };
+}
+
+export async function listContacts(
+  ctx: RequestContext,
+  query: ListContactsQuery,
+): Promise<ListContactsResult> {
+  const where = buildContactsWhere(ctx, query);
 
   const orderBy = buildOrderBy(query.sort, { field: 'createdAt', direction: 'desc' });
 
@@ -104,6 +110,42 @@ export async function listContacts(
 
   return { data: rows.map(toContactResponse), meta: buildPaginationMeta(query, total) };
 }
+
+export interface ContactExportRow extends Contact {
+  owner: { name: string } | null;
+  company: { name: string } | null;
+}
+
+/** Same filters/sort as listContacts, uncapped by page/pageSize, capped at CSV_EXPORT_ROW_LIMIT instead. */
+export async function exportContacts(ctx: RequestContext, query: ListContactsQuery): Promise<ContactExportRow[]> {
+  const where = buildContactsWhere(ctx, query);
+  const orderBy = buildOrderBy(query.sort, { field: 'createdAt', direction: 'desc' });
+
+  return prisma.contact.findMany({
+    where,
+    orderBy,
+    take: CSV_EXPORT_ROW_LIMIT,
+    include: { owner: { select: { name: true } }, company: { select: { name: true } } },
+  });
+}
+
+export const CONTACT_EXPORT_COLUMNS: readonly CsvColumn<ContactExportRow>[] = [
+  { header: 'Contact ID', value: (r) => r.id },
+  { header: 'First name', value: (r) => r.firstName },
+  { header: 'Last name', value: (r) => r.lastName },
+  { header: 'Email', value: (r) => r.email },
+  { header: 'Phone', value: (r) => r.phone },
+  { header: 'Job title', value: (r) => r.jobTitle },
+  { header: 'Department', value: (r) => r.department },
+  { header: 'Location', value: (r) => r.location },
+  { header: 'Lifecycle status', value: (r) => r.lifecycleStatus },
+  { header: 'Company', value: (r) => r.company?.name ?? null },
+  { header: 'Owner', value: (r) => r.owner?.name ?? null },
+  { header: 'Notes', value: (r) => r.notes },
+  { header: 'Archived at', value: (r) => r.archivedAt },
+  { header: 'Created at', value: (r) => r.createdAt },
+  { header: 'Updated at', value: (r) => r.updatedAt },
+];
 
 export interface ContactMutationResult {
   contact: ContactResponse;

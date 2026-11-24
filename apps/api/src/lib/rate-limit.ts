@@ -1,4 +1,4 @@
-import { rateLimit, MemoryStore } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator, MemoryStore } from 'express-rate-limit';
 import type { Request, RequestHandler } from 'express';
 import { ApiError } from '../middleware/error-handler.js';
 
@@ -147,7 +147,14 @@ export function createIntakeIpRateLimiter(
     standardHeaders: true,
     legacyHeaders: false,
     store,
-    keyGenerator: (req: Request): string => `ip:${req.ip ?? 'unknown'}`,
+    // ipKeyGenerator (not req.ip directly) normalises an IPv6 address to its
+    // /56 subnet first — found by actually running this server outside
+    // vitest (Docker, Day 5 part b): express-rate-limit 8.x validates this
+    // at construction time and logs ERR_ERL_KEY_GEN_IPV6 otherwise, because
+    // an un-normalised IPv6 key lets one caller trivially rotate through
+    // billions of distinct req.ip values from a single /64 allocation,
+    // defeating the limiter entirely.
+    keyGenerator: (req: Request): string => `ip:${req.ip ? ipKeyGenerator(req.ip) : 'unknown'}`,
     handler: (_req, _res, next) => next(tooManyIntakeRequests()),
   });
   return { limiter, reset: () => store.resetAll() };

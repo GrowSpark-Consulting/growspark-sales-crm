@@ -21,6 +21,7 @@ import {
   type ListDealsQuery,
 } from '@growspark/shared';
 import { defineRoute } from '../../lib/route-registry.js';
+import { rowsToCsv } from '../../lib/csv.js';
 import * as dealsService from './deals.service.js';
 
 export function registerDealsRoutes(app: Application): void {
@@ -50,6 +51,31 @@ export function registerDealsRoutes(app: Application): void {
       try {
         const deal = await dealsService.createDeal(req.ctx!, req.body as CreateDealInput);
         res.status(201).json({ data: dealResponseSchema.parse(deal) });
+      } catch (err) {
+        next(err);
+      }
+    },
+  });
+
+  // Registered before /api/v1/deals/:id so "export" isn't captured as :id.
+  defineRoute({
+    app,
+    method: 'get',
+    path: '/api/v1/deals/export',
+    auth: PERMISSIONS.REPORTS_EXPORT,
+    validate: { query: listDealsQuerySchema },
+    handler: async (req, res, next) => {
+      try {
+        const rows = await dealsService.exportDeals(req.ctx!, req.validatedQuery as ListDealsQuery);
+        const csv = rowsToCsv(rows, dealsService.DEAL_EXPORT_COLUMNS);
+        res
+          .status(200)
+          .set('Content-Type', 'text/csv; charset=utf-8')
+          .set(
+            'Content-Disposition',
+            `attachment; filename="deals-export-${new Date().toISOString().slice(0, 10)}.csv"`,
+          )
+          .send(csv);
       } catch (err) {
         next(err);
       }

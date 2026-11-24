@@ -16,6 +16,7 @@
     "db:seed:sample": "pnpm --filter api run db:seed:sample",
     "db:reset": "pnpm --filter api run db:reset",
     "db:verify-fresh": "pnpm --filter api run db:verify-fresh",
+    "docker:check-env-leak": "node scripts/check-dockerignore.mjs",
     "prepare": "pnpm --filter @growspark/shared build && pnpm --filter api exec prisma generate",
     "dev": "pnpm --filter @growspark/shared run dev:prepare && pnpm --filter api exec prisma generate && node scripts/dev.mjs",
     "build": "pnpm --filter @growspark/shared build && pnpm --filter api exec prisma generate && pnpm -r build",

@@ -7,7 +7,16 @@
  * testable without needing to simulate process.exit.
  */
 
-const LOCAL_DATABASE_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+/**
+ * 'postgres' is this repo's own Docker Compose service name for the
+ * Postgres container (docker-compose.yml) — not an external host. It only
+ * resolves at all inside this project's own Compose network, which is how
+ * the api/web containers in the "full" profile (`docker compose --profile
+ * full up`, Day 5 part b) reach the same Postgres container native dev
+ * reaches via 127.0.0.1:5433. Still a local, project-owned database either
+ * way; this does not relax the guard against a real remote host.
+ */
+const LOCAL_DATABASE_HOSTS = new Set(['localhost', '127.0.0.1', '::1', 'postgres']);
 
 /**
  * DATABASE_URL's `?schema=` query param decides where `prisma migrate`
@@ -68,7 +77,8 @@ export function checkLocalDatabaseHost(databaseUrl: string): string | null {
 
   return (
     `DATABASE_URL points at host "${host}", not localhost. Local development ` +
-    `and tests must use the Docker Postgres on 127.0.0.1 — refusing to start ` +
-    `rather than risk running against a remote database by accident.`
+    `and tests must use the Docker Postgres on 127.0.0.1 (or the "postgres" ` +
+    `Compose service name, inside the "full" Docker profile) — refusing to ` +
+    `start rather than risk running against a remote database by accident.`
   );
 }

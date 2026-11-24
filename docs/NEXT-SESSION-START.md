@@ -195,12 +195,60 @@ specific package you're about to work on.
   through yet; that, plus `apps/api/scripts/replay-intake.sh`'s curl-based
   demonstration, is the user's to run.
 
+- **Day 5b (CSV export, a Docker "full" profile, README rewrite, an RBAC
+  sweep, a P0 freeze list) is done — built and verified 2026-11-24.** CSV
+  export: Leads, Companies, Contacts, Deals (not Enquiries — confirmed with
+  the user), formula-injection-safe, gated on the (previously unused)
+  `reports:export` permission. Docker: `docker compose --profile full up
+  --build -d` runs the whole stack on its own ports (**web 3100, api
+  4100** — deliberately not 3000/4000) against its own database
+  (**crm_docker**, never `crm_dev`), auto-seeded with fixed demo
+  credentials every container start. **Read `docs/decisions.md` D76–D80
+  before touching anything Docker-related** — building this surfaced five
+  real problems, including two serious incidents (a verification step
+  briefly overwrote the real local Admin/Staff passwords in `crm_dev`,
+  caught and reported immediately, fixed by giving Docker its own
+  database; a `.dockerignore` mistake let real `.env`/staging credentials
+  get baked into a built image, fixed, the leaked images and build cache
+  were deleted from this machine, and a permanent guard —
+  `pnpm docker:check-env-leak` — now exists). RBAC sweep: every route and
+  screen checked against the PRD/roadmap; no permission-table change made;
+  one real gap found and reported (no frontend page for the audit log,
+  despite the backend being fully built and Admin-only) — **the user asked
+  for it to be built immediately, and it was, same session (D81)**:
+  `/settings/audit-log`, Admin-only, filters for actor/action/entity type/
+  date range, and a server-side **allowlist**
+  (`sanitizeAuditMetadata`, `apps/api/src/lib/audit-metadata.ts`) so the
+  free-form `metadata` JSON column — written by many different call sites
+  — can never leak something sensitive into this screen just because a
+  future call site adds an unsafe field; proven with a test that inserts
+  a row with deliberately dangerous key names and confirms none reach the
+  JSON response. README rewritten for a cold reviewer. **apps/api 478/478,
+  apps/web 101/101 — 579 total, all passing.** Full plain-language account
+  in `docs/DAY-5B-SUMMARY.md`; the audit page build specifically is D81.
+  Nothing committed or pushed (explicit instruction this session); nothing
+  run against staging.
+
+- **Same session, D82 — two more bugs found in manual testing, both
+  fixed.** Every CSV export's first column was the bare text "ID" — Excel
+  on Windows misdetects that as an old SYLK file and refuses to open it
+  ("Excel has detected that the file is a SYLK file..."); fixed (renamed
+  to "Lead ID"/"Company ID"/"Contact ID"/"Deal ID", a structural guard
+  added to `rowsToCsv` so this specific mistake can't recur unnoticed, plus
+  a UTF-8 BOM on every export). Separately, `pnpm docker:check-env-leak`
+  failed on Windows cmd/PowerShell (it needed a POSIX `sh`, which Windows
+  doesn't have by default) — rewritten as plain Node
+  (`scripts/check-dockerignore.mjs`, no shell anywhere), proven to still
+  catch the original `.dockerignore` bug exactly the way the `.sh` version
+  did. **apps/api 483/483 (up from 478), apps/web 101/101 (unchanged) —
+  584 total, all passing.**
+
 ## The next work, in order
 
-Day 5a is done (see above). The rest of Day 5 (CSV export, Docker
-packaging, the P0 freeze) is not yet detailed in this repo — confirm exact
-scope with the user before starting it. Per the roadmap, Days 6–7 (testing,
-stabilisation, demo) stay out of scope until the build days are done.
+Day 5b is done, including the audit log page (see above) — **no open P0
+gap remains**. Per the roadmap, Day 6 (testing, stabilisation) is next;
+confirm with the user before starting it, since it hasn't been detailed in
+this repo yet.
 
 ## Staging deployment (package 4C — built, database steps confirmed working)
 
@@ -246,6 +294,11 @@ before touching staging, not this summary.
 
 A fuller, individually-verified version of some of these lives in
 `docs/PROJECT-STATE.md` §14 — this is the short list to act on.
+
+- **Docker "full" profile ports are 3100 (web) / 4100 (api), not 3000/4000
+  — this is deliberate, not a typo to "fix".** Running it alongside native
+  `pnpm dev` is the whole point; see `docs/decisions.md` D80 for why they
+  were ever the same port in the first place and what that cost.
 
 - **No browser-automation tool exists in this environment.** Every manual
   browser check (console errors, hydration warnings, light/dark theme,

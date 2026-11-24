@@ -2819,3 +2819,578 @@ the integration out of ever seeing it.
     `docs/MANUAL-TEST-DAY5A.md` needed no edit — its rotate step already
     described the correct (now actually working) behaviour; only the code
     was wrong, not the script.
+
+## D76 — Day 5 part (b) kickoff and CSV export: Leads, Companies, Contacts, Deals (2026-11-24)
+
+Day 5b's approved scope: CSV export, a Docker "full" profile, a README
+rewrite, an RBAC sweep, and a P0-vs-PRD freeze list — see
+`docs/DAY-5B-SUMMARY.md` for the full plain-language account of the whole
+session, including two real incidents found while building the Docker piece
+(D77–D80 below). This entry covers CSV export only.
+
+- **Scope confirmed with the user before building**: Leads, Companies,
+  Contacts, and Deals get an export; Enquiries does not — the roadmap's own
+  P0 text only ever named Leads and Deals, and Enquiries has no export
+  requirement anywhere in the PRD or the 5-day plan. The user chose this
+  explicitly when asked.
+- **`apps/api/src/lib/csv.ts`** (new): `csvCell()` is the one function that
+  decides a cell's final text — stringify, then neutralise formula
+  injection, then RFC4180-quote, in that order. Formula-injection defence:
+  a cell whose first character is `=`, `+`, `-`, `@`, a tab, or a carriage
+  return gets a leading single quote, which Excel/Sheets/LibreOffice all
+  treat as "force to plain text." RFC4180 quoting: a cell containing a
+  comma, a double quote, or a line break is wrapped in double quotes with
+  internal quotes doubled. `CSV_EXPORT_ROW_LIMIT = 10_000`, matching the
+  5-day roadmap's own stated cap. 21 new tests
+  (`tests/lib/csv.test.ts`), including the specific case where both
+  defences must apply to the same cell in the right order.
+- **Each of the four services** (`leads.service.ts`, `companies.service.ts`,
+  `contacts.service.ts`, `deals.service.ts`) had its `listX`'s inline
+  `where` object extracted into a private `buildXWhere(ctx, query)`
+  function, reused by both the existing `listX` and a new `exportX(ctx,
+  query)` — so an export can never drift out of sync with its list
+  endpoint's filters, per CLAUDE.md's "reuse shared helpers" rule, and
+  because the roadmap's "export respects the current filters" rule is only
+  actually true if they share one implementation. `exportX` takes the same
+  filters and sort as `listX`, ignores `page`/`pageSize`, and caps at
+  `CSV_EXPORT_ROW_LIMIT` via a plain `take`. Each export query includes a
+  small join for display names that the JSON list responses don't carry
+  (owner name, lead-source name, company name, pipeline-stage name) —
+  needed only because a downloaded CSV has no client-side app left to
+  resolve an id to a name the way the browser UI already does.
+- **New routes**, all gated on the existing, previously-unused
+  `PERMISSIONS.REPORTS_EXPORT` (defined in `packages/shared` since Day 1 but
+  never attached to a route before now — built, on reflection, for exactly
+  this): `GET /api/v1/leads/export`, `/companies/export`, `/contacts/export`,
+  `/deals/export`. `REPORTS_EXPORT` is not Admin-only, matching the PRD's
+  "Staff: yes" for reports. Each is registered before its resource's `/:id`
+  route, same reason `/leads/duplicates` already was (Express matches by
+  registration order; `export` would otherwise be captured as an `:id`).
+  Response: `text/csv; charset=utf-8`, `Content-Disposition: attachment;
+  filename="<resource>-export-<date>.csv"`.
+- **Frontend**: a small shared `buildExportHref(path, params)` helper
+  (`apps/web/lib/export.ts`, 5 unit tests) builds the export URL from the
+  exact same filter values each page already passes to its list query —
+  not from `searchParams.toString()` directly, since a few filters (dates,
+  `sort`) are normalised before being sent to the list hook and the export
+  link must send the same normalised form. A plain `<a href>` "Download
+  CSV" button (not a fetch+blob dance) was added to the Leads, Companies,
+  Contacts, and Deals list pages, right next to each page's existing
+  primary action — same-origin GET through the already-existing `/api/*`
+  rewrite proxy, so the browser's native download handling and the
+  session cookie both just work with no extra code.
+- **Testing**: 19 new backend route tests across 4 new files
+  (`tests/{leads,companies,contacts,deals}/export.test.ts`) — Admin and
+  Staff can both export; unauthenticated is refused; the same filters the
+  list endpoint accepts are respected; a formula-injection attempt in a
+  real field is neutralised end to end; cross-organisation isolation holds.
+  `pnpm typecheck`/`pnpm lint` clean throughout (0 errors, the same 3
+  pre-existing `apps/web` warnings). Full repo test count after this entry:
+  **apps/api 449/449 (up from 428), apps/web 97/97 (up from 92) — 546
+  total** (before D77's rate-limit/connection-timeout additions, which add
+  a further few tests — see D77/D78).
+
+## D77 — Docker "full" profile: Dockerfiles, docker-compose, and two real bugs found by actually running it (2026-11-24)
+
+The roadmap asks for Dockerfiles for both apps and a Compose `full` profile
+that runs the whole stack in one command. Built, then verified by actually
+building and running it end to end (not just trusting the design) — which
+surfaced two genuine, pre-existing bugs unrelated to Docker itself, described
+below, both fixed with a test. D78–D80 cover three further incidents found
+during that same verification, each significant enough for its own entry.
+
+- **Both Dockerfiles are deliberately single-stage**, not a minimal
+  multi-stage/`pnpm deploy` build: the whole monorepo is installed and built
+  inside the image, and the final container keeps the full workspace and
+  devDependencies on disk. A conscious simplicity-over-image-size tradeoff
+  for a local/demo "run the whole stack in one command," not a
+  production-minimised image — revisit only if this is ever used for
+  something other than a local demo.
+- **Everything is copied into the image before `pnpm install`, not split
+  into a cached dependency-only layer first** — found necessary by actually
+  running the build: the root `package.json`'s own `"prepare"` script
+  (`pnpm --filter @growspark/shared build && prisma generate`) runs
+  automatically as part of `pnpm install` itself (an npm/pnpm lifecycle
+  hook), and needs the real source of `packages/shared` and
+  `apps/api/prisma` already present to succeed. The cost: this design has
+  very little Docker layer-caching benefit — almost any file changing
+  anywhere in the repo invalidates the `COPY . .` layer and forces a full
+  `pnpm install` from scratch on the next build. Accepted for a one-build,
+  many-runs local demo image; not revisited under this session's time
+  budget.
+- **`node:22.20.0-bookworm-slim` (Debian), not an Alpine base** — needs
+  `apt-get install openssl` explicitly (Prisma's own engine postinstall
+  prints a warning naming this exact fix when it can't detect a libssl
+  version, which is exactly what happened the first time this was built
+  without it) but avoids Alpine/musl's own well-known Prisma engine-binary
+  quirks entirely.
+- **A placeholder, build-time-only `DATABASE_URL`** (`ENV
+  DATABASE_URL=postgresql://build:build@localhost:5432/build_placeholder`)
+  is set in both Dockerfiles before `pnpm install`. Needed because the
+  `"prepare"` script's `prisma generate` step requires `DATABASE_URL` to
+  resolve to *some* syntactically valid connection string — Prisma 7's
+  config loader (`prisma.config.ts`) throws `PrismaConfigEnvError`
+  otherwise, even though `generate` never actually opens a connection, only
+  reads `schema.prisma`. The real runtime value (`crm_docker`, D78) is set
+  by `docker-compose.yml`'s `environment:` and always overrides this
+  placeholder once the container actually starts. This also applies to
+  `apps/web/Dockerfile`, even though that image never touches Prisma
+  itself: a root-level `pnpm install` installs every workspace member's
+  dependencies, including `apps/api`'s, so the same lifecycle script runs
+  there too.
+- **Bug found #1 — `express-rate-limit` v8's IPv6 validation, tripped for
+  real only once this ran outside `vitest` for the first time.** The
+  per-IP intake rate limiter's `keyGenerator` used `req.ip` directly; v8
+  validates this at construction time and printed `ERR_ERL_KEY_GEN_IPV6` on
+  every container start (non-fatal — the server still started — but a real,
+  previously invisible issue: `NODE_ENV=test` makes the logger silent,
+  D22, so this had never been seen printed before). The real concern
+  isn't cosmetic: an un-normalised IPv6 key lets one caller rotate through
+  billions of distinct `req.ip` values from a single `/64` allocation,
+  defeating a per-IP limiter entirely. **Fixed**: `ipKeyGenerator(req.ip)`
+  (the library's own exported helper, which normalises to a `/56` subnet)
+  instead of `req.ip` directly, in
+  `apps/api/src/lib/rate-limit.ts`. Verified against the existing
+  `tests/intake/auth-and-rate-limit.test.ts` suite, unchanged and still
+  green (loopback addresses are unaffected by the fix, per
+  `ipKeyGenerator`'s own IPv4-mapped-address handling).
+- **Bug found #2 — an unbounded database-connection timeout.** The very
+  first time a fresh container's long-running server process made its
+  first real database query (`GET /health/db`, via the raw `pg.Pool`
+  `db/prisma.ts` exports — the same pool backs every Prisma query in the
+  app, not just this one route), it took **over ten minutes** to respond, a
+  genuine wall-clock measurement, not a guess (`time curl`, repeated to
+  confirm, then instant — 0.12s — on every call after the first). Root
+  cause: `pg.Pool`'s own default `connectionTimeoutMillis` is `0` — wait
+  forever — so a one-time, apparently transient connection stall (Docker
+  Desktop/WSL2 networking, never conclusively identified beyond "DNS
+  resolution itself was fast, ruled out by direct testing inside the
+  container") turned into an unbounded hang instead of a fast, retryable
+  failure. **This is not Docker-specific** — the exact same unbounded wait
+  could happen against Supabase in staging under a transient network blip.
+  **Fixed**: `buildDatabasePoolConfig`
+  (`apps/api/src/lib/database-ssl.ts`) now always sets
+  `connectionTimeoutMillis: 10_000` (10 seconds). A stalled connection now
+  fails fast and the next request's `pg.Pool` simply tries again, rather
+  than every request hanging indefinitely. New test in
+  `tests/lib/database-ssl.test.ts` asserts this is always set and is
+  `> 0`; the existing exact-equality test for the local-dev case was
+  updated to include it.
+- **Verified end to end, repeatedly, including after every fix below**:
+  real container builds, real `docker compose --profile full up`, curl
+  against real endpoints, a real login, real CSV export through the full
+  proxy chain. Not just a design read through — see `docs/DAY-5B-SUMMARY.md`
+  for the full account of what was actually run and observed.
+- **Testing**: 1 new test in `tests/lib/database-config-guards.test.ts`
+  (D78 below, for the `postgres` hostname), 1 new assertion group in
+  `tests/lib/database-ssl.test.ts`. `pnpm typecheck`/`pnpm lint` clean.
+
+## D78 — Incident: a Docker test run overwrote the real local Admin/Staff passwords in `crm_dev`; fixed with a dedicated `crm_docker` database (2026-11-24)
+
+**What happened, plainly.** While verifying the Docker "full" profile for
+the first time, the api container's `DATABASE_URL` pointed at `crm_dev` —
+the *same* database and the *same* Postgres container native `pnpm dev`
+already uses (same `docker-compose.yml` service, same volume). To prove a
+real login worked, `pnpm db:seed` was run inside the container with
+throwaway passwords. The seed **upserts** `admin@growspark.test` /
+`staff@growspark.test` by email (D15) — so this overwrote the real,
+already-set password hashes for both demo accounts in the user's own local
+database. The user caught this from the report, confirmed they had
+re-run their own `pnpm db:seed` locally to restore their real passwords,
+and then set three firm rules for the rest of this session: the Docker
+profile must use its own database with no way to ever touch `crm_dev`
+again, a cold reviewer must get a working login with no manual step, and
+this tool must never run `db:seed` or any other write against `crm_dev`
+again without asking first.
+
+- **Fix — a database of its own, not just a different config value that
+  could drift back.** `docker/init-db.sh` now also creates `crm_docker`
+  (alongside the existing `crm_test`) on any brand-new Postgres volume;
+  the user's own already-initialised volume got the same database created
+  by hand, once, the same way the init script would have (`CREATE DATABASE
+  crm_docker OWNER growspark_dev` — additive only, confirmed `crm_dev`
+  unaffected both before and after). `docker-compose.yml`'s `api` service
+  now hardcodes `.../postgres:5432/crm_docker` — deliberately **not**
+  `${POSTGRES_DB:-crm_dev}` interpolated from the same variable the
+  `postgres` service itself uses, specifically so the full profile can
+  never be pointed at `crm_dev` again just by an environment default
+  changing.
+- **`checkLocalDatabaseHost()`
+  (`apps/api/src/lib/database-config-guards.ts`) needed widening first**:
+  it only accepted `localhost`/`127.0.0.1`/`::1`, and would have refused to
+  start against a hostname like `postgres` (the Compose service name the
+  api container must use to reach the same Postgres container over the
+  Docker network). Added `'postgres'` to its allowed set, with a comment
+  explaining it is this repo's own fixed Compose service name, not a real
+  remote host — the guard's actual purpose (never silently run against a
+  real remote database) is unchanged. New test in
+  `tests/lib/database-config-guards.test.ts`.
+- **A cold reviewer gets a working login automatically, with fixed,
+  documented, non-secret demo credentials** — `admin@growspark.test` /
+  `staff@growspark.test`, password `dev-only-admin-password` /
+  `dev-only-staff-password` (the same placeholder strings
+  `apps/api/.env.example` already uses, reused on purpose so nothing new
+  needs to be remembered). `apps/api/Dockerfile`'s `CMD` now runs `pnpm
+  exec prisma migrate deploy && pnpm db:seed && node dist/index.js` — the
+  seed step is new, and safe specifically because it can now only ever
+  target `crm_docker`, a throwaway sandbox database nobody else uses,
+  re-seeded idempotently (upsert, D15) on every container start.
+  `APP_ENV: local` was also added to the api service's environment, so the
+  optional, documented follow-up `docker compose --profile full exec api
+  pnpm db:seed:sample` (richer fictional demo data) works without needing
+  `--confirm` (`apps/api/src/lib/sample-seed-guard.ts`) — not run
+  automatically, since the user asked only for a working login, not for
+  richer data, and auto-running it would have been scope beyond what was
+  asked.
+- **Verified, carefully, after the fact**: a fresh container's first
+  connection applies both migrations and seeds exactly 2 users into
+  `crm_docker`; `crm_dev` was independently confirmed unchanged (row counts
+  and the real admin/staff accounts' roles identical before and after) at
+  every stage of this session from this point on, including at the very
+  end (D80).
+- **Standing rule for every future session, not just this one**: this tool
+  must never run `pnpm db:seed`, `db:seed:sample`, or any other write
+  against `crm_dev` without asking the user first, regardless of context —
+  recorded here because it is a durable constraint, not a one-time
+  apology.
+
+## D79 — Incident: real `.env`/`.env.staging.local` files leaked into the built Docker images via a `.dockerignore` pattern that doesn't mean what it looks like it means (2026-11-24)
+
+**What happened.** While investigating why a rebuilt container still
+seemed to show `crm_dev`-looking data (itself later found to be a separate
+port-collision issue, D80 — this incident was real regardless), a direct
+`ls` inside the running api container found `apps/api/.env` **and
+`apps/api/.env.staging.local`** — real local database credentials and real
+staging/Supabase credentials — both present inside the built image.
+
+- **Root cause**: `.dockerignore`'s `.env`/`.env.*` lines were bare
+  patterns, written the same way `.gitignore`'s equivalent lines are. In
+  `.gitignore`, a bare pattern with no slash matches at every directory
+  depth. **`.dockerignore` does not work the same way** — Docker's ignore
+  matcher (moby/patternmatcher) only matches a bare pattern at the context
+  root; matching at any depth needs an explicit `**/` prefix. So `.env`
+  excluded a root-level `./.env` (which doesn't even exist in this repo —
+  env files live inside each app's folder) while doing nothing at all for
+  `apps/api/.env`, `apps/api/.env.staging.local`, or `apps/web/.env`. This
+  was found by actually inspecting a running container's filesystem, not
+  by reading the `.dockerignore` file and assuming the gitignore-style
+  pattern worked the same way here — and that distinction matters: reading
+  the file and reasoning about it would have reached the same wrong
+  conclusion the original author did.
+- **Fix**: every pattern in `.dockerignore` now has both the bare and a
+  `**/`-prefixed form (and the negations — `!.env.example` /
+  `!**/.env.example` — the same way), so a secret file is excluded
+  regardless of depth.
+- **A second, related fix was needed to make the corrected `.dockerignore`
+  actually buildable**: once real `.env` files were genuinely excluded,
+  the build broke in a *different* way — `prisma generate` (triggered by
+  the `"prepare"` lifecycle script, D77) needs `DATABASE_URL` to resolve to
+  *something*, and previously it had been accidentally "working" only
+  because the leaked real `.env` supplied one. Fixed with the placeholder
+  `ENV DATABASE_URL=...` described in D77 — a second, independent fix, not
+  a reversion of this one.
+- **Clean-up performed on this machine, this session, with the user's
+  explicit instruction**: both existing `growspark-sales-crm-api`/`-web`
+  images were deleted (`docker rmi`, after stopping/removing the
+  containers using them) and the *entire* Docker BuildKit cache was pruned
+  (`docker builder prune -a -f`, confirmed `0B` reclaimable afterward) —
+  not just the two image tags, since an overwritten tag's old layers can
+  otherwise persist in the build cache or as untagged/dangling image data.
+  Verified every unrelated image on the machine (13 Supabase images used by
+  the user's own other project, `postgres:17-alpine`, `hello-world`) was
+  untouched by checking before and after. Both images were then rebuilt
+  clean and directly inspected (`ls -la /app/apps/*/.env*`) to confirm only
+  `*.example` files are present.
+- **Confirmed nothing was ever pushed anywhere.** Every Docker command run
+  this session was `build`/`up`/`exec`/`logs`/`ps`/`rm`/`rmi`/`stop` against
+  purely local image names with no registry host prefix — never `docker
+  push`, `docker login`, or a `docker tag` naming a remote registry. The
+  exposure, for the time it existed, was local-disk-only on this machine.
+- **A permanent guard, not just a one-time fix**: `scripts/check-dockerignore.mjs`
+  (new) asks the real Docker build to apply the real `.dockerignore`
+  against a tiny throwaway `busybox` image, then inspects *that built
+  image's actual filesystem* for any `.env`-style file that isn't a
+  `.example`, printing and failing on anything it finds. Deliberately does
+  **not** re-implement `.dockerignore` pattern matching in a script —
+  exactly that kind of reimplementation is what produced this bug in the
+  first place; asking Docker's own real build to apply the real file
+  cannot repeat the same mistake. Wired up as `pnpm
+  docker:check-env-leak`. **Proven to actually catch the original bug**,
+  not just shown to pass now: run against a restored copy of the original,
+  broken `.dockerignore`, it correctly fails and names all three leaked
+  files; restoring the fixed version and re-running passes — the same
+  "prove it fails against the bug it claims to guard" discipline D75
+  already established for this project.
+- **Security lesson, recorded plainly because the user asked for it to
+  be**: `.dockerignore` is not `.gitignore` with a different filename, even
+  though the syntax looks nearly identical — a bare pattern's matching
+  depth is different between the two, and that difference leaked real
+  secrets into a build artifact on the very first attempt. Any future
+  `.dockerignore` change should either use `check-dockerignore.mjs` to
+  verify it, or at minimum use explicit `**/` prefixes rather than trusting
+  gitignore intuition.
+
+## D80 — Incident: the Docker profile's host ports collided with native `pnpm dev`, causing Windows to silently serve native-dev traffic instead of the container's; fixed by moving to dedicated ports (2026-11-24)
+
+**What happened.** After D78's fix, a careful, repeated re-test still
+seemed to show `crm_dev` data through `http://localhost:3000`/`:4000` no
+matter how many times the containers were rebuilt or recreated — directly
+inspecting the running container (`docker exec ... node -e "fetch(...)"`,
+bypassing the host port entirely) proved the container itself was correctly
+isolated and had zero leads in `crm_docker` the whole time. The actual
+cause: the user's own native `pnpm dev` (confirmed by inspecting the real
+process command lines via `Get-CimInstance Win32_Process`) was *also*
+running, bound to `0.0.0.0:3000`/`0.0.0.0:4000`, at the same time Docker had
+its own `127.0.0.1:3000`/`127.0.0.1:4000` port mappings active. Windows
+allowed both binds to coexist rather than erroring, and routed `curl
+http://localhost:...` to the native (`0.0.0.0`-bound) process every time —
+silently serving the wrong server instead of failing loudly, which is what
+made this so easy to misdiagnose as a data-isolation bug when it never was
+one.
+
+- **Fix — different host ports, not a port-sharing convention to remember
+  and get right every time.** `docker-compose.yml`'s `api`/`web` services
+  now publish on **4100**/**3100** by default (`DOCKER_API_PORT`/
+  `DOCKER_WEB_PORT`, both overridable), never 4000/3000 — so the Docker
+  profile and native `pnpm dev` can run at the same time with no ambiguity
+  at all, by construction, rather than by a documented rule someone has to
+  remember. Container-*internal* ports are unchanged (the api process still
+  listens on 4000 inside its own container, the web process on 3000 inside
+  its own) — only the host-side published ports moved; nothing inside
+  either container needed to change for this.
+- **`ALLOWED_ORIGINS` updated to match** (`http://localhost:${DOCKER_WEB_PORT:-3100}`)
+  — the browser's `Origin` header includes the port, and the CSRF check
+  (`enforceOriginAndContentType`) requires an exact match; leaving this at
+  `:3000` while the browser actually loads `:3100` would have made every
+  write silently 403.
+- **A second, independent bug found while re-verifying on the new
+  ports**: the web container's rewrite proxy failed with `ECONNREFUSED
+  127.0.0.1:4000` (then, after the api container was also recreated,
+  `ECONNREFUSED <container-ip>:4000`) even though `docker exec ... printenv
+  API_INTERNAL_URL` on the running container correctly showed
+  `http://api:4000`, and the two containers could reach each other
+  directly (confirmed with a raw `fetch()` from inside the web container).
+  **Root cause**: `next.config.ts`'s `rewrites()` reads
+  `process.env.API_INTERNAL_URL` once, and Next's *production build*
+  (`next build`, run inside the Dockerfile) serialises the resulting
+  destination into the build output — setting the correct value as a
+  container environment variable *afterward*, at `docker run`/`docker
+  compose up` time, has no effect on an already-built `.next`, because
+  Docker Compose's `environment:` only ever applies once a container
+  starts, never during the earlier `docker build`. The container had
+  genuinely been running with the correct runtime env var the whole time;
+  it just didn't matter, because the thing that needed the value had
+  already run and frozen its answer before that env var could ever exist.
+  **Fixed**: `apps/web/Dockerfile` now sets `ENV
+  API_INTERNAL_URL=http://api:4000` **before** `RUN pnpm --filter web
+  build` — always this exact value for this compose setup (the Compose
+  service name and the api container's own internal port, neither of which
+  `DOCKER_API_PORT` — the *host*-published port — ever changes).
+- **Final verification, after both fixes, on the real new ports**: a real
+  login via `http://localhost:3100` against the actual rebuilt containers;
+  `GET /api/v1/leads` through the full proxy chain returns an empty array
+  (genuinely fresh `crm_docker`, not `crm_dev`'s real data); a CSV export
+  request succeeds through the same proxy chain; an unauthenticated request
+  still gets a real `401`; `crm_dev`'s row counts and the real
+  admin/staff users' roles were re-checked directly and are unchanged.
+  Containers were stopped and removed afterward (`docker compose --profile
+  full stop/rm`), leaving only the pre-existing, untouched `postgres`
+  service running, exactly as it was before any of this session's Docker
+  work began.
+- **Full regression after all of D76–D80's fixes**: `pnpm
+  typecheck`/`pnpm lint` clean across the whole repo (0 errors, the same 3
+  pre-existing `apps/web` warnings). **apps/api 470/470, apps/web 97/97 —
+  567 total.** (Two failures seen in one intermediate run were reproduced
+  as resource contention from running heavy `docker exec`/`psql` commands
+  concurrently with the test suite against the same shared Postgres
+  container `crm_test` lives in — re-running the suite alone, with Docker
+  idle, passed cleanly; not a real regression, not left unresolved.)
+
+## D81 — The audit log Admin page: closing D76–D80's one reported gap (2026-11-24)
+
+The user chose to build this now rather than accept the gap. The backend
+route (`GET /audit-events`, filters, pagination, newest-first ordering)
+already existed and needed no changes beyond the metadata safeguard below;
+this entry covers the new frontend page and that safeguard.
+
+- **Metadata is allowlisted at the response layer, not trusted as
+  written.** Every real `writeAudit()`/`writeIntakeAudit()` call site in
+  the codebase was read (not sampled) to build the list — every one
+  already writes only names, ids, enum values, or arrays of *field names*
+  (e.g. `changedFields`), never a password, a raw API key, or a full
+  enquiry payload. Rather than trust that this stays true forever,
+  `apps/api/src/lib/audit-metadata.ts`'s `sanitizeAuditMetadata()` is an
+  **allowlist** (not a denylist) of exactly those known-safe key names,
+  applied in `audit.service.ts`'s `toAuditEventResponse` before any
+  metadata reaches the API response. An allowlist, deliberately, not a
+  denylist: a denylist lets a brand-new field through by default the
+  moment a future call site adds one and nobody remembers to list it as
+  dangerous; this allowlist hides anything unrecognised by default
+  instead, which is the direction a mistake should fail in for an
+  Admin-only audit screen. Proven with a real end-to-end test
+  (`tests/audit/list.test.ts`): a row is inserted directly with
+  deliberately dangerous key names (`rawKey`, `password`, `passwordHash`,
+  `token`, `sessionToken`, `secret`) and real-looking values, and the test
+  asserts the full JSON response never contains any of those keys or
+  values — not just that the known-safe fields are present.
+- **Frontend**: `/settings/audit-log` (Admin-only — client-side redirect to
+  `/forbidden` for Staff, same pattern as `/users` and
+  `/settings/api-keys`; the real control is the API's own `audit:read`
+  permission, unchanged), using the same `DataTable`/`useListUrlState`
+  pattern every other list page already uses. Columns: When (date + time),
+  Actor (resolved to a name via the existing `/users/options`, or
+  "System" for the null-actor intake-path rows), Action (a cosmetically
+  humanised label — `user.role_changed` → "User role changed" — the raw
+  value is still what the Action filter matches against), Record (a link
+  to the actual detail page for entity types that have one — lead,
+  company, contact, deal, website submission/enquiry — plain text
+  otherwise), and Details (the sanitised metadata, rendered as a compact
+  `key: value` list). Filters: Action and Entity type (free-text inputs —
+  `action`/`entityType` are plain strings in the schema, not a closed
+  enum, same reasoning Enquiries' form-type filter already used, D73),
+  Actor (a `Select` over `/users/options`), and a From/To date range —
+  all four map directly to the existing `GET /audit-events` query
+  parameters. **No interactive sort control**: the backend has always
+  hardcoded `orderBy: { createdAt: 'desc' }` with no `sort` query
+  parameter in its schema at all, and the user's own requirement was
+  "sorting by time (newest first)," read as specifying the required
+  (and only sensible) order for an audit trail, not as a request for a
+  sort-direction toggle — kept as-is rather than adding backend scope that
+  wasn't asked for.
+- **Nav item**: "Audit Log" (a `history` icon), Admin-only, placed directly
+  after API Keys in the sidebar's Admin section, per the user's instruction.
+- **Testing**: 5 new backend unit tests
+  (`tests/lib/audit-metadata.test.ts` — passthrough of every real key in
+  use, dropping an unlisted key, dropping each of 8 specifically
+  dangerous-sounding key names, `null`/non-object handling, returning
+  `null` rather than `{}` once everything is dropped) plus 3 new backend
+  integration tests in the existing `tests/audit/list.test.ts` (Staff
+  refused with `403`, unauthenticated refused with `401`, and the
+  poisoned-row end-to-end proof above — the existing filter/pagination/
+  newest-first tests in that file already covered "Admin sees entries" and
+  "filters work" and needed no change). 4 new frontend tests
+  (`tests/components/audit-log-page-client.test.tsx`): Staff is redirected
+  to `/forbidden` and renders nothing; an Admin sees a real entry rendered
+  with its actor name resolved; changing the Action filter input updates
+  the URL query (`router.replace` called with `action=...`) the same way
+  every other list page's filters do; and a defensive check that the
+  component itself never renders a raw-looking key/hash pattern even if
+  it were somehow present (belt-and-braces on top of the backend proof,
+  not a replacement for it).
+- **Verified**: `pnpm typecheck`/`pnpm lint` clean across the whole repo (0
+  errors, the same 3 pre-existing `apps/web` warnings). **apps/api
+  478/478 (up from 470), apps/web 101/101 (up from 97) — 579 total, all
+  passing.** README's permission table, `docs/MANUAL-TEST-DAY5B.md` (a new
+  §3 with exact click-through steps, verifying no raw secret ever appears
+  in the Details column), and this entry were all updated in the same
+  pass. No schema or migration change — the existing `AuditEvent` table
+  and `GET /audit-events` route needed nothing new.
+
+## D82 — Bug found in manual testing: Excel's SYLK misdetection broke every CSV export; `check-dockerignore` rewritten off `sh` (2026-11-24)
+
+Two independent fixes reported together; the user found both by actually
+using what was built rather than trusting it.
+
+**The CSV bug.** Opening `leads-export-2026-11-24.csv` in Excel on Windows
+failed with "Excel has detected that the file is a SYLK file, but cannot
+load it." Root cause confirmed by reading the raw first bytes of a real
+export, not assumed: Excel has a long-standing, well-documented
+misdetection where a text file whose very first cell is the bare two
+letters `ID` gets sniffed as an old SYLK spreadsheet file (which
+historically begins `ID;...`) instead of plain CSV, and Excel then refuses
+to open it at all. **Every one of this app's four exports started their
+header row with a bare `ID` column** — confirmed by grepping every export
+column list, not sampled.
+
+- **Fix 1 — renamed the first column in all four exports** to a
+  resource-specific name that can never be the bare text "ID":
+  `LEAD_EXPORT_COLUMNS` → "Lead ID", `COMPANY_EXPORT_COLUMNS` → "Company
+  ID", `CONTACT_EXPORT_COLUMNS` → "Contact ID", `DEAL_EXPORT_COLUMNS` →
+  "Deal ID" (all in their respective `*.service.ts` files).
+- **Fix 2 — a structural guard, not just the four call-site renames**:
+  `rowsToCsv()` (`apps/api/src/lib/csv.ts`) now throws immediately if the
+  first column's header is ever the bare text "ID" again (case-
+  insensitive, whitespace-trimmed), naming the exact SYLK misdetection in
+  the error message. This is deliberate defense-in-depth: the four
+  existing exports are fixed either way, but a *future* export built
+  without remembering this specific Excel quirk would otherwise ship the
+  same bug silently — now it fails loudly, at the point `rowsToCsv` is
+  called, instead of shipping a file Excel can't open.
+- **Fix 3 — a UTF-8 byte-order mark (BOM) now leads every export**, so
+  Excel reads non-ASCII characters (e.g. the rupee sign, or an accented
+  name) with the correct encoding instead of guessing from raw bytes. Not
+  a replacement for fix 1/2 — both were asked for and both are real,
+  independent defenses — just an additional correctness fix for encoding,
+  done at the same time since it touches the exact same function.
+- **CRLF line endings were already correct** — `rowsToCsv` already joined
+  rows with `\r\n` before this session; confirmed, not changed.
+- **Formula-injection escaping (the pre-existing defence from D76) is
+  unaffected** — the BOM is prepended to the whole document after all
+  per-cell escaping/quoting has already happened, so it cannot interact
+  with, mask, or weaken that defence; verified with a dedicated test
+  (quotes, commas, and a newline in the same document as the BOM, all
+  still handled correctly).
+- **Testing**: `tests/lib/csv.test.ts` gained a BOM-presence assertion
+  (replacing the previous exact-string equality tests, now expecting the
+  BOM prefix), a dedicated "starts with the BOM, never with the bare
+  letters ID" test, a quotes/commas/newline-still-work-with-the-BOM test,
+  and three tests for the new guard (throws for a bare "ID" header in any
+  case/whitespace variant; does not throw for "Lead ID" or when "ID" is
+  not the first column). Each of the four export integration test files
+  (`tests/{leads,companies,contacts,deals}/export.test.ts`) gained an
+  assertion reading the **raw** response text's first character code
+  (`0xfeff`) and confirming the two characters immediately after it are
+  never `ID` — proving this end to end through the real HTTP response, not
+  only at the `rowsToCsv` unit level. Confirmed empirically, not assumed,
+  that `supertest`'s `res.text` preserves a leading BOM exactly as sent
+  (verified with a throwaway diagnostic test before relying on this) —
+  the existing header-equality assertions pass regardless because
+  JavaScript's own `String.prototype.trim()` already strips `﻿` as
+  whitespace (part of the ECMAScript `WhiteSpace` production), which is
+  why those assertions needed only a text update (the new "Lead ID" etc.
+  headers), not BOM-handling logic of their own.
+
+**The `check-dockerignore` bug.** `pnpm docker:check-env-leak` (D79) failed
+on Windows cmd/PowerShell with `sh` not found — the guard script itself
+was a POSIX shell script, which this project's own standing convention
+(every other script here is Node/TypeScript, `apps/api/scripts/*.ts` run
+via `tsx`, or root `scripts/dev.mjs`) never actually required, and Windows
+has no POSIX `sh` on PATH by default.
+
+- **Rewritten as `scripts/check-dockerignore.mjs`** — plain Node ESM, no
+  build step, matching `scripts/dev.mjs`'s own existing root-level
+  convention exactly (the only other root-level script). Every Docker
+  invocation uses `spawnSync('docker', [...argv])` — never `execSync` or
+  `shell: true` — so there is no shell anywhere, host or container: the
+  inline throwaway Dockerfile is piped to `docker build -f -` via
+  `spawnSync`'s own `input` option (no temp file needed), and `find`'s
+  `(`/`-o`/`)`/`!` tokens are passed as literal, separate argv elements to
+  `docker run <image> find ...` directly — no inner `sh -c` wrapper either,
+  simplifying the original shell version rather than just porting it
+  line-for-line. `docker` itself is a real executable on Windows (Docker
+  Desktop installs `docker.exe` directly, not a `.cmd` shim), so none of
+  `apps/api/scripts/lib/run-cli.ts`'s `process.execPath`-redirection
+  machinery is needed here — that pattern exists specifically for
+  npm/pnpm-installed JS CLIs that *do* get wrapped in a `.cmd` shim on
+  Windows, which `docker` is not.
+- **`package.json`'s `docker:check-env-leak` script updated** to `node
+  scripts/check-dockerignore.mjs`; the old `scripts/check-dockerignore.sh`
+  deleted, not kept alongside.
+- **Proven to still catch the original bug, exactly the same way D79's
+  version was** — not just shown to pass now: run against a restored copy
+  of the original broken `.dockerignore`, it correctly fails and names all
+  three leaked files (`apps/api/.env`, `apps/api/.env.staging.local`,
+  `apps/web/.env`); restoring the fixed version and re-running passes.
+  Confirmed the throwaway check image (`growspark-dockerignore-check:tmp`)
+  is cleaned up after every run, pass or fail, via a `try/finally` around
+  the whole check (the original `.sh` used a `trap ... EXIT`; the `.mjs`
+  version's `finally` is the direct equivalent).
+- **Verified end to end**: `pnpm run docker:check-env-leak` (via pnpm, not
+  just `node scripts/check-dockerignore.mjs` directly) produces the same
+  result.
+
+**Full regression after both fixes**: `pnpm typecheck`/`pnpm lint` clean
+across the whole repo (0 errors, the same 3 pre-existing `apps/web`
+warnings). **apps/api 483/483 (up from 478), apps/web 101/101 (unchanged
+— no web code touched this entry) — 584 total, all passing.** No schema,
+migration, permission, or dependency change. Nothing committed or pushed.

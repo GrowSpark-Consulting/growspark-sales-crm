@@ -13,6 +13,7 @@ import { scoped } from '../../lib/scoped.js';
 import { writeAudit } from '../../lib/audit.js';
 import { toSkipTake, buildPaginationMeta } from '../../lib/pagination.js';
 import { buildOrderBy } from '../../lib/list-query.js';
+import { CSV_EXPORT_ROW_LIMIT, type CsvColumn } from '../../lib/csv.js';
 import { findDuplicateCompanies } from '../../lib/duplicates.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Company, Prisma } from '../../generated/prisma/client.js';
@@ -70,11 +71,9 @@ export interface ListCompaniesResult {
   meta: { page: number; pageSize: number; total: number };
 }
 
-export async function listCompanies(
-  ctx: RequestContext,
-  query: ListCompaniesQuery,
-): Promise<ListCompaniesResult> {
-  const where: Prisma.CompanyWhereInput = {
+/** Shared by listCompanies and exportCompanies so the two never drift out of sync. */
+function buildCompaniesWhere(ctx: RequestContext, query: ListCompaniesQuery): Prisma.CompanyWhereInput {
+  return {
     ...scoped(ctx),
     archivedAt: query.archived ? { not: null } : null,
     ...(query.ownerId ? { ownerId: query.ownerId } : {}),
@@ -88,6 +87,13 @@ export async function listCompanies(
         }
       : {}),
   };
+}
+
+export async function listCompanies(
+  ctx: RequestContext,
+  query: ListCompaniesQuery,
+): Promise<ListCompaniesResult> {
+  const where = buildCompaniesWhere(ctx, query);
 
   const orderBy = buildOrderBy(query.sort, { field: 'createdAt', direction: 'desc' });
 
@@ -98,6 +104,46 @@ export async function listCompanies(
 
   return { data: rows.map(toCompanyResponse), meta: buildPaginationMeta(query, total) };
 }
+
+export interface CompanyExportRow extends Company {
+  owner: { name: string } | null;
+}
+
+/** Same filters/sort as listCompanies, uncapped by page/pageSize, capped at CSV_EXPORT_ROW_LIMIT instead. */
+export async function exportCompanies(ctx: RequestContext, query: ListCompaniesQuery): Promise<CompanyExportRow[]> {
+  const where = buildCompaniesWhere(ctx, query);
+  const orderBy = buildOrderBy(query.sort, { field: 'createdAt', direction: 'desc' });
+
+  return prisma.company.findMany({
+    where,
+    orderBy,
+    take: CSV_EXPORT_ROW_LIMIT,
+    include: { owner: { select: { name: true } } },
+  });
+}
+
+export const COMPANY_EXPORT_COLUMNS: readonly CsvColumn<CompanyExportRow>[] = [
+  { header: 'Company ID', value: (r) => r.id },
+  { header: 'Name', value: (r) => r.name },
+  { header: 'Legal name', value: (r) => r.legalName },
+  { header: 'Industry', value: (r) => r.industry },
+  { header: 'Website', value: (r) => r.website },
+  { header: 'Email', value: (r) => r.email },
+  { header: 'Phone', value: (r) => r.phone },
+  { header: 'Employee size', value: (r) => r.employeeSize },
+  { header: 'Annual revenue', value: (r) => r.annualRevenue },
+  { header: 'Address line 1', value: (r) => r.addressLine1 },
+  { header: 'Address line 2', value: (r) => r.addressLine2 },
+  { header: 'City', value: (r) => r.city },
+  { header: 'State', value: (r) => r.state },
+  { header: 'Postal code', value: (r) => r.postalCode },
+  { header: 'Country', value: (r) => r.country },
+  { header: 'Owner', value: (r) => r.owner?.name ?? null },
+  { header: 'Description', value: (r) => r.description },
+  { header: 'Archived at', value: (r) => r.archivedAt },
+  { header: 'Created at', value: (r) => r.createdAt },
+  { header: 'Updated at', value: (r) => r.updatedAt },
+];
 
 export interface CompanyMutationResult {
   company: CompanyResponse;

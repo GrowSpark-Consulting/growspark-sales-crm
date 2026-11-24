@@ -17,6 +17,7 @@ import { scoped } from '../../lib/scoped.js';
 import { writeAudit } from '../../lib/audit.js';
 import { toSkipTake, buildPaginationMeta } from '../../lib/pagination.js';
 import { buildOrderBy } from '../../lib/list-query.js';
+import { CSV_EXPORT_ROW_LIMIT, type CsvColumn } from '../../lib/csv.js';
 import { findDuplicateLeads } from '../../lib/duplicates.js';
 import { findNextActivity } from '../../lib/next-activity.js';
 import type { RequestContext } from '../../lib/context.js';
@@ -90,8 +91,9 @@ export interface ListLeadsResult {
   meta: { page: number; pageSize: number; total: number };
 }
 
-export async function listLeads(ctx: RequestContext, query: ListLeadsQuery): Promise<ListLeadsResult> {
-  const where: Prisma.LeadWhereInput = {
+/** Shared by listLeads and exportLeads so the two never drift out of sync. */
+function buildLeadsWhere(ctx: RequestContext, query: ListLeadsQuery): Prisma.LeadWhereInput {
+  return {
     ...scoped(ctx),
     archivedAt: query.archived ? { not: null } : null,
     ...(query.status ? { status: query.status } : {}),
@@ -118,6 +120,10 @@ export async function listLeads(ctx: RequestContext, query: ListLeadsQuery): Pro
         }
       : {}),
   };
+}
+
+export async function listLeads(ctx: RequestContext, query: ListLeadsQuery): Promise<ListLeadsResult> {
+  const where = buildLeadsWhere(ctx, query);
 
   const orderBy = buildOrderBy(query.sort, { field: 'createdAt', direction: 'desc' });
 
@@ -128,6 +134,50 @@ export async function listLeads(ctx: RequestContext, query: ListLeadsQuery): Pro
 
   return { data: rows.map((lead) => toLeadResponse(lead)), meta: buildPaginationMeta(query, total) };
 }
+
+export interface LeadExportRow extends Lead {
+  owner: { name: string } | null;
+  source: { name: string };
+}
+
+/** Same filters/sort as listLeads, uncapped by page/pageSize, capped at CSV_EXPORT_ROW_LIMIT instead. */
+export async function exportLeads(ctx: RequestContext, query: ListLeadsQuery): Promise<LeadExportRow[]> {
+  const where = buildLeadsWhere(ctx, query);
+  const orderBy = buildOrderBy(query.sort, { field: 'createdAt', direction: 'desc' });
+
+  return prisma.lead.findMany({
+    where,
+    orderBy,
+    take: CSV_EXPORT_ROW_LIMIT,
+    include: { owner: { select: { name: true } }, source: { select: { name: true } } },
+  });
+}
+
+export const LEAD_EXPORT_COLUMNS: readonly CsvColumn<LeadExportRow>[] = [
+  { header: 'Lead ID', value: (r) => r.id },
+  { header: 'First name', value: (r) => r.firstName },
+  { header: 'Last name', value: (r) => r.lastName },
+  { header: 'Email', value: (r) => r.email },
+  { header: 'Phone', value: (r) => r.phone },
+  { header: 'Company name', value: (r) => r.companyName },
+  { header: 'Website', value: (r) => r.website },
+  { header: 'Job title', value: (r) => r.jobTitle },
+  { header: 'Industry', value: (r) => r.industry },
+  { header: 'Source', value: (r) => r.source.name },
+  { header: 'Source detail', value: (r) => r.sourceDetail },
+  { header: 'Status', value: (r) => r.status },
+  { header: 'Priority', value: (r) => r.priority },
+  { header: 'Owner', value: (r) => r.owner?.name ?? null },
+  { header: 'Requirement', value: (r) => r.requirement },
+  { header: 'Estimated budget', value: (r) => r.estimatedBudget },
+  { header: 'Purchase timeline', value: (r) => r.purchaseTimeline },
+  { header: 'Next follow-up', value: (r) => r.nextFollowUpAt },
+  { header: 'Notes', value: (r) => r.notes },
+  { header: 'Converted at', value: (r) => r.convertedAt },
+  { header: 'Archived at', value: (r) => r.archivedAt },
+  { header: 'Created at', value: (r) => r.createdAt },
+  { header: 'Updated at', value: (r) => r.updatedAt },
+];
 
 export interface LeadMutationResult {
   lead: LeadResponse;

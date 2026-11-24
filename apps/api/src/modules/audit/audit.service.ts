@@ -2,6 +2,7 @@ import type { ListAuditEventsQuery, AuditEventResponse } from '@growspark/shared
 import { prisma } from '../../db/prisma.js';
 import { scoped } from '../../lib/scoped.js';
 import { toSkipTake, buildPaginationMeta } from '../../lib/pagination.js';
+import { sanitizeAuditMetadata } from '../../lib/audit-metadata.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { AuditEvent, Prisma } from '../../generated/prisma/client.js';
 
@@ -12,7 +13,7 @@ function toAuditEventResponse(event: AuditEvent): AuditEventResponse {
     action: event.action,
     entityType: event.entityType,
     entityId: event.entityId,
-    metadata: event.metadata,
+    metadata: sanitizeAuditMetadata(event.metadata),
     createdAt: event.createdAt.toISOString(),
   };
 }

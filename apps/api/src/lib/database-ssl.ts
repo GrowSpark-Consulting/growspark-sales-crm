@@ -92,8 +92,20 @@ export interface DatabasePoolConfigEnv extends DatabaseSslEnv {
  * `Pool` with neither the pool-size limit nor any SSL config at all — folded
  * into this instead, see docs/decisions.md D68).
  */
+/**
+ * `pg`'s own default is 0 — no timeout at all, so a connection attempt that
+ * never completes (a transient network stall; found for real running this
+ * app in Docker for the first time, Day 5 part b: a fresh container's very
+ * first connection to the "postgres" Compose service once took over ten
+ * minutes before the OS's own TCP retry eventually got through, and every
+ * request touching the database hung the whole time because nothing ever
+ * gave up) hangs the request indefinitely instead of failing fast. Bounded
+ * here so a stalled connection surfaces as a clear, timely error instead.
+ */
+const CONNECTION_TIMEOUT_MS = 10_000;
+
 export function buildDatabasePoolConfig(env: DatabasePoolConfigEnv): PoolConfig {
   const ssl = resolveDatabaseSsl(env);
   const connectionString = ssl === undefined ? env.DATABASE_URL : stripPgConnectionStringSslParams(env.DATABASE_URL);
-  return { connectionString, max: env.DATABASE_POOL_MAX, ssl };
+  return { connectionString, max: env.DATABASE_POOL_MAX, ssl, connectionTimeoutMillis: CONNECTION_TIMEOUT_MS };
 }
