@@ -14,6 +14,8 @@ export const PERMISSIONS = {
   CONTACTS_WRITE: 'contacts:write',
   DEALS_READ: 'deals:read',
   DEALS_WRITE: 'deals:write',
+  QUOTATIONS_READ: 'quotations:read',
+  QUOTATIONS_WRITE: 'quotations:write',
   ACTIVITIES_READ: 'activities:read',
   ACTIVITIES_WRITE: 'activities:write',
   RECORDS_ARCHIVE: 'records:archive',

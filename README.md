@@ -31,11 +31,13 @@ from the start).
 | CSV export (Leads, Companies, Contacts, Deals) | Done |
 | Docker: one-command full stack for a reviewer | Done |
 | Audit log (Admin-only page: filter, paginate, actor/action/entity/date) | Done |
+| Quotations (line items, GST, Draft → Sent → Accepted/Rejected/Expired, duplicate, PDF download) | Done |
 
 Not built yet (see `docs/decisions.md` and the project state docs for the
-full P0/P1/P2 breakdown): quotations/products, global search, in-app
-notifications, self-service password reset, and everything explicitly
-scoped to P1/P2 in the roadmap.
+full P0/P1/P2 breakdown): in-app notifications and a predefined reports page
+(both in progress, Day 5c), a product/service catalogue and a CGST/SGST/IGST
+split for quotations (future items, D87), global search, self-service
+password reset, and everything explicitly scoped to P1/P2 in the roadmap.
 
 ## Stack
 
@@ -191,6 +193,7 @@ there is no path where hiding a button is the actual security control.
 | Archive / restore business records | Yes | Yes |
 | Dashboard, Today, CSV export | Yes | Yes |
 | Website Enquiries inbox | Yes | Yes |
+| Quotations — read, write, change status, duplicate, download PDF | Yes | Yes |
 | Manage users, roles, deactivate | Yes | No |
 | Read the audit log | Yes | No |
 | Manage settings and API keys | Yes | No |

@@ -16,6 +16,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { CompanyContactsTab } from "@/components/companies/company-contacts-tab";
 import { DealsTab } from "@/components/deals/deals-tab";
+import { QuotationsTab } from "@/components/quotations/quotations-tab";
 import { RecordTimeline } from "@/components/activities/record-timeline";
 import { formatDate, formatPhoneForDisplay } from "@/lib/format";
 
@@ -152,6 +153,17 @@ export function CompanyDetailPageClient({ companyId }: { companyId: string }) {
               companyId={company.id}
               addHref={`/deals/new?companyId=${company.id}`}
               emptyLabel={`No deals yet for ${company.name}.`}
+            />
+          ),
+        },
+        {
+          value: "quotations",
+          label: "Quotations",
+          content: (
+            <QuotationsTab
+              companyId={company.id}
+              addHref={`/quotations/new?companyId=${company.id}`}
+              emptyLabel={`No quotations yet for ${company.name}.`}
             />
           ),
         },

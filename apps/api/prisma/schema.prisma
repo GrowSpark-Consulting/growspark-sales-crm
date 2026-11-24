@@ -96,18 +96,58 @@ enum SubmissionStatus {
   @@map("submission_status")
 }
 
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+
+  @@map("quotation_status")
+}
+
+enum NotificationType {
+  LEAD_ASSIGNED
+  DEAL_ASSIGNED
+  TASK_DUE_TODAY
+  TASK_OVERDUE
+  NEW_ENQUIRY
+  QUOTATION_ACCEPTED
+  QUOTATION_REJECTED
+
+  @@map("notification_type")
+}
+
 // ---------------------------------------------------------------------------
 // Tenant root
 // ---------------------------------------------------------------------------
 
 model Organization {
-  id        String   @id @default(uuid(7)) @db.Uuid
-  name      String
-  timezone  String   @default("Asia/Kolkata")
-  currency  String   @default("INR")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id           String   @id @default(uuid(7)) @db.Uuid
+  name         String
+  timezone     String   @default("Asia/Kolkata")
+  currency     String   @default("INR")
+  // Quotation PDF header details (D84). All nullable, no UI: filled by
+  // `pnpm org:set-details` / `pnpm staging:set-org-details` from a JSON file
+  // the owner supplies. A blank value is simply left off the PDF.
+  legalName    String?  @map("legal_name")
+  addressLine1 String?  @map("address_line1")
+  addressLine2 String?  @map("address_line2")
+  city         String?
+  state        String?
+  postalCode   String?  @map("postal_code")
+  country      String?
+  phone        String?
+  email        String?
+  website      String?
+  gstin        String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  quotations          Quotation[]
+  quotationLineItems  QuotationLineItem[]
+  quotationCounters   QuotationCounter[]
+  notifications       Notification[]
   users               User[]
   sessions            Session[]
   apiKeys             ApiKey[]
@@ -148,6 +188,7 @@ model User {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
 
   sessions           Session[]
+  notifications      Notification[]      @relation("NotificationRecipient")
   createdApiKeys     ApiKey[]            @relation("ApiKeyCreatedBy")
   auditEvents        AuditEvent[]        @relation("AuditEventActor")
   ownedLeads         Lead[]              @relation("LeadOwner")
@@ -159,6 +200,7 @@ model User {
   dealStageChanges   DealStageHistory[]  @relation("DealStageHistoryChangedBy")
   assignedActivities Activity[]          @relation("ActivityAssignee")
   createdActivities  Activity[]          @relation("ActivityCreatedBy")
+  ownedQuotations    Quotation[]         @relation("QuotationOwner")
 
   @@unique([organizationId, email])
   @@map("users")
@@ -364,6 +406,7 @@ model Company {
   deals           Deal[]
   leadConversions LeadConversion[]
   activities      Activity[]
+  quotations      Quotation[]
 
   @@index([organizationId, nameNormalized])
   @@index([organizationId, archivedAt])
@@ -396,6 +439,7 @@ model Contact {
   dealContacts    DealContact[]
   leadConversions LeadConversion[]
   activities      Activity[]
+  quotations      Quotation[]
 
   @@index([organizationId, emailNormalized])
   @@index([organizationId, phoneNormalized])
@@ -478,6 +522,7 @@ model Deal {
   stageHistories  DealStageHistory[]
   leadConversions LeadConversion[]
   activities      Activity[]
+  quotations      Quotation[]
 
   // Partial index (WHERE clause) not expressible in Prisma; added by hand:
   //   deals_org_stage_idx ON (organization_id, stage_id) WHERE archived_at IS NULL
@@ -596,4 +641,118 @@ model WebsiteSubmission {
   @@index([organizationId, status, receivedAt])
   @@index([organizationId, leadId])
   @@map("website_submissions")
+}
+
+// ---------------------------------------------------------------------------
+// Quotations (Day 5c, D83/D84)
+// ---------------------------------------------------------------------------
+
+model Quotation {
+  id              String          @id @default(uuid(7)) @db.Uuid
+  organizationId  String          @map("organization_id") @db.Uuid
+  number          String
+  version         Int             @default(1)
+  companyId       String          @map("company_id") @db.Uuid
+  contactId       String          @map("contact_id") @db.Uuid
+  dealId          String?         @map("deal_id") @db.Uuid
+  ownerId         String?         @map("owner_id") @db.Uuid
+  status          QuotationStatus @default(DRAFT)
+  issueDate       DateTime        @map("issue_date") @db.Date
+  validUntil      DateTime        @map("valid_until") @db.Date
+  currency        String          @default("INR")
+  discountPercent Decimal         @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  taxPercent      Decimal         @default(18) @map("tax_percent") @db.Decimal(5, 2)
+  subtotal        Decimal         @db.Decimal(14, 2)
+  discountAmount  Decimal         @map("discount_amount") @db.Decimal(14, 2)
+  taxAmount       Decimal         @map("tax_amount") @db.Decimal(14, 2)
+  total           Decimal         @db.Decimal(14, 2)
+  terms           String?
+  notes           String?
+  sentAt          DateTime?       @map("sent_at") @db.Timestamptz(3)
+  archivedAt      DateTime?       @map("archived_at") @db.Timestamptz(3)
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  company      Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  contact      Contact             @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  deal         Deal?               @relation(fields: [dealId], references: [id], onDelete: Restrict)
+  owner        User?               @relation("QuotationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  lineItems    QuotationLineItem[]
+
+  // CHECKs added by hand to the migration SQL: percentages 0..100, money
+  // >= 0, valid_until >= issue_date, version >= 1, number not blank.
+  @@unique([organizationId, number])
+  @@index([organizationId, status, validUntil])
+  @@index([organizationId, issueDate])
+  @@index([organizationId, companyId])
+  @@index([organizationId, dealId])
+  @@index([organizationId, ownerId])
+  @@map("quotations")
+}
+
+model QuotationLineItem {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  quotationId     String   @map("quotation_id") @db.Uuid
+  position        Int
+  description     String
+  quantity        Decimal  @db.Decimal(12, 2)
+  unitPrice       Decimal  @map("unit_price") @db.Decimal(14, 2)
+  discountPercent Decimal  @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  lineTotal       Decimal  @map("line_total") @db.Decimal(14, 2)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  quotation    Quotation    @relation(fields: [quotationId], references: [id], onDelete: Restrict)
+
+  // CHECKs added by hand: quantity > 0, unit_price >= 0, discount 0..100,
+  // line_total >= 0, description not blank.
+  @@unique([quotationId, position])
+  @@index([organizationId, quotationId])
+  @@map("quotation_line_items")
+}
+
+// One row per organisation per calendar year; incremented with an atomic
+// INSERT ... ON CONFLICT DO UPDATE ... RETURNING inside the create
+// transaction, so concurrent creates can never share a number (D83).
+model QuotationCounter {
+  organizationId String   @map("organization_id") @db.Uuid
+  year           Int
+  lastNumber     Int      @map("last_number")
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+
+  @@id([organizationId, year])
+  @@map("quotation_counters")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (Day 5c, D89)
+// ---------------------------------------------------------------------------
+
+// One row per thing a user should notice. Deliberately stores no text and no
+// personal data: the type says what happened, entityId says which record
+// (its kind follows from the type), and the wording is built from the live
+// record when the list is read. dedupeKey is only set for notifications
+// generated on load (task due/overdue), so regenerating them is a no-op;
+// Postgres allows any number of NULLs in the unique index.
+model Notification {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  type           NotificationType
+  entityId       String           @map("entity_id") @db.Uuid
+  dedupeKey      String?          @map("dedupe_key")
+  readAt         DateTime?        @map("read_at") @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  user         User         @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([organizationId, userId, dedupeKey])
+  @@index([organizationId, userId, createdAt(sort: Desc)])
+  @@index([organizationId, userId, readAt])
+  @@map("notifications")
 }

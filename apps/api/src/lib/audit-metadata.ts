@@ -39,6 +39,12 @@ const ALLOWED_METADATA_KEYS = new Set([
   'contactIds',
   'submissionId',
   'apiKeyPrefix',
+  // Quotations (D83): a document number, its revision, a 2-dp total and the
+  // number it was copied from — business identifiers, never personal data.
+  'number',
+  'version',
+  'total',
+  'duplicatedFromNumber',
 ]);
 
 /**

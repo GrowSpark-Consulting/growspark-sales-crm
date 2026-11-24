@@ -19,6 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
 import { CloseLostDialog } from "@/components/deals/close-lost-dialog";
 import { DealContactsTab } from "@/components/deals/deal-contacts-tab";
+import { QuotationsTab } from "@/components/quotations/quotations-tab";
 import { NextActivityField, RecordTimeline } from "@/components/activities/record-timeline";
 import {
   DropdownMenu,
@@ -279,6 +280,17 @@ export function DealDetailPageClient({ dealId }: { dealId: string }) {
                 </ul>
               )}
             </div>
+          ),
+        },
+        {
+          value: "quotations",
+          label: "Quotations",
+          content: (
+            <QuotationsTab
+              dealId={deal.id}
+              addHref={`/quotations/new?companyId=${deal.companyId}&dealId=${deal.id}`}
+              emptyLabel="No quotations for this deal yet."
+            />
           ),
         },
         { value: "timeline", label: "Timeline", content: <RecordTimeline owner="deals" recordId={deal.id} /> },

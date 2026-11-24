@@ -26,6 +26,12 @@ docs/decisions.md D13). All FKs are `ON DELETE RESTRICT ON UPDATE CASCADE`.
 
 PK: `organizations_pkey` (id). No FKs, uniques, indexes, or CHECKs beyond the PK.
 
+**Added by `20261124181711_add_quotations` (D84)** — quotation PDF header
+details, all `text NULL`, no default: `legal_name`, `address_line1`,
+`address_line2`, `city`, `state`, `postal_code`, `country`, `phone`,
+`email`, `website`, `gstin`. Set only by `pnpm org:set-details` /
+`pnpm staging:set-org-details`; no UI.
+
 ## users
 
 | Column | Type | Null | Default |
@@ -463,6 +469,81 @@ FKs: organization_id → organizations.id; lead_id → leads.id (nullable).
 No CHECKs. No `created_at` — `received_at` serves that role (judgment call,
 see Phase A report section (b)).
 
+## quotations (D83, migration `20261124181711_add_quotations`)
+
+| Column | Type | Null | Default |
+|---|---|---|---|
+| id | uuid | NO | (client: uuid7) |
+| organization_id | uuid | NO | |
+| number | text | NO | |
+| version | integer | NO | 1 |
+| company_id | uuid | NO | |
+| contact_id | uuid | NO | |
+| deal_id | uuid | YES | |
+| owner_id | uuid | YES | |
+| status | quotation_status (enum) | NO | 'DRAFT' |
+| issue_date | date | NO | |
+| valid_until | date | NO | |
+| currency | text | NO | 'INR' |
+| discount_percent | decimal(5,2) | NO | 0 |
+| tax_percent | decimal(5,2) | NO | 18 |
+| subtotal | decimal(14,2) | NO | |
+| discount_amount | decimal(14,2) | NO | |
+| tax_amount | decimal(14,2) | NO | |
+| total | decimal(14,2) | NO | |
+| terms | text | YES | |
+| notes | text | YES | |
+| sent_at | timestamptz(3) | YES | |
+| archived_at | timestamptz(3) | YES | |
+| created_at | timestamptz(3) | NO | now() |
+| updated_at | timestamptz(3) | NO | |
+
+PK: id. Unique: `quotations_organization_id_number_key` (organization_id, number).
+Indexes: (organization_id, status, valid_until); (organization_id, issue_date);
+(organization_id, company_id); (organization_id, deal_id); (organization_id, owner_id).
+FKs: organization_id, company_id, contact_id, deal_id (nullable), owner_id
+(nullable, → users).
+**Hand-written CHECKs**: `quotations_number_not_blank`; `quotations_version_positive`
+(version >= 1); `quotations_discount_percent_range` and `quotations_tax_percent_range`
+(BETWEEN 0 AND 100); `quotations_amounts_non_negative` (subtotal, discount_amount,
+tax_amount, total all >= 0); `quotations_valid_until_after_issue` (valid_until >= issue_date).
+Percentages are decimal(5,2), not the integer 0..100 used elsewhere (33.33% must fit).
+
+## quotation_line_items
+
+| Column | Type | Null | Default |
+|---|---|---|---|
+| id | uuid | NO | (client: uuid7) |
+| organization_id | uuid | NO | |
+| quotation_id | uuid | NO | |
+| position | integer | NO | |
+| description | text | NO | |
+| quantity | decimal(12,2) | NO | |
+| unit_price | decimal(14,2) | NO | |
+| discount_percent | decimal(5,2) | NO | 0 |
+| line_total | decimal(14,2) | NO | |
+| created_at | timestamptz(3) | NO | now() |
+
+PK: id. Unique: `quotation_line_items_quotation_id_position_key` (quotation_id, position).
+Index: (organization_id, quotation_id). FKs: organization_id; quotation_id → quotations.id.
+**Hand-written CHECKs**: description not blank; quantity > 0; unit_price >= 0;
+discount_percent BETWEEN 0 AND 100; line_total >= 0; position >= 1.
+Rows are replaced wholesale (delete + insert, in the edit transaction) while the
+quotation is a Draft.
+
+## quotation_counters
+
+| Column | Type | Null | Default |
+|---|---|---|---|
+| organization_id | uuid | NO | |
+| year | integer | NO | |
+| last_number | integer | NO | |
+| updated_at | timestamptz(3) | NO | |
+
+**Composite PK**: (organization_id, year). FK: organization_id.
+**Hand-written CHECK**: `quotation_counters_last_number_positive` (last_number >= 1).
+Incremented only by the atomic upsert in `src/lib/quotation-number.ts` (D83).
+
 ## Enum types
 
 | Enum (DB type name) | Values |
@@ -475,6 +556,7 @@ see Phase A report section (b)).
 | activity_type | TASK, CALL, MEETING, NOTE |
 | activity_status | OPEN, DONE, CANCELLED |
 | submission_status | RECEIVED, LEAD_CREATED, REJECTED, SPAM |
+| quotation_status | DRAFT, SENT, ACCEPTED, REJECTED, EXPIRED |
 
 Enum values themselves are not snake_cased (only the type names are, per the
 brief's "Enums mapped to snake_case type names").

@@ -259,6 +259,28 @@ against staging; `crm_dev` was never written to after the password
 incident was caught and fixed (the user re-seeded their own password
 themselves).
 
+**Update, 2026-11-25 — Day 5c, feature 1 of 3 (Quotations) is done.** Day 5c
+adds Quotations, then Notifications, then Reports, stopping for review after
+each. Quotations: migration `20261124181711_add_quotations` (three tables,
+one enum, eleven nullable organisation header columns); exact-decimal money
+rule with half-up rounding (D85); yearly `Q-YYYY-NNNN` numbering via an
+atomic counter upsert; server-enforced Draft → Sent → Accepted/Rejected
+flow with best-effort, audited auto-expiry on read (D86); edit (Draft only,
+version bump), duplicate, archive/restore; an on-demand pdfkit PDF with
+bundled Noto Sans for the rupee sign, never stored (D84); list/detail/
+create/edit screens, Quotations tabs on Deal and Company, and an optional
+"mark the deal Won?" offer after Accept. New permissions `quotations:read`/
+`quotations:write` (both roles, approved). New dependency `pdfkit@0.20.2`
+(+ dev `@types/pdfkit@0.17.7`). **apps/api 539/539 (up from 483), apps/web
+109/109 (up from 101) — 648 total.** Applied to `crm_test` by the user
+(`pnpm db:verify-fresh`); not yet to `crm_dev` or staging. Full account:
+`docs/DAY-5C-SUMMARY.md`; decisions D83–D87. Nothing committed or pushed.
+Later the same day: D88 (a Draft past its valid-until date cannot be sent,
+tested) and the start of Notifications (D89 — migration
+`20261124191130_add_notifications` and shared schemas only; the rest is
+not written). **Current counts: apps/api 540/540, apps/web 109/109 (649).**
+Resume from `docs/DAY-5C-HANDOVER-PROMPT.md`.
+
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
@@ -1868,6 +1890,14 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D72 — Day 5a completed, backend: API keys, the intake endpoint, and Enquiries built exactly per D71 (two flagged judgment calls: a replayed-`REJECTED` submission re-throws its original error, and the Enquiries list got a `sort` param D71's text didn't name explicitly); a pre-existing Windows `db:verify-fresh`/`db:reset` bug (D63's same `.cmd`-shim `ENOENT`) fixed first at the user's request; 359 → 402 → 409 `apps/api` tests across this session's two backend checkpoints
 - D73 — Day 5a completed, frontend: the Admin-only API Keys screen (create/rotate both reveal a raw key exactly once) and the Enquiries screen (visible to both roles, reusing `DataTable`/`RecordLayout`); `docs/intake-contract.md` and `apps/api/scripts/replay-intake.sh` written; manual browser verification explicitly unstarted (no browser-automation tool in this environment)
 - D74 — Day 5a audit follow-up: a user-requested per-refinement accounting of D71's eight items against actual test files found two real gaps (key-hash/compare mechanism, audit/log-redaction content) — closed with `tests/lib/api-key.test.ts`, `tests/intake/audit.test.ts`, `tests/logger.test.ts` (new `LOG_REDACT_PATHS` export), and a per-IP rate-limit test enabled by a `createIntakeIpRateLimiter` ceiling-parameterised factory refactor (same pattern as `createGlobalLoginFloodLimiter`); 409 → **427** `apps/api` tests; `docs/DAY-5A-SUMMARY.md` gained an explicit tested-vs-reasoning-only table
+- D75–D82 — Day 5a/5b fixes and features (Rotate key reveal; CSV export; Docker full profile and its three incidents; audit log page; Excel SYLK fix) — see each entry
+- D83 — Day 5c Quotations: data model, numbering, status flow, endpoints, screens, the accept → "mark deal Won?" offer; a pg@9-incompatible in-transaction reload found by the tests and fixed
+- D84 — Quotation PDF (pdfkit 0.20.2, Noto Sans, on demand, never stored; PDF reference = number + version) and the organisation header columns + `org:set-details` scripts
+- D85 — The quotation money rule: exact decimals, half-up to 2 dp, three roundings; one shared formatter for API/PDF/screen
+- D86 — Quotation auto-expiry on read: effective status everywhere, best-effort audited write that never fails a read
+- D87 — Approved PRD deviations (no catalogue, no GST split, no PDF reports, owner added) and future items
+- D88 — A Draft with a past valid-until date cannot be marked Sent (409 VALID_UNTIL_PASSED)
+- D89 — Notifications started: migration `20261124191130_add_notifications` + shared schemas only; no text/personal data stored, titles built at read time
 
 ## 10. Gotchas and lessons learned
 
@@ -2007,6 +2037,25 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   a timeout and gets moved to the background, treat it as still running —
   check its actual output before launching the same command again, don't
   assume the timeout meant it died.
+- **Don't read a record with several relation `include`s inside an
+  interactive `$transaction`** (D83). Prisma fetches the relations
+  concurrently; on the transaction's single pg connection that prints pg@8's
+  "client.query() when the client is already executing a query" deprecation,
+  which becomes an error in pg@9. Return the id from the transaction and read
+  the full record after commit. A whole-suite `grep DeprecationWarning` is a
+  cheap check.
+- **This tool may not apply migrations to `crm_test`** (blocked by the
+  permission system, D83, same as D71's precedent): write the migration, then
+  ask the user to run `pnpm db:verify-fresh`. Until they do, every
+  `apps/api` test fails at the global reset if a new table was added to
+  `tests/helpers/reset-database.ts`.
+- **A running `pnpm dev` can miss a nested route folder created in the same
+  instant as its parent** (`mkdir -p a/[id]/edit`): it served 404 until the
+  page file was touched. A production build is the reliable check (D83).
+- **Generating a migration without touching any database**: `pnpm exec prisma
+  migrate diff --from-schema <copy of the previous schema.prisma> --to-schema
+  prisma/schema.prisma --script` (D83); `git show HEAD:apps/api/prisma/
+  schema.prisma` gives the previous schema.
 
 ## 11. Testing
 
@@ -2302,7 +2351,23 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   pushed; nothing run against staging. The rest of Day 5 (CSV export,
   Docker packaging, the P0 freeze) is not yet
   detailed in this repo — confirm exact scope with the user before starting
-  it.
+  it. *(Superseded: Day 5b was then built — see §1 and D76–D82.)*
+- **Day 5c is in progress (2026-11-25).** Quotations is done (§1, D83–D87,
+  `docs/DAY-5C-SUMMARY.md`). Next, each after the user's "continue":
+  **Notifications** (in-app bell, list, mark read/all read; events: lead or
+  deal assigned to me, task due today/overdue generated on app load with
+  de-duplication, new website enquiry to every active user, quotation
+  accepted/rejected to its owner; written after the main transaction
+  commits; polling paused while the tab is hidden), then **Reports**
+  (`reports:read`; pipeline by stage, lead sources and conversion, sales by
+  owner, quotations summary — must reuse `quotationStatusWhere` (D86) —
+  overdue tasks by owner; date range; CSV per report; reconciliation test
+  against the Home dashboard). Ready-to-paste resume prompt:
+  `docs/DAY-5C-HANDOVER-PROMPT.md`.
+- **Future items (not scheduled; D87)**: **GST split** (CGST/SGST/IGST,
+  place of supply, HSN/SAC) and **product catalogue** (products/services
+  with SKU, category and price, picked into quotation lines) — both PRD
+  5.7/13.1 capabilities deliberately left out of Day 5c.
 
 ## 14. Open questions and unverified items
 
@@ -3345,3 +3410,47 @@ log just records that a session happened and what it covered.
   427/427 (up from 409), apps/web 91/91, 518 total, all passing.** No
   schema, migration, permission, or dependency change. Nothing committed
   or pushed; nothing run against staging.
+
+### 2026-11-25 — Day 5c, feature 1: Quotations
+
+- Plan approved (permissions `quotations:read`/`quotations:write`/
+  `reports:read` for both roles; `pdfkit@0.20.2` + `@types/pdfkit@0.17.7`;
+  bundled Noto Sans; percentage discounts; yearly numbering; new-enquiry
+  notifications to every active user) plus seven follow-up requirements
+  (org header details via script, safe auto-expiry, rounding rule +
+  awkward-number tests, duplicate test, polling pause, record PRD
+  deviations, report only at the end of Quotations).
+- Built: migration `20261124181711_add_quotations`; shared
+  `quotations.ts`/`money-format.ts`; API `lib/quotation-{money,number,pdf}.ts`,
+  `lib/organization-details.ts`, `modules/quotations/`; scripts
+  `org:set-details` / `staging:set-org-details`; fonts in
+  `apps/api/assets/fonts/` (NotoSans-Regular.ttf sha256 478c558ea716033cd60c03438f628dfa75694dcf6b5f6d505a2f05fd2b4f3823,
+  NotoSans-Bold.ttf 1df075a380fc7cb898acf64c1f7b3b4dd780de3caa860178bf929de35817a913, OFL.txt cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a); web hooks,
+  presentation, form, list, detail, create/edit, `QuotationsTab` on Deal and
+  Company pages, sidebar item. Decisions D83–D87.
+- This tool's attempt to apply the migration to `crm_test` was blocked by
+  the permission system; the user ran `pnpm db:verify-fresh`. Not applied to
+  `crm_dev` or staging. No write to `crm_dev`; nothing run against staging.
+- Found and fixed by running the tests: a pg@9-incompatible relation reload
+  inside transactions (D83). Found while smoke-testing: the user's running dev
+  server missed the new nested edit route until touched (watcher, not code).
+- Verified: `pnpm typecheck` clean; `pnpm lint` 0 errors (same 3 older
+  warnings); `pnpm test` **apps/api 539/539, apps/web 109/109 (648)**; web
+  production build lists all quotation routes; sample PDFs rendered and
+  inspected; read-only smoke requests against the user's own running dev
+  servers (PIDs 19804/14724, left running, not touched). Not clicked through
+  in a browser. Nothing committed or pushed.
+
+### 2026-11-25 (later) — D88 rule added; Notifications started, stopped cleanly
+
+- D88: a Draft whose valid-until date has passed can no longer be marked
+  Sent (409 `VALID_UNTIL_PASSED`, "Valid-until date has passed, change it
+  first."), tested; `MANUAL-TEST-DAY5C.md` §5 rewritten to match.
+- Notifications (D89): migration `20261124191130_add_notifications`
+  (complete, applied nowhere) and `packages/shared/src/notifications.ts`
+  written; no service/routes/UI/tests yet. Stopped at the user's request
+  (usage limit).
+- Verified: `pnpm typecheck` clean; `pnpm lint` 0 errors (3 older
+  warnings); `pnpm test` **apps/api 540/540, apps/web 109/109 (649)**.
+  Nothing committed or pushed; nothing run against staging or `crm_dev`.
+  Resume with `docs/DAY-5C-HANDOVER-PROMPT.md`.

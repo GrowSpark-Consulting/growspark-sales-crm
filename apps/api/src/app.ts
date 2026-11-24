@@ -20,6 +20,7 @@ import { registerWorkspaceRoutes } from './modules/workspace/workspace.routes.js
 import { registerApiKeysRoutes } from './modules/api-keys/api-keys.routes.js';
 import { registerIntakeRoutes } from './modules/intake/intake.routes.js';
 import { registerEnquiriesRoutes } from './modules/enquiries/enquiries.routes.js';
+import { registerQuotationsRoutes } from './modules/quotations/quotations.routes.js';
 import { resetRouteRegistry } from './lib/route-registry.js';
 import { env } from './env.js';
 
@@ -75,6 +76,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
   registerApiKeysRoutes(app);
   registerIntakeRoutes(app);
   registerEnquiriesRoutes(app);
+  registerQuotationsRoutes(app);
   options.extraRoutes?.(app);
 
   app.use(errorHandler);

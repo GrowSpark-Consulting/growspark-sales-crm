@@ -79,8 +79,8 @@ next.
    detailed reference; skim its table of contents (the `##` headings) and
    come back to specific sections as needed rather than reading linearly
    every time.
-4. **`docs/decisions.md`** — every approved decision, D1 through D67 (D3
-   and D5 don't exist — never assigned), append-only, each with the
+4. **`docs/decisions.md`** — every approved decision, D1 through D89 (D3
+   and D5 don't exist — never assigned; D83+ is Day 5c), append-only, each with the
    reasoning behind it. Don't re-litigate something already decided here
    without a new entry. D46–D50 cover all of Day 3 (lead conversion, the
    Deals API, the Deals UI, the pipeline board, and the Convert dialog) —
@@ -243,12 +243,37 @@ specific package you're about to work on.
   did. **apps/api 483/483 (up from 478), apps/web 101/101 (unchanged) —
   584 total, all passing.**
 
+- **Day 5c (three missing PRD features, one at a time) is in progress —
+  feature 1, Quotations, is done (2026-11-25).** Migration
+  `20261124181711_add_quotations`; exact-decimal money rule (half-up, 2 dp,
+  D85); yearly `Q-YYYY-NNNN` numbers; Draft → Sent → Accepted/Rejected with
+  audited auto-expiry on read (D86); edit/duplicate/archive; an on-demand
+  pdfkit PDF with bundled Noto Sans (D84); list/detail/form screens,
+  Quotations tabs on Deal and Company, and an optional "mark the deal Won?"
+  after Accept. New permissions `quotations:read`/`quotations:write`; new
+  dependency `pdfkit@0.20.2`. **apps/api 539/539, apps/web 109/109 (648).**
+  Applied to `crm_test` by the user; **not yet applied to `crm_dev`
+  (`pnpm db:migrate`) or staging (`pnpm staging:migrate`)**. Organisation
+  PDF header details are filled by `pnpm org:set-details` /
+  `pnpm staging:set-org-details` (the user's to run). Approved PRD
+  deviations and future items (GST split, product catalogue): D87. See
+  `docs/DAY-5C-SUMMARY.md` and `docs/MANUAL-TEST-DAY5C.md`. Nothing
+  committed or pushed. Later the same day: D88 (a Draft past its
+  valid-until date cannot be marked Sent, tested) — counts now **apps/api
+  540/540, apps/web 109/109 (649)**.
+- **Day 5c feature 2, Notifications, is STARTED but NOT done (D89).** Only
+  migration `20261124191130_add_notifications` (complete, applied nowhere)
+  and `packages/shared/src/notifications.ts` exist. No service, routes, UI
+  or tests yet. **Start here: `docs/DAY-5C-HANDOVER-PROMPT.md`** — a
+  ready-to-paste prompt with the full approved plan.
+
 ## The next work, in order
 
-Day 5b is done, including the audit log page (see above) — **no open P0
-gap remains**. Per the roadmap, Day 6 (testing, stabilisation) is next;
-confirm with the user before starting it, since it hasn't been detailed in
-this repo yet.
+Day 5c continues, each step only after the user's "continue":
+**Notifications**, then **Reports**. The full approved scope and every
+already-made decision are in `docs/DAY-5C-HANDOVER-PROMPT.md` (a
+ready-to-paste resume prompt) — read it before starting. Day 6 (testing,
+stabilisation) comes after Day 5c; confirm its scope with the user first.
 
 ## Staging deployment (package 4C — built, database steps confirmed working)
 

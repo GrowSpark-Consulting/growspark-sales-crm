@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Home, Users as UsersIcon, Building2, Contact, Target, Handshake, Sun, Moon, Monitor, LogOut, CalendarDays, ListTodo, Inbox, KeyRound, History } from "lucide-react";
+import { Home, Users as UsersIcon, Building2, Contact, Target, Handshake, Sun, Moon, Monitor, LogOut, CalendarDays, ListTodo, Inbox, KeyRound, History, FileText } from "lucide-react";
 import { cn } from "cn";
 import { useMe, ME_QUERY_KEY } from "@/hooks/use-me";
 import { apiPost, ApiError } from "@/lib/api-client";
@@ -33,6 +33,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/companies": "Companies",
   "/contacts": "Contacts",
   "/deals": "Deals",
+  "/quotations": "Quotations",
   "/enquiries": "Enquiries",
   "/settings/api-keys": "API Keys",
   "/settings/audit-log": "Audit Log",
@@ -134,6 +135,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </NavItem>
           <NavItem href="/deals" active={pathname.startsWith("/deals")} icon={Handshake}>
             Deals
+          </NavItem>
+          <NavItem href="/quotations" active={pathname.startsWith("/quotations")} icon={FileText}>
+            Quotations
           </NavItem>
           <NavItem href="/enquiries" active={pathname.startsWith("/enquiries")} icon={Inbox}>
             Enquiries

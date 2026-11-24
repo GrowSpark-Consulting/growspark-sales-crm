@@ -3394,3 +3394,317 @@ across the whole repo (0 errors, the same 3 pre-existing `apps/web`
 warnings). **apps/api 483/483 (up from 478), apps/web 101/101 (unchanged
 — no web code touched this entry) — 584 total, all passing.** No schema,
 migration, permission, or dependency change. Nothing committed or pushed.
+
+## D83 — Day 5c, feature 1: Quotations — data model, status flow, numbering, endpoints, screens (2026-11-25)
+
+Day 5c adds three missing PRD features in order: Quotations, Notifications,
+Reports. The user approved the plan and these specifics before any code:
+permissions `quotations:read`, `quotations:write` (and, later,
+`reports:read`), all for both Admin and Staff; `pdfkit@0.20.2`; bundled Noto
+Sans; percentage discounts; per-year numbering; new-enquiry notifications to
+every active user. This entry covers Quotations as a whole; D84–D87 cover
+the PDF and organisation details, the money rule, auto-expiry, and the
+recorded PRD deviations.
+
+- **Migration `20261124181711_add_quotations`** (additive only): enum
+  `quotation_status` (DRAFT, SENT, ACCEPTED, REJECTED, EXPIRED); tables
+  `quotations`, `quotation_line_items`, `quotation_counters`; eleven new
+  nullable columns on `organizations` (D84). Generated with `prisma migrate
+  diff --from-schema <previous> --to-schema schema.prisma --script` (no
+  database touched), then hand-written CHECKs appended under the usual
+  marker: percentages 0–100, money ≥ 0, `valid_until ≥ issue_date`, version
+  ≥ 1, quantity > 0, non-blank number/description, line position ≥ 1,
+  counter ≥ 1. **This tool was not permitted to apply the migration to
+  `crm_test` itself** (an attempt was blocked; consistent with D71's
+  precedent) — the user ran `pnpm db:verify-fresh`. Not yet applied to
+  `crm_dev` (the user's `pnpm db:migrate`) or staging (`pnpm
+  staging:migrate`), both the user's to run.
+- **Percentages are `Decimal(5,2)`, not the schema's usual `Int 0..100`**
+  (schema.prisma header convention) — a deliberate exception, because the
+  brief's own example is a 33.33% discount, which an integer cannot hold.
+- **Quotation fields**: number, version, company (required), contact
+  (required), deal (optional), owner, status, issue date, valid-until,
+  currency (INR), discount %, GST %, stored subtotal/discount/tax/total,
+  terms, notes, sentAt, archivedAt. Totals are stored (so lists, sorting and
+  Reports never recompute them) and always recomputed by the server on
+  every write — any totals a client sends are ignored (Zod strips unknown
+  keys; proven by a test that sends a fake `total`).
+- **Relationship rules (server-side, 422/404)**: the contact must belong to
+  the chosen company, or to no company; the deal must belong to the chosen
+  company; every linked record must be in the caller's organisation (404
+  otherwise, never 403).
+- **Numbering**: `Q-YYYY-NNNN`, restarting each calendar year in the
+  organisation's own time zone (a create at 20:00 UTC on 31 Dec is already
+  1 Jan in Asia/Kolkata and gets `Q-2027-0001` — tested). Allocated by one
+  atomic `INSERT ... ON CONFLICT (organization_id, year) DO UPDATE SET
+  last_number = last_number + 1 RETURNING` inside the create transaction;
+  the `(organization_id, number)` unique index is a second line of defence.
+  Proven with 8 simultaneous creates (all distinct, consecutive) and a
+  second organisation getting its own `0001`. A rolled-back create can leave
+  a gap; duplicates are impossible.
+- **Status flow (shared `QUOTATION_STATUS_TRANSITIONS`, enforced in the
+  service)**: DRAFT → SENT; SENT → ACCEPTED | REJECTED; SENT → EXPIRED only
+  automatically (D86); ACCEPTED, REJECTED, EXPIRED are final — re-quote with
+  Duplicate. EXPIRED cannot be requested by hand (422). A disallowed
+  transition is `409 INVALID_STATUS_TRANSITION`. Edit is Draft-only (409
+  otherwise). Status changes and edits use a conditional `updateMany ...
+  where status = <the status just read>`, so a concurrent change makes the
+  loser get a 409 rather than silently overwriting. Archived quotations
+  cannot change status (restore first); archive/restore work at any status.
+- **Version**: starts at 1, +1 on every Draft edit. Shown on screen and in
+  the PDF as the "PDF reference" (`Q-2026-0001-v3`, D84).
+- **Duplicate**: new number, version 1, Draft, issue date today,
+  valid-until today + 30 days, same company/contact/deal, same line items,
+  percentages, totals, terms and notes; the caller becomes owner; sentAt and
+  archivedAt are not copied. Allowed from any status (including archived).
+  Audited with `duplicatedFromNumber`. Tested field by field.
+- **Endpoints** (`/api/v1/quotations`): list (search on number or company
+  name, status, company, contact, deal, owner, issue-date range, archived,
+  sort by number/issueDate/validUntil/total/createdAt/updatedAt), create,
+  get, PATCH (Draft only), `POST /:id/status`, `POST /:id/duplicate`,
+  archive/restore (`records:archive`), `GET /:id/pdf` (D84), and `POST
+  /calculate` — an addition to the approved plan, flagged to the user: the
+  form's live totals call the server's money rule instead of doing any
+  arithmetic in the browser (CLAUDE.md: no business logic in the frontend).
+- **Audit**: `quotation.created/updated/status_changed/duplicated/archived/
+  restored` (actor = the user) and `quotation.expired` (actor null, D86).
+  `audit-metadata.ts`'s allowlist gained `number`, `version`, `total`,
+  `duplicatedFromNumber` — business identifiers only; a test reads the rows
+  back through `GET /audit-events` and asserts the exact metadata.
+- **A pg@9 incompatibility found and fixed by running the tests, not by
+  inspection**: the first draft re-read the finished quotation (with five
+  relation includes) inside each transaction; Prisma issues those relation
+  queries concurrently, which on a transaction's single pg connection
+  printed pg@8's "client.query() when the client is already executing a
+  query" deprecation (a hard error in pg@9). Fixed by reading the result
+  after commit (`loadQuotationResponse`); the warning is gone from the
+  whole suite.
+- **Screens**: `/quotations` (DataTable; filters for search, status,
+  company, owner, issued-from/to, archived; sortable number/issued/valid
+  until/total), `/quotations/new` (accepts `?companyId=&dealId=`, prefills
+  the contact from the deal's primary contact only while the contact box is
+  still empty — D50's async-default lesson), `/quotations/[id]`
+  (RecordLayout; line items, totals, terms/notes; Download PDF, Edit, Mark
+  as sent, Accepted/Rejected, Duplicate, Archive/Restore),
+  `/quotations/[id]/edit` (refuses outside Draft). A Quotations tab on Deal
+  and Company pages (`QuotationsTab`, same bounded shape as `DealsTab`, with
+  "New quotation" prefilled). Sidebar item after Deals.
+- **Accepted → offer to mark the deal Won (never forced)**: after a
+  successful Accept, if the quotation has a deal and that deal is still
+  OPEN, a dialog offers "Mark deal as Won" / "Not now"; Won calls the
+  existing `POST /deals/:id/close {status: WON}` — no new backend path. If
+  dismissed, the quotation's Overview keeps a "linked deal is still open"
+  notice with the same button. Tested both ways, and the test was shown to
+  fail with the prompt disabled (D75's discipline).
+- **Not built, on purpose**: a CSV export of the quotation list (not
+  requested; Reports will export a quotations summary); an audit row for a
+  PDF download (reads are not audited anywhere else in this app either).
+- **Dev-server note, not a code issue**: with the user's own `pnpm dev`
+  running, the newly created nested `/quotations/[id]/edit` route returned
+  404 until its file was touched (the watcher missed a directory created in
+  the same instant as its parent); a production `pnpm --filter web build`
+  lists every quotation route correctly.
+
+## D84 — Quotation PDF and the organisation's own header details (2026-11-25)
+
+- **The user's choice, overriding the brief's earlier "browser print only"
+  idea**: a real PDF, generated on demand from the quotation's data on every
+  download, never stored, no headless browser. `pdfkit@0.20.2` (MIT, pure
+  JavaScript; its dependencies fontkit/linebreak/fflate/png-js/@noble are
+  all pure JS with no install scripts, so no `allowBuilds` change) plus dev
+  `@types/pdfkit@0.17.7`, both exact pins. **0.21.0 deliberately avoided**:
+  it was published 2026-11-20, four days before this decision; 0.20.2 had
+  been out three months. `pnpm install --frozen-lockfile` passes, no peer
+  warnings, no `minimumReleaseAgeExclude` entry needed.
+- **Fonts**: Noto Sans Regular + Bold (SIL OFL 1.1), downloaded from the
+  official notofonts repository and committed with their `OFL.txt` in
+  `apps/api/assets/fonts/` (SHA-256 recorded in the PROJECT-STATE session
+  log). Needed because the 14 standard PDF fonts have no rupee sign. A test
+  asks the embedded font itself whether it has U+20B9 (true) and, to prove
+  the check can fail, a Tamil letter (false).
+- **Built in two layers**: `buildQuotationPdfModel()` (pure) turns the data
+  into the exact strings printed — every amount through the shared
+  `formatRupees`/`formatIndianDecimal` the screens also use (D85) — and
+  `renderQuotationPdf()` only lays them out: seller header (left), title and
+  meta (number, reference, dates, status, deal; right), Bill To, a
+  line-items table that repeats its header row on every new page, the
+  totals block, terms and notes, and a "reference · Page n of m" footer.
+  Rendered and inspected visually (a one-page and a 45-line three-page
+  quotation) from a scratch script before the tests were written.
+- **Delivery**: the PDF is built in memory (a few KB) and sent with
+  `Content-Type: application/pdf`, `Content-Disposition: attachment;
+  filename="<reference>.pdf"`, `Cache-Control: no-store`. Buffered rather
+  than piped straight to the response, so a failure part-way through still
+  produces a clean JSON error instead of a truncated file.
+- **"PDF reference" (PRD 13.1)** = quotation number + version
+  (`Q-2026-0001-v3`), per the user — printed in the PDF meta and footer,
+  used as the file name, and written into the PDF's document info.
+- **What the tests prove about the PDF itself**: a complete PDF (`%PDF-` …
+  `%%EOF`), pagination for long quotations, the reference and the exact API
+  total present in the file's document info, and that the printed totals
+  rows equal `formatRupees(<API value>)`. Text inside the page content
+  streams is glyph-encoded (embedded subset font), so it is not asserted
+  byte-for-byte without a PDF-parsing dependency; the model test covers
+  every printed string instead.
+- **Organisation header details — the user's preference, built as
+  proposed**: eleven nullable columns on `organizations`: `legal_name`,
+  `address_line1`, `address_line2`, `city`, `state`, `postal_code`,
+  `country`, `phone`, `email`, `website`, `gstin`. No UI (Settings is out of
+  scope). Filled from a JSON file by `pnpm org:set-details --file <path>`
+  (local, the DATABASE_URL in `apps/api/.env`) or, from `apps/api`, `pnpm
+  staging:set-org-details --file <path>` (through `loadStagingEnv`, which
+  prints host and schema first). Both are dry runs unless `--confirm` is
+  passed. The file is validated strictly: unknown keys rejected (a typo
+  must not be silently ignored), GSTIN checked against the 15-character
+  format and upper-cased, email checked, `""`/`null` clears a field, an
+  absent key is left alone. Writes are audited
+  (`organization.details_updated`, actor null, field names only). Template:
+  `apps/api/org-details.example.json`. Nothing is seeded, so staging only
+  ever holds what the owner writes. The PDF simply leaves blank fields off.
+  This tool has not run either script.
+
+## D85 — The quotation money rule and its rounding (2026-11-25)
+
+**Rule (`apps/api/src/lib/quotation-money.ts`)** — exact decimal arithmetic
+(Prisma's bundled decimal.js) at every step, never a JavaScript float; every
+rounding is **half-up to 2 decimal places** (0.005 → 0.01, not
+round-half-to-even):
+
+```
+line total      = round2(quantity × unit price × (100 − line discount %) / 100)
+subtotal        = sum of line totals
+discount amount = round2(subtotal × quotation discount % / 100)
+taxable amount  = subtotal − discount amount
+GST amount      = round2(taxable amount × GST % / 100)
+total           = taxable amount + GST amount
+```
+
+Rounding happens exactly three times (once per line, once for the
+discount, once for the tax), so the printed subtotal − discount + GST always
+equals the printed total to the paisa (tested with a cents-level BigInt
+check). Inputs (quantity, prices, percentages) are limited to 2 decimal
+places and travel as strings; a JSON number is accepted but converted with
+`String()` (shortest exact text) and validated as text, never multiplied as
+a float.
+
+- **Worked examples, each a test**: 3 × ₹0.10 = 0.30; with a 33.33%
+  discount → 0.10, taxable 0.20, 18% GST 0.036 → 0.04, total **0.24**.
+  3 × 33.33 = 99.99; 33.33% → 33.33; taxable 66.66; GST 11.9988 → 12.00;
+  total **78.66**. 0.05 less 50% = 0.025 → **0.03** (half-up, not to even).
+  0.10 + 0.20 = exactly 0.30. A 12-integer-digit price keeps every digit.
+- **One formatter for every surface**: `packages/shared/src/money-format.ts`
+  (`formatIndianDecimal`, `formatRupees`) works on the API's decimal string,
+  never a JS number, with Indian grouping (`12,34,567.50`). The PDF and every
+  quotation screen print through it, so "the PDF, the screen and the API
+  show the same total" holds by construction, and is tested at each layer:
+  the API returns 0.24; the PDF file's info carries `total INR 0.24` and its
+  model prints `₹ 0.24`; the detail page renders `₹ 0.24` (web test
+  asserting `formatRupees(<API value>)` row by row). The older `formatINR`
+  (whole rupees, used by Deals and the dashboard) is untouched and
+  deliberately not used for quotations.
+- **`taxableAmount`** is returned by the API (and the calculate endpoint)
+  rather than recomputed by the PDF or the browser.
+
+## D86 — Quotation auto-expiry on read (2026-11-25)
+
+No background worker exists (or was wanted), so a SENT quotation past its
+valid-until date is expired when it is read. The user asked for three
+guarantees; each is a test in `tests/quotations/expiry.test.ts`.
+
+- **Correctness never depends on the write.** Every response, the list's
+  Status filter and the PDF use the *effective* status: SENT with a
+  valid-until date before the organisation's current calendar date reads as
+  EXPIRED. The filter is expiry-aware SQL (`status=SENT` means "SENT and
+  valid until today or later"; `status=EXPIRED` means "EXPIRED, or SENT and
+  lapsed"), shared as `quotationStatusWhere()` so Reports can reuse it. A
+  quotation is still valid on its valid-until date itself (tested).
+- **The write is best-effort and can never fail the read.** Before a list,
+  detail, PDF or status change, `expireLapsedQuotations()` flips lapsed rows
+  organisation-wide (`updateManyAndReturn ... where status = 'SENT' and
+  valid_until < today`) and writes one audit row per flipped quotation, in
+  one transaction; any error is logged (`logger.warn`) and swallowed. Tested
+  by forcing `prisma.$transaction` to reject: detail and lists still return
+  200, still show EXPIRED, the EXPIRED filter still finds it, the SENT
+  filter does not — and the stored row is provably still SENT with no audit
+  row.
+- **Audited as a system action**: `quotation.expired`, `actorId` null,
+  metadata `{ number, fromStatus: SENT, toStatus: EXPIRED }`. Because the
+  UPDATE re-checks `status = 'SENT'` under the row lock, five concurrent
+  reads produce exactly one flip and one audit row (tested).
+- **Limits, stated plainly**: an expired quotation nobody opens stays SENT
+  in the table until the next quotation read in that organisation (anything
+  that queries the table directly, bypassing the service, would see the
+  stale status — which is why Reports must reuse `quotationStatusWhere`).
+  Drafts never expire. Once expired, a quotation cannot be accepted (409
+  naming the date and suggesting Duplicate).
+
+## D87 — Known deviations from the PRD in Day 5c (approved), and future items (2026-11-25)
+
+Accepted by the user as listed in the Day 5c plan; recorded here so none of
+them is mistaken for an oversight.
+
+1. **No product/service catalogue** (PRD 5.7, 13.1 "Product / Service").
+   Quotation line items are typed in (description, quantity, unit price,
+   discount %); nothing is picked from a catalogue, and there is no SKU or
+   category. **Future item: product catalogue.**
+2. **No CGST/SGST/IGST split.** One GST percentage per quotation (default
+   18%, editable), printed as one "GST (x%)" line. Intra-/inter-state
+   splitting, place of supply and HSN/SAC codes are not modelled. **Future
+   item: GST split.**
+3. **No PDF reports** (PRD 5.10 "PDF report output where useful"). Reports
+   (feature 3) will be tables, simple charts and CSV only.
+4. **Owner added to quotations.** PRD 13.1's quotation field list has no
+   owner; the brief's list filter needs one, and every other sales record
+   has one. Defaults to the creator; editable.
+5. (From D84) **The PDF is regenerated on demand, never stored**; the PRD's
+   "PDF reference" is the number + version string, not a stored file path.
+
+## D88 — A Draft with a past valid-until date cannot be marked Sent (2026-11-25)
+
+The user's answer to the open question in D83/DAY-5C-SUMMARY: sending a
+quotation that is already out of date must be refused, not allowed to turn
+Expired the moment it is sent. `changeQuotationStatus` now answers `409
+VALID_UNTIL_PASSED` — "Valid-until date has passed, change it first." —
+when the requested status is SENT and the stored valid-until date is before
+the organisation's current calendar date. Valid until *today* is still
+accepted (consistent with D86: a quotation is valid on its valid-until date).
+Nothing is written on refusal (status, sentAt and the audit log are
+unchanged — asserted). The detail page's existing confirm dialog shows the
+server's message as its error banner; no frontend change was needed. Test:
+`tests/quotations/crud.test.ts` ("refuses to send a draft whose valid-until
+date has passed…"). `docs/MANUAL-TEST-DAY5C.md` §5 rewritten: expiry can no
+longer be produced instantly through the UI, so that step now checks the
+refusal, sends with valid-until = today, and looks again the next day.
+
+## D89 — Day 5c, feature 2: Notifications — STARTED, stopped cleanly at the data layer (2026-11-25)
+
+Stopped at the user's request (usage limit). What exists, and its state:
+
+- **Migration `20261124191130_add_notifications` — complete and final for
+  the approved plan, applied nowhere yet.** One enum `notification_type`
+  (LEAD_ASSIGNED, DEAL_ASSIGNED, TASK_DUE_TODAY, TASK_OVERDUE, NEW_ENQUIRY,
+  QUOTATION_ACCEPTED, QUOTATION_REJECTED) and one table `notifications`
+  (id, organization_id, user_id → users, type, entity_id, dedupe_key NULL,
+  read_at NULL, created_at); unique (organization_id, user_id, dedupe_key)
+  — Postgres allows many NULLs, so only generated-on-load rows are
+  de-duplicated; indexes (organization_id, user_id, created_at DESC) and
+  (organization_id, user_id, read_at). Generated with `prisma migrate diff`
+  (no database touched); no hand-written CHECKs needed. Safe to apply
+  (additive, empty table, nothing reads or writes it yet).
+- **Design choice: no text and no personal data stored.** A row holds only
+  the type and the id of the record it is about (the record kind follows
+  from the type: lead, deal, activity, website submission, quotation).
+  `title`/`href` are built when the list is read, from the live record —
+  e.g. "Lead assigned to you: <current lead name>" — so no second copy of
+  a person's name is kept, and wording follows later edits.
+- **Shared schemas written and exported** (`packages/shared/src/
+  notifications.ts`): `NOTIFICATION_TYPES`, list query (`unreadOnly`),
+  response (`id, type, title, href, readAt, createdAt`), list envelope with
+  `meta.unread`, unread-count and mark-all-read envelopes.
+- **Not yet written**: the service, routes, triggers, frontend, tests, and
+  `'notifications'` in `apps/api/tests/helpers/reset-database.ts` (left out
+  on purpose: adding it before `crm_test` has the migration would fail every
+  API test at the global reset). Full remaining plan:
+  `docs/DAY-5C-HANDOVER-PROMPT.md`.
+- Verified at the stop: `pnpm typecheck` clean, `pnpm lint` 0 errors (same 3
+  older warnings), `pnpm test` apps/api 540/540, apps/web 109/109 (649).
