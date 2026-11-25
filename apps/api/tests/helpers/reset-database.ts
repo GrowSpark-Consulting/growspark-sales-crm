@@ -19,6 +19,7 @@ const APPLICATION_TABLES = [
   'lead_sources',
   'lead_status_histories',
   'leads',
+  'notifications',
   'organizations',
   'pipeline_stages',
   'pipelines',

@@ -79,7 +79,7 @@ next.
    detailed reference; skim its table of contents (the `##` headings) and
    come back to specific sections as needed rather than reading linearly
    every time.
-4. **`docs/decisions.md`** — every approved decision, D1 through D89 (D3
+4. **`docs/decisions.md`** — every approved decision, D1 through D90 (D3
    and D5 don't exist — never assigned; D83+ is Day 5c), append-only, each with the
    reasoning behind it. Don't re-litigate something already decided here
    without a new entry. D46–D50 cover all of Day 3 (lead conversion, the
@@ -261,16 +261,21 @@ specific package you're about to work on.
   committed or pushed. Later the same day: D88 (a Draft past its
   valid-until date cannot be marked Sent, tested) — counts now **apps/api
   540/540, apps/web 109/109 (649)**.
-- **Day 5c feature 2, Notifications, is STARTED but NOT done (D89).** Only
-  migration `20261124191130_add_notifications` (complete, applied nowhere)
-  and `packages/shared/src/notifications.ts` exist. No service, routes, UI
-  or tests yet. **Start here: `docs/DAY-5C-HANDOVER-PROMPT.md`** — a
-  ready-to-paste prompt with the full approved plan.
+- **Day 5c feature 2, Notifications, is done (D90, 2026-11-25).** Bell with
+  unread count in the header (polls every 60 s, paused while the tab is
+  hidden), `/notifications` page, mark one / all read; events for lead/deal
+  assignment, new website enquiry, quotation accepted/rejected, and task
+  due today/overdue (generated on app load). Both Day 5c migrations are on
+  `crm_test` and `crm_dev` (run by the user); **not yet on staging**.
+  **apps/api 572/572, apps/web 121/121 (693).** Not clicked through in a
+  browser (`docs/MANUAL-TEST-DAY5C.md` §8). PRD 5.8/5.11 gaps (deal-change
+  and invitation notifications, preferences) are reported in D90, not built.
+  For this phase the user commits and pushes; this tool does neither.
 
 ## The next work, in order
 
 Day 5c continues, each step only after the user's "continue":
-**Notifications**, then **Reports**. The full approved scope and every
+**Reports** (the last feature). The full approved scope and every
 already-made decision are in `docs/DAY-5C-HANDOVER-PROMPT.md` (a
 ready-to-paste resume prompt) — read it before starting. Day 6 (testing,
 stabilisation) comes after Day 5c; confirm its scope with the user first.

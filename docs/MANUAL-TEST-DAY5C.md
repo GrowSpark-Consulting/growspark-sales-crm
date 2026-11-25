@@ -1,4 +1,4 @@
-# Manual test script — Day 5c (Quotations; Notifications and Reports to follow)
+# Manual test script — Day 5c (Quotations, Notifications; Reports to follow)
 
 Written for someone who has never used this app before. This environment
 has no browser-automation tool, so none of this has been clicked through by
@@ -10,12 +10,12 @@ terminal.
 
 ## 0. Before you start
 
-- [ ] `pnpm db:verify-fresh` (rebuilds `crm_test` with migration
-      `20261124181711_add_quotations`), then
-      `pnpm typecheck && pnpm lint && pnpm test` — expected 648 tests: 539
-      `apps/api`, 109 `apps/web`.
-- [ ] Apply the migration to your own local database: `pnpm db:migrate`
-      (applies `20261124181711_add_quotations` to `crm_dev`; additive only).
+- [ ] `pnpm db:verify-fresh` (rebuilds `crm_test` with migrations
+      `20261124181711_add_quotations` and `20261124191130_add_notifications`),
+      then `pnpm typecheck && pnpm lint && pnpm test` — expected 693 tests:
+      572 `apps/api`, 121 `apps/web`.
+- [ ] Apply the migrations to your own local database: `pnpm db:migrate`
+      (applies both migrations above to `crm_dev`; additive only).
       Without this, every quotation screen shows an error.
 - [ ] Optional, for a realistic PDF header: copy
       `apps\api\org-details.example.json` to a file of your own (e.g.
@@ -135,6 +135,103 @@ terminal.
 ## 7. Staging (only when you choose to)
 
 - [ ] `pnpm staging:migrate` (from `apps\api`) applies
-      `20261124181711_add_quotations`.
+      `20261124181711_add_quotations` and `20261124191130_add_notifications`.
 - [ ] Optional: `pnpm staging:set-org-details --file <your file>` (dry run),
       then again with `--confirm`.
+
+## 8. Notifications
+
+You need two people signed in at once: **Admin** in a normal browser window
+and **Staff** in a private/incognito window (two windows of the same browser
+profile share one sign-in — see PROJECT-STATE §10).
+
+### 8.1 The bell and the empty page
+
+1. [ ] As **Staff**, look at the top bar, right side, just left of your
+       name. **Expected**: a bell icon. (If Staff already has overdue tasks
+       from the sample data, a red number may show — that's 8.4, fine.)
+2. [ ] Hover the bell. **Expected**: tooltip "Notifications" (or
+       "Notifications, N unread"). Click it. **Expected**: page title
+       **Notifications**; either a list or "No notifications yet" with a
+       sentence explaining what you'll be told about; buttons **All**,
+       **Unread**, and **Mark all as read** (greyed out when nothing is
+       unread).
+
+### 8.2 A lead and a deal assigned to Staff
+
+1. [ ] As **Admin**: **Leads** → **New lead**; First name `Notify`, Email
+       `notify@example.com`, **Owner** = the Staff user; **Create lead**.
+2. [ ] As **Staff**: wait up to one minute, or click back into the tab.
+       **Expected**: the bell shows **1**. Open it: "Lead assigned to you:
+       Notify", in bold, with a dot and a **Mark read** button.
+3. [ ] Click the title. **Expected**: the lead's page opens. Go back to
+       Notifications: that row is no longer bold, has no dot and no Mark
+       read; the bell's number has gone.
+4. [ ] As **Admin**: open the lead, **Edit**, change something other than
+       the owner (e.g. Job title), save. **Expected (Staff)**: nothing new.
+       Then change **Owner** to Admin, save, change it back to Staff, save.
+       **Expected (Staff)**: one new "Lead assigned to you: Notify".
+5. [ ] As **Admin**: **Deals** → **New deal** for any company, **Owner** =
+       Staff, create it. **Expected (Staff)**: "Deal assigned to you: <deal
+       name>"; clicking it opens the deal.
+6. [ ] As **Admin**, create another lead with **Owner** = Admin (yourself).
+       **Expected**: no new notification for anyone.
+7. [ ] As **Admin**, rename the first lead's first name to `Notified`.
+       **Expected (Staff)**: the existing notification now reads "Lead
+       assigned to you: Notified" (titles come from the live record).
+
+### 8.3 Quotation accepted / rejected
+
+1. [ ] As **Staff**: create a quotation (§1) and **Mark as sent**.
+2. [ ] As **Admin**: open that quotation → **Accepted** → **Mark accepted**
+       (choose **Not now** on the deal offer). **Expected (Staff)**:
+       "Quotation Q-…-… accepted (<company>)"; clicking it opens the
+       quotation.
+3. [ ] Repeat with a second Staff quotation; this time Admin clicks
+       **Rejected**. **Expected (Staff)**: "Quotation … rejected (…)".
+4. [ ] As **Staff**, send and accept a quotation you own yourself.
+       **Expected**: no notification for anyone.
+
+### 8.4 Tasks due today and overdue
+
+1. [ ] As **Admin**: open any lead → **Timeline** → add a **Task** assigned
+       to Staff, due later **today**. Add a second task assigned to Staff,
+       due **yesterday**.
+2. [ ] As **Staff**: reload any page. **Expected**: "Task due today:
+       <subject>" and "Task overdue: <subject>"; each opens the lead.
+3. [ ] Reload several times. **Expected**: still exactly one of each.
+4. [ ] Complete the due-today task (My Tasks). **Expected**: its
+       notification stays in the list (known limit, D90).
+
+### 8.5 New website enquiry
+
+1. [ ] Send one test enquiry the same way as `docs\MANUAL-TEST-DAY5A.md`,
+       with a new Idempotency-Key.
+2. [ ] **Expected**: both Admin and Staff get "New website enquiry from
+       <name>"; clicking it opens the enquiry. Sending again with the
+       **same** Idempotency-Key: no second notification.
+
+### 8.6 Mark all, Unread filter, privacy
+
+1. [ ] With two or more unread, click **Unread (N)**. **Expected**: only
+       unread rows; the address bar ends `?unread=true`; reloading keeps it.
+2. [ ] Click **Mark all as read**. **Expected**: toast "N notifications
+       marked as read."; the Unread view is empty with "You're all caught
+       up."; the bell's number disappears; the button greys out.
+3. [ ] As **Admin**, open Notifications. **Expected**: none of Staff's
+       notifications appear (each user only sees their own).
+
+### 8.7 The bell pauses while the tab is hidden
+
+1. [ ] As **Staff**, press F12 → **Network**, filter `unread-count`.
+       **Expected**: one request about every 60 seconds while the tab is in
+       front.
+2. [ ] Switch to another browser tab for 3 minutes, then come back.
+       **Expected**: no requests while you were away; one straight away when
+       you return, then every 60 seconds again.
+
+### 8.8 Both themes
+
+1. [ ] Light and dark (user menu → Theme): the bell, its red number and the
+       Notifications page (bold unread rows, the dot, the buttons) are
+       readable in both.

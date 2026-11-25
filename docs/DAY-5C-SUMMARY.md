@@ -88,3 +88,81 @@ number through one shared formatter. Full rule: D85.
   already passed can no longer be marked Sent — the server answers "Valid-
   until date has passed, change it first." (tested). Valid until *today* is
   still allowed.
+
+## 2. Notifications — done (2026-11-25)
+
+### What a user can now do
+
+- See a **bell** at the top right of every page, with a red number for
+  unread notifications. Click it to open **Notifications**.
+- On the Notifications page: see your notifications newest first, switch
+  between **All** and **Unread**, click one to open the record it's about
+  (it's marked read as you go), **Mark read** one at a time, or **Mark all as
+  read**.
+- You're told when:
+  - someone else assigns a **lead** or a **deal** to you (when it's created,
+    when its owner is changed, or when a lead conversion creates a deal for
+    you);
+  - a **website enquiry** creates a new lead (everyone active in the
+    organisation hears about it);
+  - a **quotation you own** is accepted or rejected by someone else;
+  - one of **your tasks is due today**, or is **overdue**.
+- You never see anyone else's notifications, and nobody sees yours.
+
+### How it behaves
+
+- The bell checks for news **once a minute while the tab is visible**, and
+  stops while the tab is hidden. When you come back to the tab it checks
+  straight away.
+- **Free Render server**: a visible tab makes one small request a minute,
+  so while anyone has the app open and visible, the server never sleeps.
+  A hidden tab sends nothing, so the server can sleep after about 15
+  minutes; the next visit then waits for it to wake (tens of seconds). D90
+  has the detail.
+- Task reminders are created when *you* open the app. No email, no
+  background job. "Due today" uses the organisation's time zone.
+- Nothing about the person or record is copied into the notification
+  itself: the title is built from the live record each time, so a renamed
+  lead shows its new name.
+- If writing a notification fails, the lead/deal/quotation change it was
+  about still goes through (PRD §11), and the failure is logged.
+
+### What was checked
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | clean |
+| `pnpm lint` | 0 errors (the same 3 older warnings) |
+| `pnpm test` | **apps/api 572/572** (was 540), **apps/web 121/121** (was 109), 693 total |
+| Web production build | `/notifications` compiles |
+| Running app | the new API endpoints answer 401 when not signed in; `/notifications` answers 200 |
+| Clicked through in a browser | **No**: see `MANUAL-TEST-DAY5C.md` §8 |
+
+### Tested vs. reasoning only
+
+| Requirement | Proven by |
+|---|---|
+| Isolation between users and between organisations (404, never counted) | `apps/api/tests/notifications/api.test.ts` |
+| Each trigger, including "not when you did it yourself" and "only when the owner really changes" | `tests/notifications/triggers.test.ts` |
+| Due today / overdue, org time zone, de-duplication, concurrency, batch cap | `tests/notifications/tasks.test.ts` |
+| A failed notification doesn't roll back the lead (or deal, quotation, intake) | `tests/notifications/failure.test.ts` (with a control test) |
+| Mark one read (idempotent) / read all | `api.test.ts` |
+| Bell count, 60-second polling, paused while hidden | `apps/web/tests/components/notification-bell.test.tsx` (pause test shown to fail with background polling on) |
+| Notifications page actions | `notifications-page-client.test.tsx` |
+| Render free-tier sleep behaviour | **Reasoning only**: from Render's published free-tier terms, not measured |
+| How it looks in a browser, both themes | **Not yet**: manual script |
+
+### Things to know
+
+- **Differences from the PRD, not approved deviations.** PRD 5.8 also lists
+  notifications for **deal changes** (stage moves, Won/Lost) and
+  **invitations**, and 5.11 lists **notification preferences**. None of
+  these are built. There's no invite flow at all: an Admin creates users
+  directly. "Reminders" is covered by "task due today"; the activity's own
+  reminder time isn't used. A manually created lead notifies only its owner
+  (through the assignment rule), not everyone.
+- **Limits**: the bell can be up to a minute behind; a task reminder stays
+  in the list after the task is done; at most one "overdue" per task and one
+  "due today" per task per day; up to 50 task reminders are created per page
+  load (latest due first); reassigning back and forth notifies again each
+  time; old notifications are never deleted.

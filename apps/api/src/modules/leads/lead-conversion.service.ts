@@ -5,6 +5,7 @@ import { ApiError } from '../../middleware/error-handler.js';
 import { scoped } from '../../lib/scoped.js';
 import { writeAudit } from '../../lib/audit.js';
 import { getDefaultPipeline, getFirstOpenStage } from '../../lib/pipeline.js';
+import { notifyAssignment } from '../notifications/notifications.service.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 
@@ -61,7 +62,7 @@ export async function convertLead(
   leadId: string,
   input: ConvertLeadInput,
 ): Promise<LeadConversionResponse['data']> {
-  return prisma.$transaction(async (tx) => {
+  const { result, dealOwnerId } = await prisma.$transaction(async (tx) => {
     // 1. Lock the lead row before anything else reads or writes it, so two
     // concurrent conversion attempts serialise rather than race.
     const locked = await tx.$queryRaw<{ id: string }[]>`
@@ -167,6 +168,7 @@ export async function convertLead(
     // copied from the stage, primary contact attached, first stage-history
     // row.
     let dealId: string | null = null;
+    let dealOwnerId: string | null = null;
     if (input.createDeal) {
       const pipeline = await getDefaultPipeline(tx, ctx.orgId);
       const firstStage = await getFirstOpenStage(tx, ctx.orgId, pipeline.id);
@@ -208,6 +210,7 @@ export async function convertLead(
         },
       });
       dealId = deal.id;
+      dealOwnerId = deal.ownerId;
     }
 
     // 5. Convert the lead, write its history and conversion record, repoint
@@ -246,6 +249,13 @@ export async function convertLead(
       metadata: { companyId, contactId, dealId, createdCompany, createdContact },
     });
 
-    return { leadId: lead.id, companyId, contactId, dealId, createdCompany, createdContact };
+    return { result: { leadId: lead.id, companyId, contactId, dealId, createdCompany, createdContact }, dealOwnerId };
   });
+
+  // After commit, best-effort (D90): a deal created by conversion notifies its
+  // owner like any other new deal; never rolls back or fails the conversion.
+  if (result.dealId) {
+    await notifyAssignment(ctx, 'DEAL_ASSIGNED', result.dealId, dealOwnerId);
+  }
+  return result;
 }

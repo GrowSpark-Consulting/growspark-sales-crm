@@ -20,6 +20,7 @@ import { buildOrderBy } from '../../lib/list-query.js';
 import { CSV_EXPORT_ROW_LIMIT, type CsvColumn } from '../../lib/csv.js';
 import { getDefaultPipeline, getFirstOpenStage } from '../../lib/pipeline.js';
 import { findNextActivity } from '../../lib/next-activity.js';
+import { notifyAssignment } from '../notifications/notifications.service.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Deal, Prisma } from '../../generated/prisma/client.js';
 
@@ -235,6 +236,8 @@ export async function createDeal(ctx: RequestContext, input: CreateDealInput): P
     });
     return deal;
   });
+  // After commit, best-effort (D90): never rolls back or fails the create.
+  await notifyAssignment(ctx, 'DEAL_ASSIGNED', created.id, created.ownerId);
   return toDealResponse(created);
 }
 
@@ -248,7 +251,7 @@ export async function getDeal(ctx: RequestContext, id: string): Promise<DealResp
 }
 
 export async function updateDeal(ctx: RequestContext, id: string, input: UpdateDealInput): Promise<DealResponse> {
-  const updated = await prisma.$transaction(async (tx) => {
+  const { deal: updated, previousOwnerId } = await prisma.$transaction(async (tx) => {
     const existing = await tx.deal.findFirst({ where: { id, ...scoped(ctx) } });
     if (!existing) {
       throw new ApiError(404, 'NOT_FOUND', 'Deal not found');
@@ -279,8 +282,12 @@ export async function updateDeal(ctx: RequestContext, id: string, input: UpdateD
       entityId: deal.id,
       metadata: { changedFields: Object.keys(input) },
     });
-    return deal;
+    return { deal, previousOwnerId: existing.ownerId };
   });
+  // Only a real change of owner notifies (D90) — re-saving the same owner does not.
+  if (updated.ownerId !== previousOwnerId) {
+    await notifyAssignment(ctx, 'DEAL_ASSIGNED', updated.id, updated.ownerId);
+  }
   return toDealResponse(updated);
 }
 

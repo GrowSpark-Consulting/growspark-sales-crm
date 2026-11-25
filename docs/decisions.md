@@ -3708,3 +3708,125 @@ Stopped at the user's request (usage limit). What exists, and its state:
   `docs/DAY-5C-HANDOVER-PROMPT.md`.
 - Verified at the stop: `pnpm typecheck` clean, `pnpm lint` 0 errors (same 3
   older warnings), `pnpm test` apps/api 540/540, apps/web 109/109 (649).
+
+## D90 — Day 5c, feature 2: Notifications — built as approved (2026-11-25)
+
+Resumed from D89 after the user ran `pnpm db:verify-fresh` (and `pnpm
+db:migrate` for `crm_dev`). `'notifications'` was added to
+`apps/api/tests/helpers/reset-database.ts` first, and the full API suite was
+re-run to prove the baseline still held (540/540) before any feature code.
+The migration from D89 needed no change.
+
+- **Service (`apps/api/src/modules/notifications/notifications.service.ts`).**
+  Writers: `notifyAssignment` (lead/deal; skips an unassigned record and an
+  assignment the actor made to themselves), `notifyNewEnquiry` (every
+  *active* user in the organisation; a deactivated user gets nothing),
+  `notifyQuotationDecision` (the quotation's owner, unless the owner made the
+  change), and `generateTaskNotifications`. All of them go through one
+  `insertNotifications` (`createMany({ skipDuplicates: true })`), which logs
+  (`logger.warn`) and swallows any error. Every trigger is called **after**
+  its transaction has committed, never inside it, so a failed notification
+  can neither roll back nor fail the main action (PRD §11). These writes are
+  not audited (they are not business changes, and reads/mark-read are not
+  audited anywhere else in this app), so `audit-metadata.ts` is unchanged.
+- **Triggers wired in**: `createLead`; `updateLead` (only when the owner
+  actually changes: re-saving the same owner or editing other fields
+  notifies nobody); `createDeal`; `updateDeal` (same rule); `convertLead`
+  (when it creates a deal: its owner is the chosen owner, else the lead
+  owner, else the converter); intake (only a genuinely new lead: a replay, a
+  honeypot hit or a rejection returns earlier and never notifies); and
+  `changeQuotationStatus` (ACCEPTED/REJECTED only). Each transaction now
+  also returns the previous owner, so the "changed" check needs no extra
+  query.
+- **Task due today / overdue, without a worker.** Generated for the signed-in
+  user only, on `GET /notifications` and `GET /notifications/unread-count`:
+  OPEN activities of type TASK assigned to them with `due_at` before the end
+  of the organisation's current day (`orgDayBounds`, so "today" follows the
+  organisation's time zone, not UTC; tested across the IST/UTC midnight
+  boundary). Due today → `TASK_DUE_TODAY`, key `task-due:<activityId>:<org
+  date>`; before today → `TASK_OVERDUE`, key `task-overdue:<activityId>`. The
+  unique index `(organization_id, user_id, dedupe_key)` plus
+  `skipDuplicates` makes repeated and concurrent loads safe (5 parallel
+  loads produce no duplicates, tested). **Batch cap: 50 tasks per load,
+  latest due date first** (`TASK_NOTIFICATION_BATCH_LIMIT`), so due-today
+  tasks and recent overdue ones are always covered and a long backlog of
+  very old overdue tasks can't slow every request. Best-effort: a failure
+  here never fails the read (tested by forcing the query to throw).
+- **Reading.** Titles and links are built per page with one query per record
+  kind (never per row), each organisation-scoped: "Lead assigned to you:
+  <name>", "Deal assigned to you: <name>", "Task due today: <subject>" /
+  "Task overdue: <subject>" (link: the task's linked lead/contact/company/
+  deal; every activity is linked, per the `activities_has_link` CHECK), "New
+  website enquiry from <lead name>" (link: the enquiry), "Quotation <number>
+  accepted|rejected (<company>)". A record that can't be found gets a
+  generic title, never another organisation's data (tested). Wording
+  follows later edits, because no name is stored (tested by renaming a lead).
+- **Endpoints** (`auth: 'authenticated'`, no new permission, no permission
+  table change): `GET /api/v1/notifications` (paged, `unreadOnly`,
+  `meta.unread`, newest first), `GET /api/v1/notifications/unread-count`,
+  `POST /api/v1/notifications/:id/read` (idempotent, keeps the first read
+  time), `POST /api/v1/notifications/read-all` (`{ updated }`). Every query is
+  scoped by organisation **and** user: another user's or organisation's
+  notification is a 404 and is never counted, listed or bulk-marked (tested
+  both ways).
+- **Frontend.** `hooks/use-notifications.ts`. `NotificationBell` sits in the
+  app-shell header, left of the user menu: a bell linking to
+  `/notifications`, with a badge (capped at "99+") and an accessible label
+  "Notifications, N unread". It refetches every **60 seconds**
+  (`refetchInterval`) with `refetchIntervalInBackground: false`. Checked in
+  the installed `@tanstack/query-core@5.108.0` source: an interval tick only
+  fetches when `focusManager.isFocused()`, which follows the document's
+  `visibilitychange`, and `refetchOnWindowFocus` (on by default) refetches as
+  soon as the tab is visible again. The `/notifications` page has an All /
+  Unread toggle (kept in the URL), an unread dot plus a screen-reader
+  "(unread)", "Mark read" per row and "Mark all as read" (disabled when
+  nothing is unread); opening an unread notification marks it read. Both
+  mutations refresh the list and the bell together.
+- **What this does to the free Render server (as asked).** Render's free web
+  service sleeps after about 15 minutes with no incoming requests. **A
+  visible tab sends one request a minute, so while anyone has the app open
+  and visible, the API never sleeps**, which uses free instance hours around
+  the clock. **A hidden tab (another tab in front, a minimised window, a
+  locked screen) sends nothing, so the server can sleep after ~15
+  minutes.** The next request then waits for a cold start (typically tens
+  of seconds), and the bell catches up. Each poll is cheap: the task query
+  plus the unread count, a few small indexed queries. This is Render's
+  published free-tier behaviour as understood here; check Render's current
+  pricing page before relying on the exact figures.
+- **Differences from the PRD (reported to the user; not approved
+  deviations).** PRD 5.8 lists notifications for "new leads, assignments,
+  reminders, overdue work, deal changes and invitations", and 5.11 lists
+  "notification preferences". The approved Day 5c plan covers new *website*
+  leads (a manually created lead notifies only its owner, through the
+  assignment rule), assignments, due-today tasks (standing in for
+  "reminders"; the activity `reminderAt` field is not used) and overdue
+  tasks. **Not built**: deal changes (stage moves, Won/Lost), invitations
+  (this app has no invite flow, since an Admin creates users directly), and
+  notification preferences.
+- **Limits, stated plainly.** Not real time: the bell can lag by up to 60
+  seconds. Task reminders exist only once the assignee opens the app (no
+  email, no worker). A reminder stays in the list after its task is
+  completed. Each task gets at most one "overdue" notification, ever, and at
+  most one "due today" per day. Assignment notifications are not
+  de-duplicated (reassigning A → B → A → B notifies B twice). Notifications
+  are never deleted (no retention rule yet).
+- **Tests.** API: `tests/notifications/{triggers,api,tasks,failure}.test.ts`
+  (32 tests). These include a forced `notification.createMany` failure on
+  lead create, intake, deal create and quotation accept (each still
+  succeeds with its audit row, and an intake replay still returns the same
+  lead), plus a control test proving the same request does notify when
+  nothing is forced. Web: `tests/components/notification-bell.test.tsx` and
+  `notifications-page-client.test.tsx` (12 tests). The polling-pause test
+  was shown to fail (6 requests while hidden instead of none) with
+  `refetchIntervalInBackground` temporarily set to `true`, then restored
+  (D75's discipline).
+- **Verified**: `pnpm typecheck` clean; `pnpm lint` 0 errors (the same 3
+  older web warnings); `pnpm test` **apps/api 572/572 (up from 540), apps/web
+  121/121 (up from 109), 693 total**; no pg deprecation warning; `pnpm
+  --filter web build` lists `/notifications` (built alongside the user's
+  running `next dev`, which Next 16 keeps in a separate `.next/dev` folder,
+  per the installed docs); read-only smoke against the user's running dev
+  servers (web PID 6960, API PID 9784, left untouched): both new GET
+  endpoints answer 401 without a session, and `/notifications` answers 200.
+  Not clicked through in a browser. Not committed (the user commits and
+  pushes); nothing run against staging or written to `crm_dev`.

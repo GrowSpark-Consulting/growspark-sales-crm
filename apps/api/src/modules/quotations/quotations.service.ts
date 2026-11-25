@@ -23,6 +23,7 @@ import { orgDateKey } from '../../lib/org-time.js';
 import { calculateQuotationTotals, toMoneyString, type MoneyLineInput } from '../../lib/quotation-money.js';
 import { allocateQuotationNumber } from '../../lib/quotation-number.js';
 import { logger } from '../../logger.js';
+import { notifyQuotationDecision } from '../notifications/notifications.service.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Quotation, QuotationLineItem } from '../../generated/prisma/client.js';
 
@@ -460,7 +461,13 @@ export async function changeQuotationStatus(
     });
     return { quotationId: existing.id, fromStatus: current };
   });
-  return { quotation: await loadQuotationResponse(quotationId, todayKey), fromStatus };
+  const quotation = await loadQuotationResponse(quotationId, todayKey);
+  // After commit, best-effort (D90): the owner hears about an accept/reject
+  // made by someone else; never rolls back or fails the status change.
+  if (input.status === 'ACCEPTED' || input.status === 'REJECTED') {
+    await notifyQuotationDecision(ctx, quotation.id, quotation.ownerId, input.status);
+  }
+  return { quotation, fromStatus };
 }
 
 export async function duplicateQuotation(ctx: RequestContext, id: string, now = new Date()): Promise<QuotationResponse> {

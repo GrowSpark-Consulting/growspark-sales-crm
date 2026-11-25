@@ -281,6 +281,22 @@ tested) and the start of Notifications (D89 — migration
 not written). **Current counts: apps/api 540/540, apps/web 109/109 (649).**
 Resume from `docs/DAY-5C-HANDOVER-PROMPT.md`.
 
+**Update, 2026-11-25 (later) — Day 5c, feature 2 of 3 (Notifications) is
+done (D90).** The user applied both Day 5c migrations to `crm_test`
+(`pnpm db:verify-fresh`) and `crm_dev` (`pnpm db:migrate`); still not on
+staging. In-app only: a bell with an unread count in the app-shell header
+(polls every 60 s, paused while the tab is hidden), a `/notifications` page,
+mark one read / mark all read. Events: lead or deal assigned to someone else
+(create, owner change, deal created by conversion), new website enquiry to
+every active user, quotation accepted/rejected to its owner, and task due
+today / overdue generated when the user loads the app (org time zone,
+de-duplicated, capped at 50 per load). All written after the main
+transaction commits, best-effort. No new permission, dependency or
+migration change. PRD 5.8/5.11 items **not** built: deal-change and
+invitation notifications, notification preferences (reported, D90).
+**apps/api 572/572, apps/web 121/121 (693).** Next: Reports, after the
+user's "continue".
+
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
@@ -1898,6 +1914,7 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D87 — Approved PRD deviations (no catalogue, no GST split, no PDF reports, owner added) and future items
 - D88 — A Draft with a past valid-until date cannot be marked Sent (409 VALID_UNTIL_PASSED)
 - D89 — Notifications started: migration `20261124191130_add_notifications` + shared schemas only; no text/personal data stored, titles built at read time
+- D90 — Notifications built: service, four endpoints (org + user scoped), triggers after commit (best-effort), task reminders on load (dedupe keys, 50 cap), bell polling 60 s paused when hidden, Render free-tier effect, PRD 5.8/5.11 gaps reported
 
 ## 10. Gotchas and lessons learned
 
@@ -2352,13 +2369,9 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   Docker packaging, the P0 freeze) is not yet
   detailed in this repo — confirm exact scope with the user before starting
   it. *(Superseded: Day 5b was then built — see §1 and D76–D82.)*
-- **Day 5c is in progress (2026-11-25).** Quotations is done (§1, D83–D87,
-  `docs/DAY-5C-SUMMARY.md`). Next, each after the user's "continue":
-  **Notifications** (in-app bell, list, mark read/all read; events: lead or
-  deal assigned to me, task due today/overdue generated on app load with
-  de-duplication, new website enquiry to every active user, quotation
-  accepted/rejected to its owner; written after the main transaction
-  commits; polling paused while the tab is hidden), then **Reports**
+- **Day 5c is in progress (2026-11-25).** Quotations (D83–D88) and
+  Notifications (D90) are done (§1, `docs/DAY-5C-SUMMARY.md`). Next, after
+  the user's "continue": **Reports**
   (`reports:read`; pipeline by stage, lead sources and conversion, sales by
   owner, quotations summary — must reuse `quotationStatusWhere` (D86) —
   overdue tasks by owner; date range; CSV per report; reconciliation test
@@ -3454,3 +3467,33 @@ log just records that a session happened and what it covered.
   warnings); `pnpm test` **apps/api 540/540, apps/web 109/109 (649)**.
   Nothing committed or pushed; nothing run against staging or `crm_dev`.
   Resume with `docs/DAY-5C-HANDOVER-PROMPT.md`.
+
+### 2026-11-25 (evening) — Day 5c, feature 2: Notifications finished (D90)
+
+- The user started Docker and ran `pnpm db:verify-fresh` and `pnpm
+  db:migrate` themselves (both Day 5c migrations now on `crm_test` and
+  `crm_dev`; not staging). Rule confirmed for this phase: the user commits
+  and pushes; this tool does neither.
+- Added `'notifications'` to `tests/helpers/reset-database.ts`; full API
+  suite re-run first: 540/540 baseline held.
+- Built: `apps/api/src/modules/notifications/` (service + routes, registered
+  in `app.ts`); after-commit triggers in `leads.service.ts`,
+  `deals.service.ts`, `lead-conversion.service.ts`, `intake.service.ts`,
+  `quotations.service.ts`; web `hooks/use-notifications.ts`,
+  `components/notifications/{notification-bell,notifications-page-client}.tsx`,
+  `app/(protected)/notifications/page.tsx`, bell + page title in
+  `app-shell.tsx`. Tests: 4 API files (32), 2 web files (12).
+- Test fixtures first failed on the `activities_has_link` and
+  `activities_done_has_completed_at` CHECKs and on quotation totals being
+  required (fixtures fixed; no code change). The polling-pause test was
+  shown to fail with background polling on, then restored.
+- Verified: `pnpm typecheck` clean; `pnpm lint` 0 errors (3 older warnings);
+  `pnpm test` **apps/api 572/572, apps/web 121/121 (693)**; `pnpm --filter
+  web build` lists `/notifications`; read-only smoke against the user's
+  running dev servers (web PID 6960, API PID 9784; not touched): new GETs
+  answer 401 unauthenticated, `/notifications` 200. Not clicked through in
+  a browser. Not committed; nothing run against staging; nothing written to
+  `crm_dev`.
+- Reported to the user: PRD 5.8/5.11 items not in the approved plan
+  (deal-change and invitation notifications, notification preferences), and
+  the Render free-tier effect of polling. Next: Reports, on "continue".

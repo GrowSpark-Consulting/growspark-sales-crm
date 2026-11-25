@@ -20,6 +20,7 @@ import { buildOrderBy } from '../../lib/list-query.js';
 import { CSV_EXPORT_ROW_LIMIT, type CsvColumn } from '../../lib/csv.js';
 import { findDuplicateLeads } from '../../lib/duplicates.js';
 import { findNextActivity } from '../../lib/next-activity.js';
+import { notifyAssignment } from '../notifications/notifications.service.js';
 import type { RequestContext } from '../../lib/context.js';
 import type { Lead, Prisma } from '../../generated/prisma/client.js';
 
@@ -235,6 +236,9 @@ export async function createLead(ctx: RequestContext, input: CreateLeadInput): P
     return lead;
   });
 
+  // After commit, best-effort (D90): never rolls back or fails the create.
+  await notifyAssignment(ctx, 'LEAD_ASSIGNED', created.id, created.ownerId);
+
   const duplicates = await findDuplicateLeads(
     ctx,
     { emailNormalized, phoneNormalized, companyNameNormalized },
@@ -266,7 +270,7 @@ export async function updateLead(
   id: string,
   input: UpdateLeadInput,
 ): Promise<LeadMutationResult> {
-  const updated = await prisma.$transaction(async (tx) => {
+  const { lead: updated, previousOwnerId } = await prisma.$transaction(async (tx) => {
     const existing = await tx.lead.findFirst({ where: { id, ...scoped(ctx) } });
     if (!existing) {
       throw new ApiError(404, 'NOT_FOUND', 'Lead not found');
@@ -325,8 +329,13 @@ export async function updateLead(
       entityId: lead.id,
       metadata: { changedFields: Object.keys(input) },
     });
-    return lead;
+    return { lead, previousOwnerId: existing.ownerId };
   });
+
+  // Only a real change of owner notifies (D90) — re-saving the same owner does not.
+  if (updated.ownerId !== previousOwnerId) {
+    await notifyAssignment(ctx, 'LEAD_ASSIGNED', updated.id, updated.ownerId);
+  }
 
   const duplicates =
     input.email !== undefined || input.phone !== undefined || input.companyName !== undefined

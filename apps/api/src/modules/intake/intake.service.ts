@@ -3,6 +3,7 @@ import { prisma } from '../../db/prisma.js';
 import { ApiError } from '../../middleware/error-handler.js';
 import { findDuplicateLeads } from '../../lib/duplicates.js';
 import { mapIntakeFields } from './intake-mapping.js';
+import { notifyNewEnquiry } from '../notifications/notifications.service.js';
 import type { ApiKeyContext } from '../../lib/context.js';
 import type { Prisma, WebsiteSubmission } from '../../generated/prisma/client.js';
 
@@ -233,6 +234,11 @@ export async function processWebsiteIntake(
   }
 
   const { submissionId, leadId } = await createLeadFromIntake(apiKeyCtx, idempotencyKey, rawBody, input);
+
+  // After commit, best-effort (PRD §11, D90): a failed notification must not
+  // roll back — or fail the response for — a valid lead. Only a real new lead
+  // notifies: replays, spam and rejections return earlier and never reach here.
+  await notifyNewEnquiry(apiKeyCtx.organizationId, submissionId);
 
   // D71 / "already done": findDuplicateLeads now takes { orgId } rather than
   // a full RequestContext, so the intake path (no human user) can call it.
