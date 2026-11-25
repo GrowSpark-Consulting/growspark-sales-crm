@@ -122,13 +122,13 @@ Do steps 1–8 on **Leads → New lead**; then repeat steps 1, 3 and 5 on
 Organisation** (Admin).
 
 1. [ ] **Expected**: a country box showing "India (+91)" and an empty number
-       box with "0/10" at its right edge. Open the country list: India first,
+       box (no digit counter inside it). Open the country list: India first,
        then countries A–Z.
 2. [ ] Type `98a40-0`. **Expected**: only `9840` appears (letters and symbols
-       are ignored); the counter reads "4/10".
+       are ignored).
 3. [ ] Keep typing until there are 10 digits, then type one more digit.
        **Expected**: the 11th digit does not appear; a grey note "India (+91)
-       numbers have at most 10 digits."; the counter stays "10/10".
+       numbers have at most 10 digits." under the field.
 4. [ ] Clear the box and type `0`. **Expected**: nothing appears (a leading 0
        is dropped). Type `098400 12345`. **Expected**: `9840012345`.
 5. [ ] Clear the box and paste (Ctrl+V) each of these in turn, clearing
@@ -137,7 +137,7 @@ Organisation** (Admin).
        - `098400 12345`
        - `919840012345`
 6. [ ] Paste `+44 20 7946 0958`. **Expected**: the country switches to
-       "United Kingdom (+44)", the box shows `2079460958`, counter "10/10".
+       "United Kingdom (+44)", and the box shows `2079460958`.
        Clear the digits: the country stays United Kingdom.
 7. [ ] Choose India again and paste `98400 1234 5678` (14 digits).
        **Expected**: nothing is pasted, and a grey note says the number has 14
@@ -166,7 +166,7 @@ Organisation** (Admin).
         **Expected**: Asha and Ravi Ready (phones +91 98400 12345 and
         +91 98450 67890 after import); Meera an Error (the phone "12345" is not
         recognisable).
-13. [ ] Light and Dark theme: the counter and the notes are readable.
+13. [ ] Light and Dark theme: the notes under the field are readable.
 
 ## 4. My Tasks — "Assigned to" (D100)
 

@@ -55,11 +55,11 @@ export interface PhoneInputProps {
  *   rules live in packages/shared `parsePhoneInput`). A paste that is still
  *   too long, or has an unknown country code, is refused with a message —
  *   never silently cut short.
- * - A live "7/10" counter. "Too short"/"invalid" messages come from the
- *   shared Zod rule (`phoneFieldSchema`), the same one the server applies.
+ * - No digit counter (removed at the user's request after D99). "Too
+ *   short"/"invalid" messages come from the shared Zod rule
+ *   (`phoneFieldSchema`), the same one the server applies.
  */
 export function PhoneInput({ value, onChange, onBlur, className, id, ...aria }: PhoneInputProps) {
-  const counterId = useId();
   const messageId = useId();
   const initial = splitPhone(value ?? "");
   const [countryCode, setCountryCode] = useState(initial.countryCode);
@@ -133,7 +133,7 @@ export function PhoneInput({ value, onChange, onBlur, className, id, ...aria }: 
     emit(parsed.countryCode, parsed.nationalDigits);
   }
 
-  const describedBy = [aria["aria-describedby"], counterId, message ? messageId : undefined].filter(Boolean).join(" ");
+  const describedBy = [aria["aria-describedby"], message ? messageId : undefined].filter(Boolean).join(" ");
 
   return (
     <div className={cn("space-y-1", className)}>
@@ -157,33 +157,21 @@ export function PhoneInput({ value, onChange, onBlur, className, id, ...aria }: 
             ))}
           </SelectContent>
         </Select>
-        <div className="relative flex-1">
-          <Input
-            id={id}
-            type="tel"
-            inputMode="numeric"
-            autoComplete="tel-national"
-            placeholder={countryCode === DEFAULT_COUNTRY_CALLING_CODE ? "e.g. 9840012345" : "Digits only"}
-            aria-label={aria["aria-label"] ?? "Phone number"}
-            aria-invalid={aria["aria-invalid"]}
-            aria-describedby={describedBy}
-            className="pr-14"
-            value={number}
-            onChange={(event) => handleType(event.target.value)}
-            onPaste={handlePaste}
-            onBlur={onBlur}
-          />
-          <span
-            id={counterId}
-            className={cn(
-              "pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-xs tabular-nums",
-              number.length > max ? "text-danger" : "text-ink-muted"
-            )}
-          >
-            {number.length}/{max}
-            <span className="sr-only"> digits</span>
-          </span>
-        </div>
+        <Input
+          id={id}
+          type="tel"
+          inputMode="numeric"
+          autoComplete="tel-national"
+          placeholder={countryCode === DEFAULT_COUNTRY_CALLING_CODE ? "e.g. 9840012345" : "Digits only"}
+          aria-label={aria["aria-label"] ?? "Phone number"}
+          aria-invalid={aria["aria-invalid"]}
+          aria-describedby={describedBy || undefined}
+          className="flex-1"
+          value={number}
+          onChange={(event) => handleType(event.target.value)}
+          onPaste={handlePaste}
+          onBlur={onBlur}
+        />
       </div>
       {message && (
         <p id={messageId} role="status" className="text-xs text-ink-muted">

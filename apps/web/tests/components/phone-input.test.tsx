@@ -34,7 +34,6 @@ describe("PhoneInput (D41: country-code select + number, composed into/out of on
     render(<PhoneInput value="" onChange={vi.fn()} />);
     expect(countryTrigger().textContent).toContain("India (+91)");
     expect(numberBox().value).toBe("");
-    expect(screen.getByText("0/10")).toBeTruthy();
   });
 
   it("typing digits emits a combined +91 E.164 string", () => {
@@ -90,7 +89,6 @@ describe("PhoneInput typing limits (D99)", () => {
     const onChange = vi.fn();
     render(<Controlled onValue={onChange} />);
     fireEvent.change(numberBox(), { target: { value: "9840012345" } });
-    expect(screen.getByText("10/10")).toBeTruthy();
     onChange.mockClear();
 
     fireEvent.change(numberBox(), { target: { value: "98400123456" } });
@@ -103,10 +101,11 @@ describe("PhoneInput typing limits (D99)", () => {
     expect(numberBox().value).toBe("9840012345");
   });
 
-  it("shows a live counter against the country's limit", () => {
-    render(<Controlled />);
+  it("shows no digit counter (removed after D99), and no note until a digit is refused", () => {
+    const { container } = render(<Controlled />);
     fireEvent.change(numberBox(), { target: { value: "9840012" } });
-    expect(screen.getByText("7/10")).toBeTruthy();
+    expect(container.textContent).not.toMatch(/\d+\/\d+/);
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
   it("forwards the form field's id to the digits box, so its label points at it", () => {
@@ -142,7 +141,6 @@ describe("PhoneInput paste handling (D99)", () => {
     expect(countryTrigger().textContent).toContain("United Kingdom (+44)");
     expect(numberBox().value).toBe("2079460958");
     expect(onChange).toHaveBeenLastCalledWith("+442079460958");
-    expect(screen.getByText("10/10")).toBeTruthy();
   });
 
   it("a paste that is still too long is refused with a message, never cut short", () => {
