@@ -3,7 +3,7 @@ import request from 'supertest';
 import { normalizeCompanyName } from '@growspark/shared';
 import { createApp } from '../../src/app.js';
 import { prisma } from '../../src/db/prisma.js';
-import { createTestTenant } from '../helpers/tenant.js';
+import { createTestTenant, createTestCompany } from '../helpers/tenant.js';
 import { createSession } from '../../src/lib/session.js';
 import { ALLOWED_ORIGIN, sessionCookieHeader } from '../helpers/http.js';
 
@@ -69,15 +69,24 @@ describe('Contacts CRUD', () => {
     expect(restoreRes.body.data.archivedAt).toBeNull();
   });
 
-  it('a contact can be created with no company at all', async () => {
+  it('D98: a contact cannot be created without a company (422 naming the field)', async () => {
     const tenant = await createTestTenant();
     const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
     const app = createApp();
     const api = authed(app, token);
 
-    const res = await api.post('/api/v1/contacts', { firstName: 'Independent', email: 'independent@example.com' });
-    expect(res.status).toBe(201);
-    expect(res.body.data.companyId).toBeNull();
+    for (const body of [
+      { firstName: 'Independent', email: 'independent@example.com' },
+      { firstName: 'Independent', email: 'independent@example.com', companyId: null },
+      { firstName: 'Independent', email: 'independent@example.com', companyId: '' },
+    ]) {
+      const res = await api.post('/api/v1/contacts', body);
+      expect(res.status).toBe(422);
+      expect(res.body.error.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: 'companyId', message: 'A company is required' })]),
+      );
+    }
+    expect(await prisma.contact.count({ where: { organizationId: tenant.organization.id } })).toBe(0);
   });
 
   it('rejects a companyId that does not belong to the organisation (404)', async () => {
@@ -100,7 +109,7 @@ describe('Contacts CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/contacts', {
+    const createRes = await api.post('/api/v1/contacts', { companyId: (await createTestCompany(tenant.organization.id)).id,
       firstName: 'Staff Created',
       email: 'staff.created@example.com',
     });
@@ -118,8 +127,8 @@ describe('Contacts CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    await api.post('/api/v1/contacts', { firstName: 'First', email: 'shared@example.com' });
-    const secondRes = await api.post('/api/v1/contacts', { firstName: 'Second', email: 'Shared@Example.com' });
+    await api.post('/api/v1/contacts', { companyId: (await createTestCompany(tenant.organization.id)).id, firstName: 'First', email: 'shared@example.com' });
+    const secondRes = await api.post('/api/v1/contacts', { companyId: (await createTestCompany(tenant.organization.id)).id, firstName: 'Second', email: 'Shared@Example.com' });
 
     expect(secondRes.status).toBe(201);
     expect(secondRes.body.duplicates.length).toBe(1);
@@ -132,7 +141,7 @@ describe('Contacts CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const res = await api.post('/api/v1/contacts', { firstName: '   ' });
+    const res = await api.post('/api/v1/contacts', { companyId: (await createTestCompany(tenant.organization.id)).id, firstName: '   ' });
     expect(res.status).toBe(422);
   });
 
@@ -142,7 +151,7 @@ describe('Contacts CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/contacts', {
+    const createRes = await api.post('/api/v1/contacts', { companyId: (await createTestCompany(tenant.organization.id)).id,
       firstName: 'Double Archive',
       email: 'double-archive@example.com',
     });
@@ -168,7 +177,7 @@ describe('Contacts CRUD', () => {
     expect(res.status).toBe(404);
   });
 
-  it('can re-point a contact to a different company, or detach it, via PATCH', async () => {
+  it('can re-point a contact to a different company via PATCH, but not detach it (D98)', async () => {
     const tenant = await createTestTenant();
     const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
     const app = createApp();
@@ -193,8 +202,16 @@ describe('Contacts CRUD', () => {
     expect(moveRes.body.data.companyId).toBe(companyB.id);
 
     const detachRes = await api.patch(`/api/v1/contacts/${contactId}`, { companyId: null });
-    expect(detachRes.status).toBe(200);
-    expect(detachRes.body.data.companyId).toBeNull();
+    expect(detachRes.status).toBe(422);
+    const stored = await prisma.contact.findUniqueOrThrow({ where: { id: contactId } });
+    expect(stored.companyId).toBe(companyB.id);
+
+    // An older contact with no company (created before D98) can still be
+    // edited without being given one — only *removing* a company is blocked.
+    await prisma.contact.update({ where: { id: contactId }, data: { companyId: null } });
+    const legacyEdit = await api.patch(`/api/v1/contacts/${contactId}`, { jobTitle: 'Buyer' });
+    expect(legacyEdit.status).toBe(200);
+    expect(legacyEdit.body.data.companyId).toBeNull();
   });
 
   it('D41: accepts a valid E.164 +91 phone, and rejects one with 11+ digits (422)', async () => {
@@ -203,10 +220,10 @@ describe('Contacts CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const validRes = await api.post('/api/v1/contacts', { firstName: 'Valid Phone', phone: '+919876543210' });
+    const validRes = await api.post('/api/v1/contacts', { companyId: (await createTestCompany(tenant.organization.id)).id, firstName: 'Valid Phone', phone: '+919876543210' });
     expect(validRes.status).toBe(201);
 
-    const invalidRes = await api.post('/api/v1/contacts', {
+    const invalidRes = await api.post('/api/v1/contacts', { companyId: (await createTestCompany(tenant.organization.id)).id,
       firstName: 'Too Many Digits',
       phone: '+9198765432109',
     });
@@ -219,10 +236,10 @@ describe('Contacts CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const phoneOnlyRes = await api.post('/api/v1/contacts', { firstName: 'Phone Only', phone: '+919876543210' });
+    const phoneOnlyRes = await api.post('/api/v1/contacts', { companyId: (await createTestCompany(tenant.organization.id)).id, firstName: 'Phone Only', phone: '+919876543210' });
     expect(phoneOnlyRes.status).toBe(201);
 
-    const neitherRes = await api.post('/api/v1/contacts', { firstName: 'No Contact Method' });
+    const neitherRes = await api.post('/api/v1/contacts', { companyId: (await createTestCompany(tenant.organization.id)).id, firstName: 'No Contact Method' });
     expect(neitherRes.status).toBe(422);
   });
 
@@ -232,7 +249,7 @@ describe('Contacts CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/contacts', {
+    const createRes = await api.post('/api/v1/contacts', { companyId: (await createTestCompany(tenant.organization.id)).id,
       firstName: 'Both Contacts',
       email: 'both@example.com',
       phone: '+919876543210',

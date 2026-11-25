@@ -194,4 +194,22 @@ describe('Companies CRUD', () => {
     });
     expect(invalidRes.status).toBe(422);
   });
+
+  it('D99: the server applies the per-country digit table and says what is wrong', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const api = authed(createApp(), token);
+
+    const ukTooShort = await api.post('/api/v1/companies', { name: 'UK Co', phone: '+442012345' });
+    expect(ukTooShort.status).toBe(422);
+    expect(ukTooShort.body.error.details).toEqual([{ path: 'phone', message: 'Enter 9–10 digits for United Kingdom (+44)' }]);
+
+    const landline = await api.post('/api/v1/companies', { name: 'Chennai Co', phone: '+914423456789' });
+    expect(landline.status).toBe(201);
+    expect(landline.body.data.phone).toBe('+914423456789');
+
+    const leadingZero = await api.post('/api/v1/companies', { name: 'Zero Co', phone: '+910984001234' });
+    expect(leadingZero.status).toBe(422);
+    expect(leadingZero.body.error.details).toEqual([{ path: 'phone', message: 'Leave out the leading 0' }]);
+  });
 });

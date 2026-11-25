@@ -4244,3 +4244,301 @@ permission.**
   PID 3764 — `tsx watch` restarted its own child; nothing stopped by this
   tool): preview and template answer 401 unauthenticated, both import pages
   200. Not clicked through in a browser.
+
+## D96 — Day 6b: approved PRD deviations (bulk operations, calendar view, enquiry read/unread) and the Day 6b plan (2026-11-25)
+
+The user approved these three PRD items as **approved deviations** — not
+built, by decision, not by oversight:
+
+1. **Bulk operations on lists** — PRD 5.3: "Search, filters, sorting, bulk
+   operations and duplicate detection." No list page has row selection or
+   any bulk action (bulk assign, bulk archive, bulk status change). PRD §07
+   already places "bulk assignment" among later-phase lead operations.
+2. **Calendar view** — PRD 5.6: "Today's activities, upcoming items, overdue
+   tasks and calendar view." Activities are shown in My Tasks (Open/Overdue/
+   Done tabs, due-date range filter), on Today and on record timelines; there
+   is no month/week calendar. PRD §07 puts external calendar integration in a
+   later phase.
+3. **Enquiry read/unread** — PRD 5.8: "Enquiries Inbox for website form
+   submissions, with read/unread, filters and lead context." The Enquiries
+   inbox (D71–D73) has filters, spam/archive and lead context, but no
+   per-user or shared read/unread state.
+
+**Day 6b plan (approved the same day)**, one item at a time, each recorded in
+its own decision: D97 pickers show options as soon as they are opened; D98
+required fields (first name + company name + email or phone on leads and
+contacts; company: name only; deals and quotations unchanged; website
+enquiries exempt; source optional everywhere); D99 one shared phone input
+with per-country digit limits (India: 10 digits, not starting with 0 —
+landlines allowed); D100 My Tasks "Assigned to" filter (Me by default). No
+migration, no new dependency, no permission change planned.
+
+## D97 — Day 6b, item 1: pickers show options as soon as they are opened (2026-11-25)
+
+- **One shared component**, `apps/web/components/pickers/record-combobox.tsx`
+  (`RecordCombobox`). `CompanySelect` and `ContactSelect` are now thin
+  wrappers around it with the same props as before (no caller changed), plus
+  a new `CompanyFilter` for list pages.
+- **Behaviour**: opening (focus, click or ↓) fetches the first **20 records
+  A–Z** (`PICKER_PAGE_SIZE`; companies by name, contacts by first name) with
+  no typing; typing narrows through the existing `?q=` search (300 ms
+  debounce). A status line under the list says "Loading…" (first load),
+  "Searching…" (the previous results stay visible while a narrower search
+  runs — no blank list on a slow server), "No companies match …", "Showing
+  20 of 134 · type to search more", or the count. Results are cached for
+  30 s under the record type's own query-key root, so reopening is instant
+  and the existing invalidations after a create/edit refresh it. Nothing is
+  fetched until a picker is opened. Archived and other-organisation records
+  are excluded by the existing list endpoints — no API change. A grey second
+  line (company industry; contact email or job title) tells same-named
+  records apart. Reopening a filled picker shows the whole first page with
+  the current pick ticked, not a one-row search for its name.
+- **Keyboard**: ↓/↑ open and move, Enter picks, Esc closes, Tab leaves;
+  `aria-activedescendant` now announces the highlighted option (missing
+  before); the form field's `id`/`aria-invalid`/`aria-describedby` are
+  forwarded to the input. **Small deviation from the plan**: Home/End keep
+  moving the text cursor (the WAI-ARIA editable-combobox pattern) instead of
+  jumping in the list.
+- **Coverage** — every picker in the app:
+  - `CompanySelect` (now opens with options): Contact form, Deal form,
+    Quotation form, Convert dialog.
+  - `ContactSelect` (now opens with options): Quotation form (the chosen
+    company's contacts), Deal → Contacts tab (the deal's company's
+    contacts), Convert dialog.
+  - Company filter on the **Deals** and **Quotations** lists: was a plain
+    Select of the first 100 companies (later ones could not be picked); now
+    `CompanyFilter` with "Any company" first. In filter mode typing does not
+    clear the current filter (the list doesn't jump while searching);
+    leaving the box without picking puts the current name back.
+  - Already compliant, unchanged: `OwnerSelect`/assignee (all active users),
+    the Quotation form's Deal select (the chosen company's deals, up to 100,
+    archived excluded), and every fixed list (source, stage, status,
+    priority, type, role, import column mapping).
+  - There is **no lead picker** anywhere in the app. Global search (D94)
+    deliberately still needs 2 characters.
+- **Known gap reported, not changed**: the Deals list's *Company column* and
+  the pipeline board's card subtitle look company names up from the first
+  100 companies only (deal responses carry `companyId`, not the name), so
+  with more than 100 companies some deals show "—". Fixing it means adding
+  the company name to deal list responses (an API change) — the user's call.
+- **Tests**: web `tests/components/record-combobox.test.tsx` (13): opens with
+  20 A–Z and the hint without typing; nothing fetched before opening;
+  narrowing via `q`; no matches; loading state on a slow server; previous
+  results kept while searching; keyboard incl. `aria-activedescendant`;
+  reopening a filled picker; typing clears a form pick; load error;
+  ContactSelect sends `companyId`; CompanyFilter's "Any company",
+  keep-while-typing and restore-on-leave; filtering on a company beyond the
+  first page. **Shown to fail with the guard removed** (fetch only once
+  something is typed — the old behaviour): 9 of 13 fail; restored.
+- **Verified**: `pnpm typecheck` clean; `pnpm lint` 0 errors (the same 3
+  older warnings); **apps/api 644/644, apps/web 160/160 (804)**, run one
+  after the other; `pnpm --filter web build` passes. Not clicked through in a
+  browser.
+
+## D98 — Day 6b, item 2: required fields — company on leads and contacts, source optional everywhere (2026-11-25)
+
+Approved by the user as recommended. **No migration, no database constraint
+added or removed.**
+
+**Required sets now** (`*` in every form; enforced by the shared Zod schemas,
+so the API and the CSV import apply the same rules):
+
+| Record | Required |
+|---|---|
+| Lead | First name, **company name (new)**, email or phone |
+| Contact | First name, **company (new)**, email or phone |
+| Company | Name (unchanged — companies made by conversion and import have no phone/email) |
+| Deal | Name, company (unchanged; stage defaults to the first open stage) |
+| Quotation | Company, contact, ≥ 1 line with description, quantity, unit price (unchanged) |
+
+- **First name stays required**: data quality, conversion needs it for the
+  contact, and the existing CHECKs `leads_first_name_not_blank` /
+  `contacts_first_name_not_blank` protect stored rows — not touched.
+- **Leads** (`packages/shared/src/leads.ts`): `companyName` is required on
+  create ("Company name is required", also for a missing or whitespace-only
+  value). `updateLeadSchema` is the same field set made partial, so a PATCH
+  may leave it out (older leads without a company keep working — status
+  changes, owner changes, conversion) but can never blank it.
+- **Contacts** (`packages/shared/src/contacts.ts`): `companyId` is a required
+  UUID ("A company is required"); on update it may be left out but no longer
+  accepts `null`, so a company can be changed but not removed. The service's
+  old "disconnect" branch is gone. New `contactImportRowSchema` = every
+  contact rule except the company id, which the import resolves from the
+  row's company name afterwards.
+- **Website enquiries are exempt**: intake creates leads through its own
+  mapper, not `createLeadSchema`, and never rejects a submission for a
+  missing company (tested).
+- **CSV import**: both entities need a Company column ("Choose a column for
+  Company (each row needs one)."); a row with a blank company is an Error
+  ("Company name is required."); the mapping hints say "Required on every
+  row"; the wizard's intro now says "Each row needs a first name, a company
+  and an email or phone." **This changes some expected results in
+  `docs/MANUAL-TEST-DAY6A.md` §5** — updated there.
+- **No database constraint** for the company: existing rows may have none.
+- **Source is optional everywhere** (it already was server-side: a new lead
+  without one gets the system "Manual" source, because `leads.source_id` is
+  NOT NULL and the lead-source report depends on it; deals allow "No source";
+  an import's blank or unknown source becomes "Import"; filters are all
+  optional; companies, contacts and quotations have no source). New on the
+  lead form: **"Not specified (saved as Manual)"**, the default on New lead.
+  Edit lead has no such option: the lead keeps its current source.
+- **Two pre-existing bugs found and fixed while building this** (both
+  reproduced by a failing test first):
+  1. **New lead without a source could not be saved**: the form's blank
+     Source value is `""`, which the shared UUID rule rejected client-side
+     ("Invalid UUID" under Source). The lead form now accepts `""` (stripped
+     before submit, so the server picks "Manual").
+  2. **The company box blanked itself right after a pick** on the Deal,
+     Quotation and Contact forms: those forms store only the id and look the
+     name up afterwards, and the picker re-synced its text to the still-empty
+     name. `RecordCombobox` now remembers the name it just picked until the
+     form's own name arrives (and updates when it does). This lived in the old
+     `CompanySelect`/`ContactSelect` too.
+- **Tests**: API — new `D98` tests in `tests/leads/crud.test.ts` (missing /
+  blank / whitespace company → 422 naming the field; cannot blank on update;
+  an older company-less lead can still be edited and moved between statuses),
+  `tests/contacts/crud.test.ts` (no / null / "" company → 422; re-point
+  allowed, detach 422; an older company-less contact still editable),
+  `tests/intake/success.test.ts` (an enquiry without a company still creates
+  a lead), `tests/imports/leads-import.test.ts` (rows without a company are
+  errors; missing Company column is a mapping error), and the contacts import
+  ("No Company" row is now an error). About 50 existing test payloads gained
+  a company (`createTestCompany` helper added to `tests/helpers/tenant.ts`);
+  two conversion tests that model a company-less lead now blank it directly
+  in the database, as a pre-D98 or website lead would be. Web — lead form
+  (company required; submits without a source; editing a company-less lead
+  asks for one; "Not specified" default), contact dialog (company required, no
+  request sent), picker (keeps the picked name). **Shown to fail with the
+  rule removed** (shared schemas reverted to optional): the three D98 API
+  tests fail; restored.
+- **Verified**: `pnpm typecheck` clean; `pnpm lint` 0 errors (the same 3
+  older warnings); **apps/api 647/647, apps/web 164/164 (811)**, run one
+  after the other; `pnpm --filter web build` passes. Not clicked through in a
+  browser.
+
+## D99 — Day 6b, item 3: one shared phone input, limited while typing (2026-11-25)
+
+Approved by the user with **Indian numbers = 10 digits, not starting with 0
+(landlines allowed)**. No new dependency (no phone library); no migration.
+
+- **Where phones are typed** — all now use the one `PhoneInput`
+  (`apps/web/components/ui/phone-input.tsx`): Lead form, Contact form,
+  Company form, and **Organisation settings** (was a free-text box). Users
+  have **no phone field**, so none was added.
+- **Country table** (`packages/shared/src/phone.ts`, `COUNTRY_CALLING_CODES`):
+  each code has the min/max length of its national number (without the
+  trunk "0"). India first and default (10–10), then A–Z: Australia 9,
+  Bahrain 8, Bangladesh 8–10, China 9–11, France 9, Germany 6–13 (its
+  E.164 cap), Hong Kong 8, Japan 9–10, Kuwait 8, Malaysia 8–10, Nepal 8–10,
+  Netherlands 9, New Zealand 8–10, Oman 8, Qatar 8, Saudi Arabia 8–9,
+  Singapore 8, South Africa 9, Sri Lanka 9, UAE 8–9, United Kingdom 9–10,
+  US/Canada 10. Eleven countries were added to the previous twelve. The list
+  stays closed (no free-typed codes). `phoneDigitLimits()` falls back to the
+  E.164 maximum (15 digits including the code) for a code outside the table.
+  A test checks every entry fits E.164 and every code matches itself.
+- **Rule** (`isValidPhoneNumber`, used by the input, the server and the
+  import): the country is in the table, digits only, **not starting with 0**,
+  length within the country's range. **India: exactly 10 digits, first digit
+  1–9** — mobiles and landlines with their STD code (44 2345 6789,
+  11 2345 6789). This *loosens* India (was 6–9 only), so every stored Indian
+  number stays valid. It *tightens* other countries (was any 7–15 digits): a
+  stored foreign number outside its new range still displays, and its edit
+  form flags it.
+- **Typing**: digits only (letters and symbols ignored), a typed leading 0
+  dropped (`cleanTypedPhoneDigits`); once the limit is reached a further
+  digit is refused — the box does not change, and a quiet note says "India
+  (+91) numbers have at most 10 digits." (also for a digit typed in the
+  middle: nothing is pushed off the end). A live counter ("7/10") sits inside
+  the box, red if a country change leaves too many digits.
+- **Paste** (`parsePhoneInput`): "+91 98400-12345", "0091 98400 12345",
+  "098400 12345", "919840012345" (India selected) → +91 / 9840012345;
+  "+44 (0)20 7946 0958" switches to UK / 2079460958; digits pasted at the
+  cursor are joined to what is there. **A paste still too long, or with an
+  unknown country code, is refused with a message and nothing changes —
+  never truncated**, because cutting digits could make a different
+  valid-looking number.
+- **Messages**: only for too short or invalid numbers, from the shared Zod
+  rule (`phoneFieldSchema`, now `superRefine` with a specific message), so
+  the browser and the server say the same thing: "Enter all 10 digits of the
+  number for India (+91)", "Enter 9–10 digits for United Kingdom (+44)",
+  "Leave out the leading 0", "Choose a country code from the list".
+- **Server keeps validating**: unchanged schemas on every create/update route
+  now carry the new rule (tested at the endpoint).
+- **Stored values**: clean E.164 values load as before. An older value that
+  needs cleaning (e.g. digits saved without "+" by website intake, or
+  free text in the organisation phone) is shown cleaned and sent up once on
+  load, so what is shown is what is saved; unreadable text shows its digits
+  under India for the user to fix. Display formatting is unchanged.
+- **Organisation phone** (`packages/shared/src/settings.ts`): now held to the
+  same rule; free text ("044 4000 1234", "+91 44 4000 1234") is cleaned the
+  way a paste is, so `pnpm org:set-details` keeps accepting a readable
+  number in its JSON file; unreadable text is refused with the specific
+  message.
+- **CSV import**: phones go through `normalizePhoneInput` (the same paste
+  clean-up, default India) instead of `parsePhoneLenient` + the strict check,
+  so "098400 12345" and "91-98450-67890" now import; "12345" is still an
+  error with the same message as before.
+- **Website intake** is unchanged: `parsePhoneLenient`, never rejects.
+- **Tests**: API `tests/shared/phone.test.ts` rewritten for the table (26:
+  India incl. landlines and leading 0, per-country ranges, the E.164 guard on
+  every entry, longest-prefix matching, typing clean-up, every paste shape,
+  refusal instead of truncation, import normaliser, messages);
+  endpoint tests in `tests/companies/crud.test.ts` (UK too short → 422 with
+  the message; landline accepted; leading 0 refused),
+  `tests/settings/organization.test.ts` (free text cleaned; too short 422;
+  clearing), `tests/imports/leads-import.test.ts` (five phone shapes). Web
+  `tests/components/phone-input.test.tsx` (22: letters ignored, leading 0
+  dropped, 11th digit refused incl. in the middle, counter, id forwarding,
+  four India paste shapes, country switch, too-long and unknown-code pastes
+  refused, paste at the cursor, clearing keeps the country, older value
+  cleaned and sent once, clean value not re-sent). **Shown to fail with the
+  guard removed** (length limit and paste refusal disabled): 3 tests fail;
+  restored.
+- **Verified**: `pnpm typecheck` clean; `pnpm lint` 0 errors (the same 3
+  older warnings); **apps/api 657/657, apps/web 180/180 (837)**, run one
+  after the other; `pnpm --filter web build` passes. Not clicked through in a
+  browser.
+
+## D100 — Day 6b, item 4: My Tasks shows the signed-in user's tasks by default ("Assigned to") (2026-11-25)
+
+Approved by the user: an **"Assigned to" dropdown** (Assigned to me —
+default, Everyone, then each active user by name), kept in the page address,
+instead of a plain Mine/Everyone toggle.
+
+- **Before**: `/tasks` sent no assignee filter, so "My Tasks" listed every
+  task in the organisation.
+- **Now** (`apps/web/components/tasks/tasks-page-client.tsx`): the URL param
+  `assignee` is absent (= me), `all`, or a user id; a refresh or a shared link
+  keeps the choice, and changing it resets to page 1 like every other filter.
+  "Me" sends `assigneeId=<signed-in user>` (from `/auth/me`); **nothing is
+  fetched until that is known**, so everyone's tasks never flash up first.
+  Everyone sends no filter. A colleague's id sends theirs. The signed-in user
+  is not repeated in the name list ("Assigned to me" covers them).
+- **Assigned to column** appears whenever the view is not your own tasks:
+  "You", the person's name, "Unassigned", or "Former user" (an assignee no
+  longer in the active-user list). A user id in the address that is not in
+  the active list stays selectable as "Former user".
+- **Same meaning of "mine" as Today and Home** (D54/D57): tasks *assigned* to
+  me (`assigneeId`). New activities are assigned to their creator by default
+  (D51), so a task someone creates for themselves shows under Me; a task that
+  was explicitly unassigned appears only under Everyone.
+- **No API change**: `GET /activities?assigneeId=` already existed and is
+  organisation-scoped. A dedicated API test now covers it (only that person's
+  tasks; another organisation's user id matches nothing). Role permissions
+  are unchanged — Staff can still choose Everyone, as before (PRD §4:
+  ownership is accountability metadata, not a visibility barrier).
+- The empty state names who the list is for ("…assigned to you / to Asha Rao
+  will show up here.").
+- **Tests**: web `tests/components/tasks-page-client.test.tsx` — harness now
+  answers `/auth/me` and `/users/options`; new: default view sends the
+  signed-in user's id and makes **no** activity request before `/auth/me`
+  answers, no column for your own list; `assignee=all` sends no filter and
+  shows the column (You / a name / Unassigned); a colleague's id filters to
+  them and the dropdown shows their name. API
+  `tests/activities/activities.test.ts` (the assignee filter). **Shown to fail
+  with the guard removed** (default view sending no filter): the default-view
+  test fails; restored.
+- **Verified**: `pnpm typecheck` clean; `pnpm lint` 0 errors (the same 3
+  older warnings); **apps/api 658/658, apps/web 183/183 (841)**, run one
+  after the other; `pnpm --filter web build` passes. Not clicked through in a
+  browser.

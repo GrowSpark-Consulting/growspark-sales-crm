@@ -37,7 +37,7 @@ import { CompanySelect } from "@/components/pickers/company-select";
 /** Exported so a test can assert the cleanup's reset target is genuinely blank (D42). */
 export function contactToFormValues(contact: ContactResponse | undefined, lockedCompanyId: string | undefined): CreateContactInput {
   return {
-    companyId: lockedCompanyId ?? contact?.companyId ?? undefined,
+    companyId: lockedCompanyId ?? contact?.companyId ?? "",
     firstName: contact?.firstName ?? "",
     lastName: contact?.lastName ?? "",
     email: contact?.email ?? "",
@@ -134,7 +134,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit contact" : "Add contact"}</DialogTitle>
           <DialogDescription>
-            {lockedCompany ? `Linked to ${lockedCompany.name}.` : "A contact can optionally belong to a company."}
+            {lockedCompany ? `Linked to ${lockedCompany.name}.` : "Every contact belongs to a company."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -264,7 +264,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                 name="companyId"
                 render={({ field }) => (
                   <FormItem className="sm:col-span-2">
-                    <FormLabel>Company</FormLabel>
+                    <FormLabel>Company *</FormLabel>
                     <FormControl>
                       {lockedCompany ? (
                         <Input value={lockedCompany.name} disabled />
@@ -277,7 +277,7 @@ export function ContactFormDialog({ contact, lockedCompany, trigger }: ContactFo
                               ? { id: field.value, name: existingCompanyQuery.data?.data.name ?? "" }
                               : undefined
                           }
-                          onValueChange={(company) => field.onChange(company?.id)}
+                          onValueChange={(company) => field.onChange(company?.id ?? "")}
                         />
                       )}
                     </FormControl>

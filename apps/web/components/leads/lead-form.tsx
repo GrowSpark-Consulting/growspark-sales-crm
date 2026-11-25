@@ -32,6 +32,10 @@ import { priorityLabel } from "@/lib/lead-presentation";
 // same issue, same fix, as Company's companyFormSchema (D38).
 const leadBaseFormFields = {
   ...leadCreatableFields,
+  // D98: the Source select's "nothing chosen" value is "" (stripped before
+  // submit, so the server picks "Manual"). The shared field only accepts a
+  // UUID, which made a sourceless new lead fail here with "Invalid UUID".
+  sourceId: z.union([z.literal(""), leadCreatableFields.sourceId.unwrap()]).optional(),
   estimatedBudget: z.union([z.number().nonnegative("Estimated budget cannot be negative"), z.string().regex(/^\d+(\.\d{1,2})?$/, "Enter a valid amount")]).optional(),
 };
 
@@ -51,6 +55,9 @@ const createLeadFormSchema = z
 const editLeadFormSchema = z.object(leadBaseFormFields).refine(emailOrPhoneRefine.check, emailOrPhoneRefine.options);
 
 type LeadFormValues = CreateLeadInput;
+
+/** Select items cannot have an empty value; this stands for "no source chosen" (D98). */
+const NOT_SPECIFIED = "__not_specified";
 
 /** Exported so a test can assert the cleanup's reset target is genuinely blank (D42). */
 export function leadToFormValues(lead?: LeadResponse): LeadFormValues {
@@ -259,7 +266,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             name="companyName"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Company name</FormLabel>
+                <FormLabel>Company name *</FormLabel>
                 <FormControl>
                   <Input
                     {...field}
@@ -318,13 +325,20 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Source</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
+                {/* D98: optional. A new lead saved without one gets the system
+                    "Manual" source (the column is NOT NULL); an existing lead
+                    keeps its source, so the clearing option is create-only. */}
+                <Select
+                  value={field.value || (mode === "create" ? NOT_SPECIFIED : "")}
+                  onValueChange={(next) => field.onChange(next === NOT_SPECIFIED ? "" : next)}
+                >
                   <FormControl>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Select a source" />
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
+                    {mode === "create" && <SelectItem value={NOT_SPECIFIED}>Not specified (saved as Manual)</SelectItem>}
                     {sources.map((source) => (
                       <SelectItem key={source.id} value={source.id}>
                         {source.label}

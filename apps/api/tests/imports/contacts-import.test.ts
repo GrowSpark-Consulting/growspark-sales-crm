@@ -37,17 +37,19 @@ describe('CSV import — contacts', () => {
 
     const preview = await staff.preview('contacts', csv);
     expect(preview.body.data.mapping).toEqual(MAPPING);
-    expect(preview.body.data.summary).toMatchObject({ ready: 5, errors: 1, companiesToCreate: ['Sample Textiles', 'Old Mills'] });
+    expect(preview.body.data.summary).toMatchObject({ ready: 4, errors: 2, companiesToCreate: ['Sample Textiles', 'Old Mills'] });
     const rows = preview.body.data.rows as ImportPreviewRow[];
     expect(rows.map((row) => row.createsCompany)).toEqual([false, true, true, true, false, false]);
     expect(rows[1]!.notes).toContain('Will create company "Sample Textiles".');
+    // D98: a contact needs a company — a row without one is an error.
+    expect(rows[4]).toMatchObject({ status: 'error', errors: ['Company name is required.'] });
     // A row that will not be imported never creates a company.
     expect(preview.body.data.summary.companiesToCreate).not.toContain('Never Made Ltd');
     expect(await prisma.company.count({ where: { organizationId: tenant.organization.id } })).toBe(2);
 
     const commit = await staff.commit('contacts', csv, MAPPING);
     expect(commit.status).toBe(200);
-    expect(commit.body.data).toMatchObject({ imported: 5, errors: 1, skippedDuplicates: 0, companiesCreated: 2 });
+    expect(commit.body.data).toMatchObject({ imported: 4, errors: 2, skippedDuplicates: 0, companiesCreated: 2 });
 
     const contacts = await prisma.contact.findMany({ where: { organizationId: tenant.organization.id }, include: { company: true } });
     const byEmail = Object.fromEntries(contacts.map((contact) => [contact.email, contact]));
@@ -57,7 +59,7 @@ describe('CSV import — contacts', () => {
     expect(byEmail['karthik@example.test']!.company!.name).toBe('Sample Textiles');
     // An archived company is never linked: a fresh one is created instead.
     expect(byEmail['arun@example.test']!.companyId).not.toBe(archived.id);
-    expect(byEmail['nocompany@example.test']!.companyId).toBeNull();
+    expect(byEmail['nocompany@example.test']).toBeUndefined();
     expect(await prisma.company.count({ where: { organizationId: tenant.organization.id, name: 'Never Made Ltd' } })).toBe(0);
 
     const audits = await prisma.auditEvent.findMany({ where: { organizationId: tenant.organization.id } });
@@ -66,9 +68,9 @@ describe('CSV import — contacts', () => {
       origin: 'csv_import',
       entity: 'contacts',
       totalRows: 6,
-      imported: 5,
+      imported: 4,
       skippedDuplicates: 0,
-      errors: 1,
+      errors: 2,
       blankRowsSkipped: 0,
       companiesCreated: 2,
     });
@@ -82,9 +84,9 @@ describe('CSV import — contacts', () => {
     });
     const csv = csvLines(
       'Name,Email,Phone,Company,Title',
-      'One,gone@example.test,,,',
-      'Two,twice@example.test,,,',
-      'Three,TWICE@example.test,,,',
+      'One,gone@example.test,,Dup Co,',
+      'Two,twice@example.test,,Dup Co,',
+      'Three,TWICE@example.test,,Dup Co,',
     );
     const staff = await importApi(app, tenant);
     const commit = await staff.commit('contacts', csv, MAPPING);
@@ -99,12 +101,16 @@ describe('CSV import — contacts', () => {
     const permissions = ROLE_PERMISSIONS[ROLES.STAFF] as unknown as string[];
     const original = [...permissions];
     const withCompany = csvLines('Name,Email,Phone,Company,Title', 'Meera,meera@example.test,,Brand New Co,');
-    const withoutCompany = csvLines('Name,Email,Phone,Company,Title', 'Meera,meera@example.test,,,');
+    // D98: every contact needs a company; linking an existing one needs no companies:write.
+    await company(tenant, 'example foods');
+    const withoutCompany = csvLines('Name,Email,Phone,Company,Title', 'Meera,meera@example.test,,Example Foods,');
     try {
       permissions.splice(permissions.indexOf(PERMISSIONS.COMPANIES_WRITE), 1);
       expect((await staff.commit('contacts', withCompany, MAPPING)).status).toBe(403);
       expect(await prisma.contact.count({ where: { organizationId: tenant.organization.id } })).toBe(0);
-      expect((await staff.commit('contacts', withoutCompany, MAPPING)).status).toBe(200);
+      const linked = await staff.commit('contacts', withoutCompany, MAPPING);
+      expect(linked.status).toBe(200);
+      expect(linked.body.data).toMatchObject({ imported: 1, companiesCreated: 0 });
       permissions.splice(permissions.indexOf(PERMISSIONS.CONTACTS_WRITE), 1);
       expect((await staff.preview('contacts', withoutCompany)).status).toBe(403);
     } finally {
@@ -132,7 +138,7 @@ describe('CSV import — contacts', () => {
     const app = createApp();
     const tenant = await createTestTenant();
     const staff = await importApi(app, tenant);
-    const exported = '﻿' + csvLines('First name,Last name,Email,Phone', "Asha,Rao,asha@example.test,'+919840012345");
+    const exported = '﻿' + csvLines('First name,Last name,Email,Phone,Company', "Asha,Rao,asha@example.test,'+919840012345,Example Foods");
     const preview = await staff.preview('contacts', exported);
     expect(preview.body.data.rows[0]).toMatchObject({ status: 'ok', phone: '+919840012345' });
   });

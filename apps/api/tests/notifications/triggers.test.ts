@@ -16,7 +16,7 @@ async function stored(tenant: TestTenant, userId: string) {
 }
 
 function leadBody(tenant: TestTenant, extra: object = {}) {
-  return { firstName: 'Asha', lastName: 'Rao', email: 'asha@example.test', sourceId: tenant.leadSource.id, ...extra };
+  return { firstName: 'Asha', lastName: 'Rao', email: 'asha@example.test', companyName: 'Fixture Co', sourceId: tenant.leadSource.id, ...extra };
 }
 
 function dealBody(companyId: string, extra: object = {}) {

@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { hash } from '@node-rs/argon2';
+import { normalizeCompanyName } from '@growspark/shared';
 import { prisma } from '../../src/db/prisma.js';
-import type { User, Organization, LeadSource, Pipeline, PipelineStage } from '../../src/generated/prisma/client.js';
+import type { Company, User, Organization, LeadSource, Pipeline, PipelineStage } from '../../src/generated/prisma/client.js';
 
 /** Fixed, dev-only passwords — fine to hard-code, these never touch a real database. */
 export const TEST_ADMIN_PASSWORD = 'Correct-Horse-Admin-1';
@@ -101,4 +102,14 @@ export async function createTestTenant(namePrefix = 'Test Org'): Promise<TestTen
 /** Two independent tenants, for cross-organisation data-isolation tests. */
 export async function createTwoTestTenants(): Promise<[TestTenant, TestTenant]> {
   return Promise.all([createTestTenant('Org A'), createTestTenant('Org B')]);
+}
+
+/**
+ * D98: every contact now needs a company. A throwaway company in one
+ * organisation, for tests whose subject is not the company itself.
+ */
+export async function createTestCompany(organizationId: string, name = `Fixture Co ${randomUUID().slice(0, 8)}`): Promise<Company> {
+  return prisma.company.create({
+    data: { organizationId, name, nameNormalized: normalizeCompanyName(name)! },
+  });
 }

@@ -15,7 +15,10 @@ function optionalTrimmed(max: number) {
  * instead of `createContactSchema.partial()`.
  */
 export const contactCreatableFields = {
-  companyId: z.uuid().nullable().optional(),
+  // D98: a contact belongs to a company — required on create; on update it
+  // may be left out (older contacts without one keep working) but not
+  // cleared (no null).
+  companyId: z.uuid('A company is required'),
   firstName: z.string().trim().min(1, 'First name is required').max(200, 'First name is too long'),
   lastName: optionalTrimmed(200),
   email: z.string().trim().max(320, 'Email is too long').optional(),
@@ -42,6 +45,17 @@ export const contactEmailOrPhoneRefine = {
 
 export const createContactSchema = z
   .object(contactCreatableFields)
+  .refine(contactEmailOrPhoneRefine.check, contactEmailOrPhoneRefine.options);
+
+/**
+ * D98: the contacts CSV import validates each row with this — every rule of
+ * createContactSchema except the company id, which the import resolves (or
+ * creates) from the row's company *name* after validation. The import
+ * requires that name itself.
+ */
+export const contactImportRowSchema = z
+  .object(contactCreatableFields)
+  .omit({ companyId: true })
   .refine(contactEmailOrPhoneRefine.check, contactEmailOrPhoneRefine.options);
 export type CreateContactInput = z.infer<typeof createContactSchema>;
 

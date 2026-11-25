@@ -166,7 +166,7 @@ export async function createContact(
     const contact = await tx.contact.create({
       data: {
         organizationId: ctx.orgId,
-        companyId: input.companyId ?? null,
+        companyId: input.companyId,
         firstName: input.firstName,
         lastName: input.lastName ?? null,
         email: input.email ?? null,
@@ -228,9 +228,8 @@ export async function updateContact(
     }
 
     const data: Prisma.ContactUpdateInput = {
-      ...(input.companyId !== undefined
-        ? { company: input.companyId ? { connect: { id: input.companyId } } : { disconnect: true } }
-        : {}),
+      // D98: the schema no longer accepts null, so a company can be changed but never removed.
+      ...(input.companyId !== undefined ? { company: { connect: { id: input.companyId } } } : {}),
       ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
       ...(input.lastName !== undefined ? { lastName: blankToNull(input.lastName) } : {}),
       ...(input.email !== undefined

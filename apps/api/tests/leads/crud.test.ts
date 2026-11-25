@@ -24,7 +24,7 @@ describe('Leads CRUD', () => {
       data: { organizationId: tenant.organization.id, name: 'Manual', sortOrder: 2 },
     });
     const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
-    const res = await authed(createApp(), token).post('/api/v1/leads', {
+    const res = await authed(createApp(), token).post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'No source selected', email: 'nosource@example.com',
     });
     expect(res.status).toBe(201);
@@ -37,7 +37,7 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/leads', {
+    const createRes = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Asha',
       lastName: 'Rao',
       email: 'asha.rao@example.com',
@@ -84,7 +84,7 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const res = await api.post('/api/v1/leads', {
+    const res = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Phone Only',
       phone: '+919876543210',
       sourceId: tenant.leadSource.id,
@@ -98,7 +98,7 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const res = await api.post('/api/v1/leads', { firstName: 'No Contact', sourceId: tenant.leadSource.id });
+    const res = await api.post('/api/v1/leads', { companyName: 'Fixture Co', firstName: 'No Contact', sourceId: tenant.leadSource.id });
     expect(res.status).toBe(422);
   });
 
@@ -108,7 +108,7 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const res = await api.post('/api/v1/leads', {
+    const res = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: '  ',
       email: 'blank@example.com',
       sourceId: tenant.leadSource.id,
@@ -122,7 +122,7 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const res = await api.post('/api/v1/leads', {
+    const res = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Bad Source',
       email: 'bad-source@example.com',
       sourceId: '00000000-0000-7000-8000-000000000000',
@@ -136,7 +136,7 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/leads', {
+    const createRes = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Immutable',
       email: 'immutable@example.com',
       sourceId: tenant.leadSource.id,
@@ -165,7 +165,7 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/leads', {
+    const createRes = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Both Contacts',
       email: 'both@example.com',
       phone: '+919876543210',
@@ -187,7 +187,7 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/leads', {
+    const createRes = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Staff Created',
       email: 'staff-created@example.com',
       sourceId: tenant.leadSource.id,
@@ -206,12 +206,12 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    await api.post('/api/v1/leads', {
+    await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'First',
       email: 'dup@example.com',
       sourceId: tenant.leadSource.id,
     });
-    const secondRes = await api.post('/api/v1/leads', {
+    const secondRes = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Second',
       email: 'Dup@Example.com',
       sourceId: tenant.leadSource.id,
@@ -228,7 +228,7 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/leads', {
+    const createRes = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Existing',
       email: 'check@example.com',
       sourceId: tenant.leadSource.id,
@@ -249,7 +249,7 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/leads', {
+    const createRes = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Double Archive',
       email: 'double-archive@example.com',
       sourceId: tenant.leadSource.id,
@@ -282,18 +282,48 @@ describe('Leads CRUD', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const validRes = await api.post('/api/v1/leads', {
+    const validRes = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Valid Phone',
       phone: '+919876543210',
       sourceId: tenant.leadSource.id,
     });
     expect(validRes.status).toBe(201);
 
-    const invalidRes = await api.post('/api/v1/leads', {
+    const invalidRes = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'Too Many Digits',
       phone: '+9198765432109',
       sourceId: tenant.leadSource.id,
     });
     expect(invalidRes.status).toBe(422);
+  });
+
+  it('D98: a lead needs a company name on create, it cannot be blanked later, and older leads without one stay editable', async () => {
+    const tenant = await createTestTenant();
+    const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
+    const api = authed(createApp(), token);
+
+    for (const companyName of [undefined, '', '   ']) {
+      const res = await api.post('/api/v1/leads', { firstName: 'No Company', email: 'nocompany@example.com', companyName });
+      expect(res.status).toBe(422);
+      expect(res.body.error.details).toEqual(
+        expect.arrayContaining([expect.objectContaining({ path: 'companyName', message: 'Company name is required' })]),
+      );
+    }
+    expect(await prisma.lead.count({ where: { organizationId: tenant.organization.id } })).toBe(0);
+
+    const created = await api.post('/api/v1/leads', { firstName: 'Has Company', email: 'has@example.com', companyName: 'Example Foods', sourceId: tenant.leadSource.id });
+    expect(created.status).toBe(201);
+    const leadId = created.body.data.id as string;
+    const blanked = await api.patch(`/api/v1/leads/${leadId}`, { companyName: '  ' });
+    expect(blanked.status).toBe(422);
+    expect((await prisma.lead.findUniqueOrThrow({ where: { id: leadId } })).companyName).toBe('Example Foods');
+
+    // A lead from before D98 (or a website enquiry) with no company: other edits still work.
+    await prisma.lead.update({ where: { id: leadId }, data: { companyName: null, companyNameNormalized: null } });
+    const legacyEdit = await api.patch(`/api/v1/leads/${leadId}`, { jobTitle: 'Buyer' });
+    expect(legacyEdit.status).toBe(200);
+    expect(legacyEdit.body.data.companyName).toBeNull();
+    const status = await api.post(`/api/v1/leads/${leadId}/status`, { status: 'CONTACTED' });
+    expect(status.status).toBe(200);
   });
 });

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { manualEntryPhoneProblem, normalizePhoneInput, parsePhoneInput, phoneNumberProblem } from './phone.js';
 
 /**
  * Settings (Day 6a, D93). Every write here is Admin-only (settings:manage);
@@ -19,6 +20,31 @@ const optionalText = (max: number) =>
     .optional()
     .transform((value) => (value === '' ? null : value));
 
+/**
+ * D99: the organisation's phone, checked like every other phone in the app.
+ * Free text such as "+91 44 4000 1234" or "044 4000 1234" (an older stored
+ * value, or a value in the `org:set-details` JSON file) is first cleaned up
+ * the same way a paste into the phone input is; what cannot be read as a
+ * complete number is refused with the same message the input shows.
+ */
+const organizationPhone = z
+  .string()
+  .trim()
+  .max(40)
+  .nullable()
+  .optional()
+  .transform((value) => (value === '' ? null : value && (normalizePhoneInput(value) ?? value)))
+  .superRefine((value, ctx) => {
+    if (!value) return;
+    let problem = manualEntryPhoneProblem(value);
+    if (problem && !value.startsWith('+')) {
+      // Unreadable free text: say why (too short, too long, no digits).
+      const parsed = parsePhoneInput(value);
+      problem = parsed.ok ? (phoneNumberProblem(parsed.countryCode, parsed.nationalDigits) ?? problem) : parsed.message;
+    }
+    if (problem) ctx.addIssue({ code: 'custom', message: problem });
+  });
+
 /** Indian GSTIN: 2-digit state code, 10-character PAN, entity digit, "Z", checksum character. */
 export const GSTIN_PATTERN = /^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
@@ -38,7 +64,7 @@ export const organizationDetailsSchema = z
     state: optionalText(100),
     postalCode: optionalText(20),
     country: optionalText(100),
-    phone: optionalText(40),
+    phone: organizationPhone,
     email: z
       .union([z.email('Not a valid email address'), z.literal(''), z.null()])
       .optional()

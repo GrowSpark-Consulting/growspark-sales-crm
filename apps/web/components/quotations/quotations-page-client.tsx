@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useQuotationsList } from "@/hooks/use-quotations";
 import { useUserOptions } from "@/hooks/use-user-options";
-import { useCompaniesList } from "@/hooks/use-companies";
 import { useListUrlState } from "@/hooks/use-list-url-state";
+import { CompanyFilter } from "@/components/pickers/company-filter";
 import { formatDate } from "@/lib/format";
 import { quotationStatusBadgeVariant, quotationStatusLabel } from "@/lib/quotation-presentation";
 
@@ -45,8 +45,6 @@ export function QuotationsPageClient() {
   });
   const { data: userOptions } = useUserOptions();
   const owners = userOptions?.data ?? [];
-  const { data: companiesData } = useCompaniesList({ pageSize: 100, sort: "name:asc" });
-  const companies = companiesData?.data ?? [];
 
   const columns: DataTableColumn<QuotationResponse>[] = [
     {
@@ -171,19 +169,7 @@ export function QuotationsPageClient() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={companyId ?? ANY} onValueChange={(value) => setParams({ companyId: value === ANY ? undefined : value })}>
-              <SelectTrigger className="w-44" aria-label="Filter by company">
-                <SelectValue placeholder="Any company" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ANY}>Any company</SelectItem>
-                {companies.map((company) => (
-                  <SelectItem key={company.id} value={company.id}>
-                    {company.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CompanyFilter companyId={companyId} onCompanyIdChange={(next) => setParams({ companyId: next })} />
             <Select value={ownerId ?? ANY} onValueChange={(value) => setParams({ ownerId: value === ANY ? undefined : value })}>
               <SelectTrigger className="w-40" aria-label="Filter by owner">
                 <SelectValue placeholder="Any owner" />

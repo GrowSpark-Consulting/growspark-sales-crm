@@ -50,14 +50,21 @@ export { normalizeEmail, normalizePhone, normalizeCompanyName } from './normaliz
 export {
   COUNTRY_CALLING_CODES,
   DEFAULT_COUNTRY_CALLING_CODE,
+  E164_MAX_DIGITS,
   matchCountryCallingCode,
+  phoneDigitLimits,
+  phoneNumberProblem,
   isValidPhoneNumber,
+  manualEntryPhoneProblem,
   isValidManualEntryPhone,
   toE164,
+  cleanTypedPhoneDigits,
+  parsePhoneInput,
+  normalizePhoneInput,
   phoneFieldSchema,
   parsePhoneLenient,
 } from './phone.js';
-export type { CountryCallingCode } from './phone.js';
+export type { CountryCallingCode, ParsedPhoneInput } from './phone.js';
 export { LEAD_STATUSES, leadStatusSchema, OPEN_LEAD_STATUSES, openLeadStatusSchema } from './lead-statuses.js';
 export type { LeadStatus, OpenLeadStatus } from './lead-statuses.js';
 export { PRIORITIES, prioritySchema } from './priorities.js';
@@ -83,6 +90,7 @@ export type {
 export {
   contactCreatableFields,
   createContactSchema,
+  contactImportRowSchema,
   updateContactSchema,
   listContactsQuerySchema,
   contactResponseSchema,

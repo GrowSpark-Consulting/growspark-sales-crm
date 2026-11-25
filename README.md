@@ -37,13 +37,16 @@ from the start).
 | Settings (organisation profile, lead sources, pipeline stages, My profile + change password) | Done |
 | Global search (top bar, Ctrl+K; leads, contacts, companies, deals, quotations) | Done |
 | CSV import of leads and contacts (map columns, row-by-row preview, duplicate skip, errors file) | Done |
+| Day 6b refinements: pickers that list options on open, company required on leads/contacts, one phone input with per-country digit limits, My Tasks "Assigned to" | Done |
 
 Not built yet (see `docs/decisions.md` and the project state docs for the
 full P0/P1/P2 breakdown): a product/service catalogue and a CGST/SGST/IGST
 split for quotations (future items, D87), notification preferences and
 deal-change notifications (future items, D91), PDF reports (D87), custom
-fields and saved filters (D93), Excel (.xlsx) import (D95), self-service
-password reset, and everything explicitly scoped to P1/P2 in the roadmap.
+fields and saved filters (D93), Excel (.xlsx) import (D95), bulk operations
+on lists, a calendar view and enquiry read/unread (approved deviations, D96),
+self-service password reset, and everything explicitly scoped to P1/P2 in the
+roadmap.
 
 ## Stack
 
@@ -247,7 +250,7 @@ numbered D1 onward). A few that shape how the code reads:
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
-Current count: **apps/api 644 tests, apps/web 147 tests — 791 total**, all
+Current count: **apps/api 658 tests, apps/web 183 tests — 841 total**, all
 against a real Postgres test database (`crm_test`), not mocked — including
 RBAC/permission matrix tests, the lead-conversion transaction (with a real
 concurrency/rollback test), dashboard-metric reconciliation against

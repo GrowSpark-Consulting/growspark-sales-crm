@@ -92,4 +92,26 @@ describe('Settings — organisation profile', () => {
     expect(orgB.city).toBeNull();
     expect((await adminA.get('/api/v1/settings/organization')).body.data.name).toBe(a.organization.name);
   });
+
+  it('D99: the organisation phone is held to the shared phone rules; older free text is cleaned up the same way a paste is', async () => {
+    const tenant = await createTestTenant();
+    const admin = await adminApi(tenant);
+
+    const clean = await admin.patch('/api/v1/settings/organization', { phone: '+914440001234' });
+    expect(clean.status).toBe(200);
+    expect(clean.body.data.phone).toBe('+914440001234'); // a Chennai landline (D99: allowed)
+
+    const freeText = await admin.patch('/api/v1/settings/organization', { phone: '044 4000 5678' });
+    expect(freeText.status).toBe(200);
+    expect(freeText.body.data.phone).toBe('+914440005678');
+
+    const tooShort = await admin.patch('/api/v1/settings/organization', { phone: '12345' });
+    expect(tooShort.status).toBe(422);
+    expect(tooShort.body.error.details).toEqual([{ path: 'phone', message: 'Enter all 10 digits of the number for India (+91)' }]);
+    const stored = await prisma.organization.findUniqueOrThrow({ where: { id: tenant.organization.id } });
+    expect(stored.phone).toBe('+914440005678');
+
+    const cleared = await admin.patch('/api/v1/settings/organization', { phone: '' });
+    expect(cleared.body.data.phone).toBeNull();
+  });
 });

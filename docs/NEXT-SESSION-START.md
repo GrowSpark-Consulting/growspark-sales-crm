@@ -79,8 +79,9 @@ next.
    detailed reference; skim its table of contents (the `##` headings) and
    come back to specific sections as needed rather than reading linearly
    every time.
-4. **`docs/decisions.md`** — every approved decision, D1 through D95 (D3
-   and D5 don't exist — never assigned; D83–D92 is Day 5c, D93+ Day 6a), append-only, each with the
+4. **`docs/decisions.md`** — every approved decision, D1 through D100 (D3
+   and D5 don't exist — never assigned; D83–D92 is Day 5c, D93–D95 Day 6a,
+   D96–D100 Day 6b), append-only, each with the
    reasoning behind it. Don't re-litigate something already decided here
    without a new entry. D46–D50 cover all of Day 3 (lead conversion, the
    Deals API, the Deals UI, the pipeline board, and the Convert dialog) —
@@ -290,12 +291,29 @@ specific package you're about to work on.
   147/147 (791).** Manual steps: `docs/MANUAL-TEST-DAY6A.md`. Resume prompt:
   `docs/DAY-6A-HANDOVER-PROMPT.md`.
 
+- **Day 6b (four user-requested refinements) is complete (2026-11-25),
+  D96–D100.** D96: bulk operations (PRD 5.3), calendar view (5.6) and
+  enquiry read/unread (5.8) are approved deviations. D97: company/contact
+  pickers list the first 20 A–Z as soon as they are opened; list-page company
+  filters reach every company. D98: leads and contacts need first name +
+  company + email or phone (forms, API, CSV import; website enquiries
+  exempt; companies need only a name); source optional everywhere. D99: one
+  phone input everywhere with a per-country digit table (India exactly 10,
+  not starting with 0, landlines allowed), typing limited, pastes cleaned up.
+  D100: My Tasks defaults to the signed-in user's tasks with an "Assigned to"
+  dropdown. Two pre-existing bugs fixed on the way (sourceless new lead could
+  not be saved; picker blanked after a pick). No migration, dependency or
+  permission change. **apps/api 658/658, apps/web 183/183 (841).** Manual
+  steps: `docs/MANUAL-TEST-DAY6B.md` (D98 also updated
+  `MANUAL-TEST-DAY6A.md` §5). Resume prompt: `docs/DAY-6B-HANDOVER-PROMPT.md`.
+
 ## The next work, in order
 
-Day 6a is finished. Next, in order: (0) the user reviews and commits Day 6a
-and decides the approved-deviation candidates listed in
-`docs/PROJECT-STATE.md` §13; then the browser pass of
-`docs/MANUAL-TEST-DAY6A.md` §1–§5; (1) the user's browser pass of
+Day 6b is finished. Next, in order: (0) the user reviews and commits Day 6b
+and decides the open items in `docs/PROJECT-STATE.md` §13 (the Day 6a
+approved-deviation candidates, and D97's "company names for deals beyond the
+first 100 companies"); then the browser passes of
+`docs/MANUAL-TEST-DAY6B.md` §1–§4 and `docs/MANUAL-TEST-DAY6A.md` §1–§5; (1) the user's browser pass of
 `docs/MANUAL-TEST-DAY5C.md` §1–§9 and any fixes it surfaces; (2) the user's
 organisation PDF details and `pnpm staging:migrate` (both Day 5c
 migrations); (3) Day 6 (testing, stabilisation) — confirm its scope with the

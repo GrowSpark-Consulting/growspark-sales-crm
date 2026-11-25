@@ -97,6 +97,7 @@ describe('CSV import — leads', () => {
     expect(preview.body.data.mappingErrors).toEqual([
       'Choose a column for First name or Full name.',
       'Choose a column for Email or Phone (each row needs one of them).',
+      'Choose a column for Company (each row needs one).',
     ]);
     expect(preview.body.data.rows).toEqual([]);
 
@@ -134,15 +135,15 @@ describe('CSV import — leads', () => {
         '',
         '=HYPERLINK("http://evil.test"),+91,ravi@example.test,,@SUM(A1),Retired,,nobody@example.test,-2+3,',
         ',,,,,,,,,',
-        'Meera,,not-an-email,,,,,,,',
-        'Karthik,,,12345,,,,,,',
-        'Divya,,divya@example.test,,,,urgent,,,',
-        'Nisha,,nisha@example.test,,,,,,,',
-        'Nisha Two,,NISHA@example.test,,,,,,,',
-        'Old,,old@example.test,,,,,,,',
-        `Long,,long@example.test,,,,,,${longNotes},`,
+        'Meera,,not-an-email,,Test Co,,,,,',
+        'Karthik,,,12345,Test Co,,,,,',
+        'Divya,,divya@example.test,,Test Co,,urgent,,,',
+        'Nisha,,nisha@example.test,,Test Co,,,,,',
+        'Nisha Two,,NISHA@example.test,,Test Co,,,,,',
+        'Old,,old@example.test,,Test Co,,,,,',
+        `Long,,long@example.test,,Test Co,,,,${longNotes},`,
         'Ragged,,ragged@example.test',
-        'Trailing,,trailing@example.test,,,,,,,,',
+        'Trailing,,trailing@example.test,,Test Co,,,,,,',
       ).replace('STAFF_EMAIL', tenant.staffUser.email.toUpperCase());
     const mapping = ['firstName', 'lastName', 'email', 'phone', 'companyName', 'source', 'priority', 'ownerEmail', 'notes', null];
     const admin = await importApi(app, tenant, 'admin');
@@ -163,7 +164,8 @@ describe('CSV import — leads', () => {
     expect(rowAt(rows, 10)).toMatchObject({ status: 'duplicate', errors: ['Same email as row 9 — only the first is imported.'] });
     expect(rowAt(rows, 11)).toMatchObject({ status: 'duplicate', errors: ['A lead with this email already exists (archived ones count).'] });
     expect(rowAt(rows, 12).errors).toEqual(['Notes are too long.']);
-    expect(rowAt(rows, 13).errors).toEqual(['This row has 3 values but the header has 10 columns.']);
+    // …and, having no Company cell, it also fails D98's company rule.
+    expect(rowAt(rows, 13).errors).toEqual(['This row has 3 values but the header has 10 columns.', 'Company name is required.']);
     expect(rowAt(rows, 14).status).toBe('ok'); // one trailing comma too many is harmless
 
     const commit = await admin.commit('leads', csv, mapping);
@@ -220,6 +222,25 @@ describe('CSV import — leads', () => {
     expect(errorRecords.find((record) => record[0] === '10')![1]).toBe('Skipped (duplicate)');
   });
 
+  it('D98: every lead needs a company — rows without one are errors and nothing is created for them', async () => {
+    const app = createApp();
+    const tenant = await createTestTenant();
+    await addSource(tenant, 'Import');
+    const staff = await importApi(app, tenant);
+    const csv = csvLines('Name,Email,Company', 'Asha Rao,asha@example.test,Example Foods', 'Ravi Kumar,ravi@example.test,', 'Meera Iyer,meera@example.test,   ');
+
+    const preview = await staff.preview('leads', csv, ['fullName', 'email', 'companyName']);
+    expect(preview.body.data.summary).toMatchObject({ ready: 1, errors: 2 });
+    const rows = preview.body.data.rows as ImportPreviewRow[];
+    expect(rowAt(rows, 3)).toMatchObject({ status: 'error', errors: ['Company name is required.'] });
+    expect(rowAt(rows, 4)).toMatchObject({ status: 'error', errors: ['Company name is required.'] });
+
+    const commit = await staff.commit('leads', csv, ['fullName', 'email', 'companyName']);
+    expect(commit.body.data).toMatchObject({ imported: 1, errors: 2 });
+    const leads = await prisma.lead.findMany({ where: { organizationId: tenant.organization.id } });
+    expect(leads.map((lead) => lead.companyName)).toEqual(['Example Foods']);
+  });
+
   it('refuses files that are empty, header-only, broken, too big, too long or too wide — and nothing else accepts a big body', async () => {
     const app = createApp();
     const tenant = await createTestTenant();
@@ -245,7 +266,7 @@ describe('CSV import — leads', () => {
     // …and every other route keeps 100 KB.
     const admin = await importApi(app, tenant, 'admin');
     const notes = 'n'.repeat(150_000);
-    const other = await admin.post('/api/v1/leads', { firstName: 'Big', email: 'big@example.test', notes });
+    const other = await admin.post('/api/v1/leads', { companyName: 'Fixture Co', firstName: 'Big', email: 'big@example.test', notes });
     expect(other.status).toBe(413);
   });
 
@@ -255,11 +276,11 @@ describe('CSV import — leads', () => {
     await addSource(a, 'Import');
     await addSource(b, 'Webinar');
     const otherOrgAdmin = await importApi(app, b, 'admin');
-    await otherOrgAdmin.post('/api/v1/leads', { firstName: 'Taken', email: 'taken@example.test', sourceId: b.leadSource.id });
+    await otherOrgAdmin.post('/api/v1/leads', { companyName: 'Fixture Co', firstName: 'Taken', email: 'taken@example.test', sourceId: b.leadSource.id });
 
-    const csv = csvLines('Name,Email,Owner,Source', `Asha,taken@example.test,${b.adminUser.email},Webinar`);
+    const csv = csvLines('Name,Email,Owner,Source,Company', `Asha,taken@example.test,${b.adminUser.email},Webinar,Example Foods`);
     const staffA = await importApi(app, a);
-    const commit = await staffA.commit('leads', csv, ['fullName', 'email', 'ownerEmail', 'source']);
+    const commit = await staffA.commit('leads', csv, ['fullName', 'email', 'ownerEmail', 'source', 'companyName']);
     expect(commit.body.data).toMatchObject({ imported: 1, skippedDuplicates: 0 });
 
     const lead = await prisma.lead.findFirstOrThrow({ where: { email: 'taken@example.test', organizationId: a.organization.id }, include: { source: true } });
@@ -273,14 +294,38 @@ describe('CSV import — leads', () => {
     const tenant = await createTestTenant();
     await addSource(tenant, 'Import');
     const staff = await importApi(app, tenant);
-    const lines = Array.from({ length: 20 }, (_v, i) => `Person ${i},p${i}@example.test`);
-    const csv = csvLines('Name,Email', ...lines);
+    const lines = Array.from({ length: 20 }, (_v, i) => `Person ${i},p${i}@example.test,Company ${i}`);
+    const csv = csvLines('Name,Email,Company', ...lines);
     const [first, second] = await Promise.all([
-      staff.commit('leads', csv, ['fullName', 'email']),
-      staff.commit('leads', csv, ['fullName', 'email']),
+      staff.commit('leads', csv, ['fullName', 'email', 'companyName']),
+      staff.commit('leads', csv, ['fullName', 'email', 'companyName']),
     ]);
     expect([first.status, second.status]).toEqual([200, 200]);
     expect([first.body.data.imported, second.body.data.imported].sort()).toEqual([0, 20]);
     expect(await prisma.lead.count({ where: { organizationId: tenant.organization.id } })).toBe(20);
+  });
+
+  it('D99: phones are read the way the phone input reads a paste — leading 0, missing +, spaces and dashes', async () => {
+    const app = createApp();
+    const tenant = await createTestTenant();
+    await addSource(tenant, 'Import');
+    const staff = await importApi(app, tenant);
+    const csv = csvLines(
+      'Name,Email,Phone,Company',
+      'Asha Rao,asha@example.test,098400 12345,Example Foods',
+      'Ravi Kumar,ravi@example.test,91-98450-67890,Example Foods',
+      'Meera Iyer,meera@example.test,+44 20 7946 0958,Example Foods',
+      'Divya Nair,divya@example.test,044 2345 6789,Example Foods',
+      'Karthik Das,karthik@example.test,98400 123456,Example Foods',
+    );
+    const commit = await staff.commit('leads', csv, ['fullName', 'email', 'phone', 'companyName']);
+    expect(commit.body.data).toMatchObject({ imported: 4, errors: 1 });
+    const leads = await prisma.lead.findMany({ where: { organizationId: tenant.organization.id }, orderBy: { email: 'asc' } });
+    expect(Object.fromEntries(leads.map((lead) => [lead.email, lead.phone]))).toEqual({
+      'asha@example.test': '+919840012345',
+      'ravi@example.test': '+919845067890',
+      'meera@example.test': '+442079460958',
+      'divya@example.test': '+914423456789',
+    });
   });
 });

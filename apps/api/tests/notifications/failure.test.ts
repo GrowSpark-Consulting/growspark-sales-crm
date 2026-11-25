@@ -26,7 +26,7 @@ describe('A failed notification never rolls back or fails the main action', () =
     const admin = await signIn(createApp(), tenant);
     const spy = breakNotificationWrites();
 
-    const res = await admin.post('/api/v1/leads', { firstName: 'Asha', email: 'asha@example.test', sourceId: tenant.leadSource.id, ownerId: tenant.staffUser.id });
+    const res = await admin.post('/api/v1/leads', { companyName: 'Fixture Co', firstName: 'Asha', email: 'asha@example.test', sourceId: tenant.leadSource.id, ownerId: tenant.staffUser.id });
     expect(res.status).toBe(201);
     expect(spy).toHaveBeenCalledTimes(1);
     const leadId = res.body.data.id as string;
@@ -81,7 +81,7 @@ describe('A failed notification never rolls back or fails the main action', () =
   it('PROOF the spy is what blocks the write: without it, the same lead create does notify', async () => {
     const tenant = await createTestTenant();
     const admin = await signIn(createApp(), tenant);
-    const res = await admin.post('/api/v1/leads', { firstName: 'Asha', email: 'asha@example.test', sourceId: tenant.leadSource.id, ownerId: tenant.staffUser.id });
+    const res = await admin.post('/api/v1/leads', { companyName: 'Fixture Co', firstName: 'Asha', email: 'asha@example.test', sourceId: tenant.leadSource.id, ownerId: tenant.staffUser.id });
     expect(res.status).toBe(201);
     expect(await prisma.notification.count()).toBe(1);
   });

@@ -12,6 +12,7 @@ import { handleApiFormError } from "@/lib/handle-form-error";
 import { SETTINGS_QUERY_KEY_ROOT, useOrganizationSettings, useRequireAdmin } from "@/hooks/use-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -59,7 +60,7 @@ const SECTIONS: { title: string; fields: { name: FieldName; label: string; requi
   {
     title: "Contact details",
     fields: [
-      { name: "phone", label: "Phone", autoComplete: "tel" },
+      { name: "phone", label: "Phone", autoComplete: "tel", wide: true },
       { name: "email", label: "Email", autoComplete: "email" },
       { name: "website", label: "Website", autoComplete: "url" },
     ],
@@ -129,12 +130,17 @@ function OrganizationForm({ org }: { org: OrganizationResponse }) {
                         {field.required ? " *" : ""}
                       </FormLabel>
                       <FormControl>
-                        <Input
-                          {...input}
-                          value={input.value ?? ""}
-                          autoComplete={field.autoComplete}
-                          className={field.name === "gstin" ? "uppercase" : undefined}
-                        />
+                        {field.name === "phone" ? (
+                          // D99: the same phone input as every other form.
+                          <PhoneInput value={input.value ?? ""} onChange={input.onChange} onBlur={input.onBlur} />
+                        ) : (
+                          <Input
+                            {...input}
+                            value={input.value ?? ""}
+                            autoComplete={field.autoComplete}
+                            className={field.name === "gstin" ? "uppercase" : undefined}
+                          />
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>

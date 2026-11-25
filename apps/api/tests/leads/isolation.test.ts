@@ -53,7 +53,7 @@ describe('leads: organisation isolation', () => {
       .post('/api/v1/leads')
       .set('Origin', ALLOWED_ORIGIN)
       .set('Cookie', sessionCookieHeader(token))
-      .send({ firstName: 'Cross Org', email: 'cross-org@example.com', sourceId: orgB.leadSource.id });
+      .send({ firstName: 'Cross Org', email: 'cross-org@example.com', companyName: 'Fixture Co', sourceId: orgB.leadSource.id });
     expect(res.status).toBe(404);
   });
 
@@ -104,7 +104,7 @@ describe('leads: organisation isolation', () => {
       .post('/api/v1/leads')
       .set('Origin', ALLOWED_ORIGIN)
       .set('Cookie', sessionCookieHeader(token))
-      .send({ firstName: 'Org A Lead', email: 'shared@example.com', sourceId: orgA.leadSource.id });
+      .send({ firstName: 'Org A Lead', email: 'shared@example.com', companyName: 'Fixture Co', sourceId: orgA.leadSource.id });
     expect(res.status).toBe(201);
     expect(res.body.duplicates).toEqual([]);
   });

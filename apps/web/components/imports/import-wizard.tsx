@@ -201,7 +201,7 @@ export function ImportWizard({ entity }: { entity: ImportEntity }) {
           <h2 className="h3">2. Match the columns</h2>
           <p className="text-sm text-ink-muted">
             <span className="font-medium text-ink">{fileName}</span> — {preview.summary.totalRows} rows. For each column in your
-            file, choose which field it fills, or “Don’t import”. Each row needs a name and an email or phone.
+            file, choose which field it fills, or “Don’t import”. Each row needs a first name, a company and an email or phone.
             {entity === "leads" && " Columns you don’t import are still kept on each lead, under “Other captured answers”."}
           </p>
           {banner}

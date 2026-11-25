@@ -6,14 +6,13 @@ import {
   IMPORT_MAX_ROWS,
   PERMISSIONS,
   PRIORITIES,
-  createContactSchema,
+  contactImportRowSchema,
   createLeadSchema,
   hasPermission,
-  isValidManualEntryPhone,
+  normalizePhoneInput,
   normalizeCompanyName,
   normalizeEmail,
   normalizePhone,
-  parsePhoneLenient,
   suggestImportMapping,
   type ImportCommitResponse,
   type ImportEntity,
@@ -115,6 +114,8 @@ export function mappingProblems(entity: ImportEntity, headers: string[], mapping
   });
   if (!seen.has('firstName') && !seen.has('fullName')) problems.push('Choose a column for First name or Full name.');
   if (!seen.has('email') && !seen.has('phone')) problems.push('Choose a column for Email or Phone (each row needs one of them).');
+  // D98: every lead and contact needs a company name.
+  if (!seen.has('companyName')) problems.push('Choose a column for Company (each row needs one).');
   return problems;
 }
 
@@ -256,8 +257,10 @@ export function evaluateRows(
     const rawPhone = get('phone');
     let phone: string | undefined;
     if (rawPhone) {
-      const parsed = parsePhoneLenient(rawPhone);
-      if (parsed && isValidManualEntryPhone(parsed)) phone = parsed;
+      // D99: the same clean-up as pasting into the phone input (country code,
+      // "0" trunk prefix, a bare number taken as India), then the same check.
+      const normalized = normalizePhoneInput(rawPhone);
+      if (normalized) phone = normalized;
       else errors.push(`Phone "${rawPhone}" is not a recognisable number — include the country code, e.g. +91 98400 12345.`);
     }
 
@@ -364,8 +367,10 @@ export function evaluateRows(
       const companyKey = normalizeCompanyName(companyName);
       const existingCompanyId = companyKey ? lookups.companiesByName.get(companyKey) : undefined;
       const input = { ...base, department: get('department'), location: get('location') };
-      const parsed = createContactSchema.safeParse(input);
-      if (companyName && companyName.length > 300) errors.push('Company: name is too long (300 characters at most).');
+      const parsed = contactImportRowSchema.safeParse(input);
+      // D98: a contact needs a company — the import links or creates it by name.
+      if (!companyName) errors.push('Company name is required.');
+      else if (companyName.length > 300) errors.push('Company: name is too long (300 characters at most).');
       if (!parsed.success) errors.push(...zodMessages(entity, parsed.error, Boolean(email || rawPhone)));
       else if (errors.length === 0) {
         const value = parsed.data;

@@ -15,7 +15,7 @@ function authed(app: ReturnType<typeof createApp>, token: string) {
 }
 
 async function createLead(api: ReturnType<typeof authed>, sourceId: string, email: string) {
-  const res = await api.post('/api/v1/leads', { firstName: 'Test', email, sourceId });
+  const res = await api.post('/api/v1/leads', { companyName: 'Fixture Co', firstName: 'Test', email, sourceId });
   return res.body.data.id as string;
 }
 

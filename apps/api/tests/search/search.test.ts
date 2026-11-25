@@ -145,7 +145,7 @@ describe('GET /api/v1/search', () => {
     const tenant = await createTestTenant();
     const admin = await signIn(app, tenant, 'admin');
     for (let i = 0; i < 7; i += 1) {
-      const res = await admin.post('/api/v1/leads', { firstName: `Banyan${i}`, email: `b${i}@example.test`, sourceId: tenant.leadSource.id });
+      const res = await admin.post('/api/v1/leads', { companyName: 'Fixture Co', firstName: `Banyan${i}`, email: `b${i}@example.test`, sourceId: tenant.leadSource.id });
       expect(res.status).toBe(201);
     }
     const groups = (await admin.get('/api/v1/search?q=banyan')).body.data.groups as SearchGroup[];

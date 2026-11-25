@@ -23,7 +23,7 @@ describe("contactToFormValues (D42 reset target)", () => {
     expect(blank.firstName).toBe("");
     expect(blank.email).toBe("");
     expect(blank.phone).toBe("");
-    expect(blank.companyId).toBeUndefined();
+    expect(blank.companyId).toBe(""); // D98: required, so blank rather than undefined
   });
 
   it("resetting a dirtied form to contactToFormValues() clears the dirtied field — the actual operation the D42 cleanup performs", () => {
@@ -66,5 +66,25 @@ describe("ContactFormDialog (D42: create dialog must not reappear open with stal
 
     expect(consoleError).not.toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+});
+
+describe("ContactFormDialog company rule (D98)", () => {
+  beforeEach(() => stubFetch());
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("will not save a contact without a company, and never calls the API", async () => {
+    renderWithClient(<ContactFormDialog trigger={<button>Add contact</button>} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add contact" }));
+    await waitFor(() => expect(screen.getByLabelText("First name *")).toBeTruthy());
+    expect(screen.getByText("Company *")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("First name *"), { target: { value: "Asha" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "asha@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add contact" }));
+
+    expect(await screen.findByText("A company is required")).toBeTruthy();
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
   });
 });

@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useActivitiesList, ACTIVITIES_QUERY_KEY_ROOT } from "@/hooks/use-activities";
 import { useListUrlState } from "@/hooks/use-list-url-state";
+import { useMe } from "@/hooks/use-me";
+import { useUserOptions } from "@/hooks/use-user-options";
 import { apiPost, ApiError } from "@/lib/api-client";
 import { formatDate, formatTime } from "@/lib/format";
 import {
@@ -23,6 +25,9 @@ import {
 import { priorityBadgeVariant, priorityLabel } from "@/lib/lead-presentation";
 
 const ANY = "ANY";
+/** D100: values of the "Assigned to" filter's `assignee` URL param besides a user id; absent means "me". */
+const ASSIGNEE_ME = "me";
+const ASSIGNEE_ALL = "all";
 const FOLLOW_UP_TYPES = activityTypeSchema.options.filter((type) => type !== "NOTE");
 type Tab = "OPEN" | "OVERDUE" | "DONE";
 
@@ -42,6 +47,20 @@ export function TasksPageClient() {
   const dueFromDay = searchParams.get("dueFrom") ?? "";
   const dueToDay = searchParams.get("dueTo") ?? "";
 
+  // D100: "My Tasks" shows the signed-in user's own tasks by default. The
+  // choice lives in the page address (?assignee=all, or a user id), so a
+  // refresh or a shared link keeps it. Nothing is fetched until the signed-in
+  // user is known, so everyone's tasks never flash up first.
+  const assignee = searchParams.get("assignee") ?? ASSIGNEE_ME;
+  const me = useMe().data?.data.user.id;
+  const { data: userOptions } = useUserOptions();
+  const users = userOptions?.data ?? [];
+  const userNames = new Map(users.map((user) => [user.id, user.name]));
+  const assigneeId = assignee === ASSIGNEE_ALL ? undefined : assignee === ASSIGNEE_ME ? me : assignee;
+  const waitingForMe = assignee === ASSIGNEE_ME && !me;
+  const showAssigneeColumn = assignee !== ASSIGNEE_ME && assigneeId !== me;
+  const assigneeName = assignee === ASSIGNEE_ME || assigneeId === me ? "you" : assigneeId ? (userNames.get(assigneeId) ?? "this person") : undefined;
+
   const listQuery = useActivitiesList({
     page,
     pageSize,
@@ -52,7 +71,8 @@ export function TasksPageClient() {
     dueFrom: dayBound(dueFromDay, false),
     dueTo: dayBound(dueToDay, true),
     sort: "dueAt:asc",
-  });
+    assigneeId,
+  }, { enabled: !waitingForMe });
 
   function selectTab(nextTab: Tab) {
     setParams({
@@ -87,6 +107,23 @@ export function TasksPageClient() {
         );
       },
     },
+    ...(showAssigneeColumn
+      ? [
+          {
+            key: "assignee",
+            header: "Assigned to",
+            render: (activity: ActivityResponse) => (
+              <span className="text-ink-muted">
+                {activity.assigneeId === null
+                  ? "Unassigned"
+                  : activity.assigneeId === me
+                    ? "You"
+                    : (userNames.get(activity.assigneeId) ?? "Former user")}
+              </span>
+            ),
+          },
+        ]
+      : []),
     {
       key: "type",
       header: "Type",
@@ -142,7 +179,7 @@ export function TasksPageClient() {
         columns={columns}
         rows={listQuery.data?.data ?? []}
         rowKey={(activity) => activity.id}
-        isLoading={listQuery.isLoading}
+        isLoading={listQuery.isLoading || waitingForMe}
         isError={listQuery.isError}
         onRetry={() => listQuery.refetch()}
         page={page}
@@ -155,10 +192,35 @@ export function TasksPageClient() {
             ? "Activities you complete or cancel will appear here."
             : tab === "OVERDUE"
               ? "Overdue tasks, calls and meetings will show up here."
-              : "Open tasks, calls and meetings assigned to anyone in the organisation will show up here."
+              : assigneeName
+                ? `Open tasks, calls and meetings assigned to ${assigneeName} will show up here.`
+                : "Open tasks, calls and meetings assigned to anyone in the organisation will show up here."
         }
         filterBar={
           <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={assignee}
+              onValueChange={(value) => setParams({ assignee: value === ASSIGNEE_ME ? undefined : value })}
+            >
+              <SelectTrigger className="w-44" aria-label="Assigned to">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ASSIGNEE_ME}>Assigned to me</SelectItem>
+                <SelectItem value={ASSIGNEE_ALL}>Everyone</SelectItem>
+                {users
+                  .filter((user) => user.id !== me || user.id === assignee)
+                  .map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name}
+                    </SelectItem>
+                  ))}
+                {/* A user id in the address that is not in the active list (e.g. deactivated) stays selectable. */}
+                {assignee !== ASSIGNEE_ME && assignee !== ASSIGNEE_ALL && !userNames.has(assignee) && (
+                  <SelectItem value={assignee}>Former user</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
             <Select value={type ?? ANY} onValueChange={(value) => setParams({ type: value === ANY ? undefined : value })}>
               <SelectTrigger className="w-36" aria-label="Filter by type">
                 <SelectValue placeholder="Any type" />

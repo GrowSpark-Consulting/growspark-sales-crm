@@ -5,13 +5,15 @@ import { apiGet } from "@/lib/api-client";
 export interface ActivitiesListParams {
   page?: number; pageSize?: number; sort?: string; status?: string; type?: string; priority?: string;
   overdue?: boolean; dueFrom?: string; dueTo?: string;
+  /** D100: one user's activities only; omitted = everyone in the organisation. */
+  assigneeId?: string;
 }
 export interface ActivitiesListResult { data: ActivityResponse[]; meta: { page: number; pageSize: number; total: number } }
-export function useActivitiesList(params: ActivitiesListParams) {
+export function useActivitiesList(params: ActivitiesListParams, options: { enabled?: boolean } = {}) {
   const query = new URLSearchParams({ page: String(params.page ?? 1), pageSize: String(params.pageSize ?? 25), sort: params.sort ?? "dueAt:asc" });
-  for (const key of ["status", "type", "priority", "dueFrom", "dueTo"] as const) if (params[key]) query.set(key, params[key]!);
+  for (const key of ["status", "type", "priority", "dueFrom", "dueTo", "assigneeId"] as const) if (params[key]) query.set(key, params[key]!);
   if (params.overdue) query.set("overdue", "true");
-  return useQuery({ queryKey: [ACTIVITIES_QUERY_KEY_ROOT, params], queryFn: () => apiGet<ActivitiesListResult>(`/api/v1/activities?${query}`), placeholderData: (previous) => previous });
+  return useQuery({ queryKey: [ACTIVITIES_QUERY_KEY_ROOT, params], queryFn: () => apiGet<ActivitiesListResult>(`/api/v1/activities?${query}`), placeholderData: (previous) => previous, enabled: options.enabled ?? true });
 }
 
 export function useToday(scope: TodayQuery["scope"]) {

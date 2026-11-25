@@ -240,4 +240,28 @@ describe('Activities API', () => {
     const companyTimeline = await api(token).get(`/api/v1/companies/${company.id}/timeline`);
     expect(companyTimeline.body.data.map((entry: { title: string }) => entry.title)).toEqual(['CALL: Deal activity', 'CALL: Company activity']);
   });
+
+  it('D100 (My Tasks "Assigned to"): assigneeId returns only that person\'s activities, and never another organisation\'s', async () => {
+    const [tenant, other] = await createTwoTestTenants();
+    const { token } = await createSession(tenant.organization.id, tenant.staffUser.id);
+    const company = await prisma.company.create({ data: { organizationId: tenant.organization.id, name: 'Tasks Co', nameNormalized: 'tasks co' } });
+    const otherCompany = await prisma.company.create({ data: { organizationId: other.organization.id, name: 'Other Co', nameNormalized: 'other co' } });
+    const make = (organizationId: string, companyId: string, subject: string, assigneeId: string | null, createdById: string) =>
+      prisma.activity.create({ data: { organizationId, type: 'TASK', subject, status: 'OPEN', companyId, createdById, assigneeId } });
+    const [mine, colleagues, unassigned] = await Promise.all([
+      make(tenant.organization.id, company.id, 'Mine', tenant.staffUser.id, tenant.adminUser.id),
+      make(tenant.organization.id, company.id, 'Colleague', tenant.adminUser.id, tenant.adminUser.id),
+      make(tenant.organization.id, company.id, 'Nobody', null, tenant.adminUser.id),
+    ]);
+    await make(other.organization.id, otherCompany.id, 'Other org', other.staffUser.id, other.adminUser.id);
+
+    const ids = async (query: string) =>
+      ((await api(token).get(`/api/v1/activities?status=OPEN${query}`)).body.data as { id: string }[]).map((row) => row.id).sort();
+
+    expect(await ids(`&assigneeId=${tenant.staffUser.id}`)).toEqual([mine.id]);
+    expect(await ids(`&assigneeId=${tenant.adminUser.id}`)).toEqual([colleagues.id]);
+    expect(await ids('')).toEqual([mine.id, colleagues.id, unassigned.id].sort());
+    // Another organisation's user id matches nothing here.
+    expect(await ids(`&assigneeId=${other.staffUser.id}`)).toEqual([]);
+  });
 });

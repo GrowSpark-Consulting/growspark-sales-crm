@@ -125,4 +125,18 @@ describe('Website intake: successful submissions', () => {
     });
     expect(secondRes.body.data.possibleDuplicateLeadIds).toEqual([existingLeadId]);
   });
+
+  it('D98: a website enquiry with no company still creates a lead — intake is exempt from the company rule', async () => {
+    const tenant = await createTestTenant();
+    await ensureWebsiteLeadSource(tenant);
+    const { key } = await createTestApiKey(tenant);
+    const res = await intakeRequest(createApp(), key, 'ext-no-company', {
+      formType: 'contact',
+      submittedAt: '2026-11-25T09:00:00Z',
+      fields: { name: 'Ravi Kumar', email: 'ravi@example.com', challenge: 'Needs help.' },
+    });
+    expect(res.status).toBe(201);
+    const lead = await prisma.lead.findUniqueOrThrow({ where: { id: res.body.data.leadId as string } });
+    expect(lead.companyName).toBeNull();
+  });
 });

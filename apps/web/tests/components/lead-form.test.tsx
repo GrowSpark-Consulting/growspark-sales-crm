@@ -151,13 +151,48 @@ describe("LeadForm optional source", () => {
     vi.unstubAllGlobals();
   });
 
-  it("create mode: leaves source blank and optional", async () => {
+  it("create mode: source starts as \"Not specified (saved as Manual)\" and stays optional (D98)", async () => {
     renderWithClient(
       <LeadForm mode="create" onSubmit={vi.fn()} submitLabel="Add lead" pendingLabel="Adding…" onCancel={vi.fn()} />,
     );
 
     const trigger = await screen.findByRole("combobox", { name: "Source" });
-    await waitFor(() => expect(trigger.textContent).toContain("Select a source"));
+    await waitFor(() => expect(trigger.textContent).toContain("Not specified (saved as Manual)"));
+  });
+
+  it("D98: create mode requires a company name, and submits without a source when none is chosen", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    renderWithClient(
+      <LeadForm mode="create" onSubmit={onSubmit} submitLabel="Add lead" pendingLabel="Adding…" onCancel={vi.fn()} />,
+    );
+    await waitFor(() => expect(screen.getByLabelText("First name *")).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("First name *"), { target: { value: "Asha" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "asha@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add lead" }));
+
+    expect(await screen.findByText("Company name is required")).toBeTruthy();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("Company name *"), { target: { value: "Example Foods" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add lead" }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    const submitted = onSubmit.mock.calls[0]![0] as Record<string, unknown>;
+    expect(submitted).toMatchObject({ firstName: "Asha", email: "asha@example.com", companyName: "Example Foods" });
+    expect(submitted.sourceId).toBeUndefined();
+  });
+
+  it("D98: editing an older lead with no company asks for one before saving", async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    renderWithClient(
+      <LeadForm mode="edit" lead={sampleLead} onSubmit={onSubmit} submitLabel="Save changes" pendingLabel="Saving…" onCancel={vi.fn()} />,
+    );
+    const trigger = await screen.findByRole("combobox", { name: "Source" });
+    // Edit keeps the lead's own source; there is no "Not specified" to fall back to.
+    await waitFor(() => expect(trigger.textContent).toContain("Manual"));
+    expect(trigger.textContent).not.toContain("Not specified");
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText("Company name is required")).toBeTruthy();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("edit mode: never overrides the lead's own already-set source (not 'Manual' here)", async () => {

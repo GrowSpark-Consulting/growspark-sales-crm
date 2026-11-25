@@ -41,7 +41,12 @@ const NAME_FIELDS = [
 export const IMPORT_FIELDS = {
   leads: [
     ...NAME_FIELDS,
-    { key: 'companyName', label: 'Company', aliases: ['company', 'company name', 'organisation', 'organization', 'account'] },
+    {
+      key: 'companyName',
+      label: 'Company',
+      aliases: ['company', 'company name', 'organisation', 'organization', 'account'],
+      hint: 'Required on every row (D98).',
+    },
     { key: 'jobTitle', label: 'Job title', aliases: ['job title', 'title', 'designation', 'role', 'position'] },
     { key: 'industry', label: 'Industry', aliases: ['industry', 'sector'] },
     { key: 'website', label: 'Website', aliases: ['website', 'web', 'url', 'site'] },
@@ -68,7 +73,7 @@ export const IMPORT_FIELDS = {
       key: 'companyName',
       label: 'Company',
       aliases: ['company', 'company name', 'organisation', 'organization', 'account'],
-      hint: 'Linked to an existing company with the same name; otherwise a new company is created.',
+      hint: 'Required on every row (D98). Linked to an existing company with the same name; otherwise a new company is created.',
     },
     { key: 'jobTitle', label: 'Job title', aliases: ['job title', 'title', 'designation', 'role', 'position'] },
     { key: 'department', label: 'Department', aliases: ['department', 'dept', 'team'] },

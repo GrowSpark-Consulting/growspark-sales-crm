@@ -13,6 +13,7 @@ import { usePipelineStages } from "@/hooks/use-pipeline";
 import { useUserOptions } from "@/hooks/use-user-options";
 import { useCompaniesList } from "@/hooks/use-companies";
 import { useListUrlState } from "@/hooks/use-list-url-state";
+import { CompanyFilter } from "@/components/pickers/company-filter";
 import { buildExportHref } from "@/lib/export";
 import { formatDate, formatINR } from "@/lib/format";
 import { dealStatusBadgeVariant, dealStatusLabel } from "@/lib/deal-presentation";
@@ -61,9 +62,10 @@ export function DealsPageClient() {
   const { data: userOptions } = useUserOptions();
   const owners = userOptions?.data ?? [];
   const ownerNames = new Map(owners.map((owner) => [owner.id, owner.name]));
-  // Company filter reuses the plain companies list (no dedicated "deal
-  // companies" lookup) — same pattern as the owner filter on every other
-  // list page: a plain Select, not the form-only CompanySelect combobox.
+  // Names for the Company column only (deal responses carry companyId, not
+  // the name). The company filter is CompanyFilter (D97), which searches all
+  // companies; this lookup still covers only the first 100 — a known gap
+  // reported in D97, not changed here.
   const { data: companiesData } = useCompaniesList({ pageSize: 100, sort: "name:asc" });
   const companies = companiesData?.data ?? [];
   const companyNames = new Map(companies.map((company) => [company.id, company.name]));
@@ -254,22 +256,7 @@ export function DealsPageClient() {
                 ))}
               </SelectContent>
             </Select>
-            <Select
-              value={companyId ?? ANY}
-              onValueChange={(value) => setParams({ companyId: value === ANY ? undefined : value })}
-            >
-              <SelectTrigger className="w-44" aria-label="Filter by company">
-                <SelectValue placeholder="Any company" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ANY}>Any company</SelectItem>
-                {companies.map((company) => (
-                  <SelectItem key={company.id} value={company.id}>
-                    {company.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CompanyFilter companyId={companyId} onCompanyIdChange={(next) => setParams({ companyId: next })} />
             <Select
               value={archived ? "archived" : ANY}
               onValueChange={(value) => setParams({ archived: value === "archived" ? "true" : undefined })}

@@ -347,6 +347,32 @@ formula guard on phones) now re-import. No migration, dependency or
 permission change. **apps/api 644/644, apps/web 147/147 (791).** Not
 clicked through in a browser (`MANUAL-TEST-DAY6A.md` §5).
 
+**Update, same day (Day 6b) — four refinements the user asked for, all done
+(D96–D100).** D96 records three PRD items as **approved deviations**: bulk
+operations on lists (5.3), a calendar view (5.6), enquiry read/unread (5.8).
+**D97**: every company/contact picker lists the first 20 records A–Z as soon
+as it is opened (typing narrows; loading/"type to search more" states;
+keyboard and `aria-activedescendant`); the Deals and Quotations company
+filters can now reach any company (were limited to the first 100). **D98**:
+leads and contacts need a company (name / picked company) as well as a first
+name and an email or phone — forms, API and CSV import; website enquiries
+exempt; companies need only a name; source optional everywhere, with "Not
+specified (saved as Manual)" on New lead. Two pre-existing bugs found and
+fixed: a new lead without a source could not be saved ("Invalid UUID"), and
+the company box blanked itself right after a pick on the Deal/Quotation/
+Contact forms. **D99**: one phone input everywhere (lead, contact, company,
+organisation settings): digits only, a per-country digit table in
+`packages/shared` (India exactly 10, not starting with 0 — landlines
+allowed), an 11th digit cannot be typed, a "7/10" counter, pasted numbers
+cleaned up (too-long pastes refused, never truncated), specific messages from
+the shared rule the server also applies; the CSV import uses the same
+clean-up. **D100**: My Tasks shows the signed-in user's tasks by default,
+with an "Assigned to" dropdown (Me / Everyone / each user) kept in the page
+address. No migration, no new dependency, no permission change. **apps/api
+658/658, apps/web 183/183 (841).** Not clicked through in a browser
+(`docs/MANUAL-TEST-DAY6B.md` §1–§4; D98 also changed some expected results
+in `docs/MANUAL-TEST-DAY6A.md` §5, updated there).
+
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
@@ -2438,6 +2464,15 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   phone/company duplicate matching on import (D95). **Pre-existing quirk
   reported, not changed (D94)**: every list page's `?q=` search treats `%`
   and `_` as wildcards (over-matches; cannot leak across organisations).
+- **Day 6b is complete (2026-11-25)**: pickers (D97), required fields
+  (D98), shared phone input (D99), My Tasks "Assigned to" (D100); approved
+  deviations recorded in D96 (bulk operations, calendar view, enquiry
+  read/unread). Next: the user's browser pass of `docs/MANUAL-TEST-DAY6B.md`
+  (and the still-unrun Day 6a and 5c ones), then the rest of Day 6 — confirm
+  scope first. **Reported, not changed (D97)**: the Deals list's Company
+  column and the pipeline board's card subtitle look names up from the first
+  100 companies only (needs the company name on deal list responses — the
+  user's call). Resume prompt: `docs/DAY-6B-HANDOVER-PROMPT.md`.
 - **Future items (not scheduled; D87)**: **GST split** (CGST/SGST/IGST,
   place of supply, HSN/SAC) and **product catalogue** (products/services
   with SKU, category and price, picked into quotation lines) — both PRD
@@ -2447,6 +2482,14 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 
 ## 14. Open questions and unverified items
 
+- **Day 6b (D97–D100) has not been clicked through in a browser.** In
+  particular, how the phone input feels with real keyboards, IME/mobile
+  number pads and real clipboard contents, and the picker dropdowns' look in
+  both themes, are reasoned and unit-tested only (`MANUAL-TEST-DAY6B.md`).
+- **Stored foreign phone numbers outside their new D99 range** (allowed by
+  the old any-7–15-digits rule) were not counted — this tool does not query
+  `crm_dev`. They still display; their edit form will ask for a fix. A
+  read-only count is the user's to run if it matters.
 - **Resolved**: the website-repo rule is now in `CLAUDE.md` (1.2c);
   `README.md`'s stale "package 1.1 only" wording is fixed (1.2c).
 - **D21/D23 — real per-IP login limiting is deferred, not solved.** It needs
@@ -3644,3 +3687,40 @@ log just records that a session happened and what it covered.
 - README updated (status rows, "not built yet", permissions, test count).
   `docs/MANUAL-TEST-DAY6A.md` §0–§5 written. Not committed (the user
   commits); nothing run against staging or written to `crm_dev`.
+
+### 2026-11-25 (Day 6b) — pickers, required fields, phone input, My Tasks (D96–D100)
+
+- Read the handover docs, decisions D93–D95, README and the PRD (attached by
+  the user after the plan). Plan approved with the user's decisions:
+  required sets as recommended; Indian numbers 10 digits, not starting with 0
+  (landlines allowed); My Tasks "Assigned to" dropdown. Built one item at a
+  time, full checks after each.
+- D96 (docs only): approved deviations — bulk operations (5.3), calendar view
+  (5.6), enquiry read/unread (5.8).
+- D97: `components/pickers/record-combobox.tsx` (new), `company-select.tsx`
+  and `contact-select.tsx` rewritten onto it, `company-filter.tsx` (new) on
+  the Deals and Quotations lists. Web 160 after this item.
+- D98: shared `leads.ts`/`contacts.ts` (company required; new
+  `contactImportRowSchema`), `contacts.service.ts`, `imports.service.ts`,
+  shared `imports.ts` hints, lead form (company *, "Not specified (saved as
+  Manual)", sourceless create fixed), contact dialog (company *), import
+  wizard text; `createTestCompany` test helper; ~50 test payloads given a
+  company. Fixed the picker blanking after a pick. `MANUAL-TEST-DAY6A.md` §5
+  updated. API 647, web 164 after this item.
+- D99: shared `phone.ts` rewritten (country table, typing/paste clean-up,
+  messages), `settings.ts` organisation phone, `imports.service.ts` uses
+  `normalizePhoneInput`; `components/ui/phone-input.tsx` rewritten; used on
+  organisation settings. API 657, web 180 after this item.
+- D100: `tasks-page-client.tsx` "Assigned to", `use-activities.ts`
+  (`assigneeId`, `enabled`). API 658, web 183.
+- Each item: a guard shown to fail when removed, then restored.
+- Verified at the end: `pnpm typecheck` clean; `pnpm lint` 0 errors (the
+  same 3 older warnings); **apps/api 658/658, apps/web 183/183 (841)** (API
+  and web suites run one after the other); `pnpm --filter web build` passes.
+  No dev server started or stopped by this tool; nothing run against staging
+  or written to `crm_dev`; no migration, dependency or permission change.
+  Python edits on Windows briefly wrote CRLF line endings into some files;
+  converted back to LF (the repo's `eol=lf`) before finishing. Not committed
+  (the user commits). Docs: `decisions.md` D96–D100,
+  `docs/MANUAL-TEST-DAY6B.md`, README, NEXT-SESSION-START, this file,
+  `docs/DAY-6B-HANDOVER-PROMPT.md`.

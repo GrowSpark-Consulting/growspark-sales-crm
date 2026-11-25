@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sales &amp; CRM User Guide</title>
+<style>
+:root {
+  --ink: #1c1b1a; --ink-muted: #5e5b57; --line: #dcd9d4; --surface: #ffffff;
+  --sunken: #f4f3f1; --bg: #fbfaf9; --head: #1f1e1d; --head-ink: #f4f3f1;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px; line-height: 1.55;
+}
+.page { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+header.cover { border-bottom: 2px solid var(--ink); padding-bottom: 20px; margin-bottom: 24px; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); margin: 0 0 8px; }
+h1 { font-size: 34px; line-height: 1.15; margin: 0 0 8px; letter-spacing: -.01em; }
+.subtitle { color: var(--ink-muted); margin: 0; }
+nav.toc { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; margin-bottom: 32px; }
+nav.toc h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; margin: 0 0 8px; border: 0; padding: 0; }
+nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 32px; }
+nav.toc li { margin: 2px 0; break-inside: avoid; }
+a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: #9b978f; }
+a:hover { text-decoration-color: var(--ink); }
+section { margin-bottom: 36px; }
+h2 { font-size: 22px; margin: 0 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+h3 { font-size: 16px; margin: 20px 0 6px; }
+p { margin: 0 0 10px; }
+ul, ol { margin: 0 0 12px; padding-left: 24px; }
+li { margin: 3px 0; }
+li > ul { margin: 4px 0 0; }
+code { font-family: Consolas, "Cascadia Mono", Menlo, monospace; font-size: .92em; background: var(--sunken); padding: 1px 4px; border-radius: 4px; }
+.table-wrap { overflow-x: auto; margin: 0 0 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+th { background: var(--head); color: var(--head-ink); text-align: left; font-weight: 600; padding: 7px 10px; }
+td { padding: 6px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+tbody tr:nth-child(even) td { background: var(--sunken); }
+.qa { margin: 0 0 12px; }
+.qa .q { font-weight: 600; margin-bottom: 2px; }
+footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 40px; }
+@media (max-width: 600px) {
+  h1 { font-size: 28px; }
+  nav.toc ol { columns: 1; }
+}
+@page { size: A4; margin: 16mm 15mm 18mm; }
+@media print {
+  body { background: #fff; font-size: 10.5pt; line-height: 1.45; }
+  .page { max-width: none; padding: 0; }
+  header.cover { margin-bottom: 14px; }
+  nav.toc { border: 1px solid #bbb; break-after: page; }
+  nav.toc ol { columns: 2; }
+  a { text-decoration: none; }
+  section { break-before: page; margin: 0; }
+  section:first-of-type, section.flow { break-before: auto; }
+  section.flow { margin-top: 18pt; }
+  h2, h3 { break-after: avoid; }
+  table, .table-wrap { border-color: #bbb; }
+  .table-wrap { overflow: visible; }
+  tr, li, .qa { break-inside: avoid; }
+  thead { display: table-header-group; }
+  th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  tbody tr:nth-child(even) td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  footer { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="cover">
+<p class="eyebrow">Grow Spark Consulting</p>
+<h1>Grow Spark Sales &amp; CRM<br>User Guide</h1>
+<p class="subtitle">Version: November 2026. Written for someone evaluating the app, not for developers.</p>
+</header>
+<nav class="toc" aria-label="Contents">
+<h2>Contents</h2>
+<ol>
+<li><a href="#1-what-the-app-is">What the app is</a></li>
+<li><a href="#2-feature-map">Feature map</a></li>
+<li><a href="#3-signing-in-users-and-passwords">Signing in, users and passwords</a></li>
+<li><a href="#4-home-today-and-my-tasks">Home, Today and My Tasks</a></li>
+<li><a href="#5-leads">Leads</a></li>
+<li><a href="#6-companies-and-contacts">Companies and Contacts</a></li>
+<li><a href="#7-deals-and-the-pipeline">Deals and the pipeline</a></li>
+<li><a href="#8-enquiries-inbox-and-the-website-form">Enquiries inbox and the website form</a></li>
+<li><a href="#9-quotations">Quotations</a></li>
+<li><a href="#10-notifications">Notifications</a></li>
+<li><a href="#11-reports">Reports</a></li>
+<li><a href="#12-global-search">Global search</a></li>
+<li><a href="#13-settings-users-api-keys-and-audit-log">Settings, Users, API keys and Audit log</a></li>
+<li><a href="#14-good-to-know">Good to know</a></li>
+<li><a href="#15-likely-evaluator-questions">Likely evaluator questions</a></li>
+<li><a href="#16-technical-overview">Technical overview</a></li>
+<li><a href="#17-prd-coverage">PRD coverage</a></li>
+<li><a href="#18-5-minute-demo-walkthrough">5-minute demo walkthrough</a></li>
+</ol>
+</nav>
+<main>
+<section id="1-what-the-app-is">
+<h2>1. What the app is</h2>
+<p>Grow Spark Sales &amp; CRM is a web app for the sales team. It covers the whole journey from first enquiry to won deal:</p>
+<h3>enquiry → lead → company and contact → deal → quotation → Won or Lost → reports.</h3>
+<p>It runs in a normal web browser. Grow Spark Consulting is the first organisation using it. Amounts are in Indian rupees (₹) and dates use India time.</p>
+<p>There are two roles. Both do everyday sales work. Only Admins manage people and settings.</p>
+<div class="table-wrap"><table>
+<thead><tr><th></th><th>Admin</th><th>Staff (shown as "Staff Executive")</th></tr></thead>
+<tbody>
+<tr><td>Leads, companies, contacts, deals, activities</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>Quotations, enquiries, reports, CSV export and import</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>Home dashboard, Today, My Tasks, search, notifications</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>My profile, change own password</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>Users (add, edit, deactivate, reset passwords)</td><td>Yes</td><td>No</td></tr>
+<tr><td>Organisation profile, lead sources, pipeline stages</td><td>Yes</td><td>No</td></tr>
+<tr><td>API keys, Audit log</td><td>Yes</td><td>No</td></tr>
+</tbody></table></div>
+<p>Staff can see every record, not only their own. "Owner" shows who is responsible for a record. It does not hide it from others.</p>
+</section>
+<section id="2-feature-map">
+<h2>2. Feature map</h2>
+<p>Every screen in the app. "Menu" is the left sidebar unless stated.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>Screen / feature</th><th>Where to find it</th><th>Admin</th><th>Staff</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td>Sign in</td><td>Login page</td><td>Yes</td><td>Yes</td><td>Email and password sign-in.</td></tr>
+<tr><td>Home</td><td>Menu → <strong>Home</strong></td><td>Yes</td><td>Yes</td><td>Dashboard: 9 key numbers, 4 charts, recent activity.</td></tr>
+<tr><td>Today</td><td>Menu → <strong>Today</strong></td><td>Yes</td><td>Yes</td><td>What needs attention today, in 7 cards.</td></tr>
+<tr><td>My Tasks</td><td>Menu → <strong>My Tasks</strong></td><td>Yes</td><td>Yes</td><td>Open, overdue and done tasks, calls and meetings.</td></tr>
+<tr><td>Leads</td><td>Menu → <strong>Leads</strong></td><td>Yes</td><td>Yes</td><td>List, add, edit, qualify, convert and archive leads.</td></tr>
+<tr><td>Import leads</td><td>Leads → <strong>Import CSV</strong></td><td>Yes</td><td>Yes</td><td>Load leads from a CSV file.</td></tr>
+<tr><td>Companies</td><td>Menu → <strong>Companies</strong></td><td>Yes</td><td>Yes</td><td>Company records with contacts, deals, quotations and timeline.</td></tr>
+<tr><td>Contacts</td><td>Menu → <strong>Contacts</strong></td><td>Yes</td><td>Yes</td><td>People, linked to a company.</td></tr>
+<tr><td>Import contacts</td><td>Contacts → <strong>Import CSV</strong></td><td>Yes</td><td>Yes</td><td>Load contacts from a CSV file (creates missing companies).</td></tr>
+<tr><td>Deals</td><td>Menu → <strong>Deals</strong></td><td>Yes</td><td>Yes</td><td>Deals as a <strong>List</strong> or a <strong>Board</strong> (pipeline).</td></tr>
+<tr><td>Quotations</td><td>Menu → <strong>Quotations</strong></td><td>Yes</td><td>Yes</td><td>Priced quotations with GST, PDF download and statuses.</td></tr>
+<tr><td>Enquiries</td><td>Menu → <strong>Enquiries</strong></td><td>Yes</td><td>Yes</td><td>Inbox of website form submissions.</td></tr>
+<tr><td>Reports</td><td>Menu → <strong>Reports</strong></td><td>Yes</td><td>Yes</td><td>Five ready-made reports, each downloadable as CSV.</td></tr>
+<tr><td>Notifications</td><td>Bell icon, top right</td><td>Yes</td><td>Yes</td><td>Your own alerts (assignments, enquiries, quotations, tasks).</td></tr>
+<tr><td>Global search</td><td>Search box, top bar (Ctrl+K or /)</td><td>Yes</td><td>Yes</td><td>Find leads, contacts, companies, deals and quotations.</td></tr>
+<tr><td>Theme and Log out</td><td>Your name, top right</td><td>Yes</td><td>Yes</td><td>Light, Dark or System theme; sign out.</td></tr>
+<tr><td>Settings</td><td>Menu → <strong>Settings</strong></td><td>Yes</td><td>Yes (My profile only)</td><td>Hub for profile and admin settings.</td></tr>
+<tr><td>My profile</td><td>Settings → <strong>My profile</strong></td><td>Yes</td><td>Yes</td><td>Your details; change your password.</td></tr>
+<tr><td>Organisation</td><td>Settings → <strong>Organisation</strong></td><td>Yes</td><td>No</td><td>Name, address, GSTIN, contact details printed on quotations.</td></tr>
+<tr><td>Lead sources</td><td>Settings → <strong>Lead sources</strong></td><td>Yes</td><td>No</td><td>Add, rename, reorder, deactivate lead sources.</td></tr>
+<tr><td>Pipeline stages</td><td>Settings → <strong>Pipeline stages</strong></td><td>Yes</td><td>No</td><td>Add, rename, reorder, delete deal stages and probabilities.</td></tr>
+<tr><td>Users</td><td>Menu → <strong>Users</strong> (or Settings)</td><td>Yes</td><td>No</td><td>Add users, change roles, deactivate, reset passwords.</td></tr>
+<tr><td>API keys</td><td>Menu → <strong>API Keys</strong> (or Settings)</td><td>Yes</td><td>No</td><td>Keys the website uses to send enquiries in.</td></tr>
+<tr><td>Audit log</td><td>Menu → <strong>Audit Log</strong> (or Settings)</td><td>Yes</td><td>No</td><td>Who changed what, and when.</td></tr>
+<tr><td>Forbidden page</td><td>Shown automatically</td><td>—</td><td>—</td><td>Appears if someone opens a page their role cannot use.</td></tr>
+</tbody></table></div>
+<p>Behind the scenes the app has 19 permissions. Staff hold every permission except three: managing users, reading the audit log, and managing settings (which includes API keys).</p>
+</section>
+<section id="3-signing-in-users-and-passwords">
+<h2>3. Signing in, users and passwords</h2>
+<h3>Signing in</h3>
+<ol>
+<li>Open the app's web address.</li>
+<li>Type your <strong>Email</strong> and <strong>Password</strong>, click <strong>Sign in</strong>.</li>
+<li>A wrong password shows a general error. It never says whether the email exists. After several failed attempts the app asks you to wait.</li>
+</ol>
+<p>To sign out, click your name (top right) → <strong>Log out</strong>. A session lasts up to 7 days. It is extended while you keep using the app.</p>
+<h3>New users (Admin only)</h3>
+<p>There is no public sign-up and no email invitation. An Admin creates each account:</p>
+<ol>
+<li>Menu → <strong>Users</strong> → <strong>New user</strong>.</li>
+<li>Enter <strong>Name</strong>, <strong>Email</strong>, <strong>Role</strong> (Admin or Staff) and an <strong>Initial password</strong> (at least 10 characters). Click <strong>Create user</strong>.</li>
+<li>Give the person their password yourself, in person or by phone.</li>
+</ol>
+<p>On the Users list an Admin can also click <strong>Edit</strong> (name, email, role), <strong>Reset password</strong>, and <strong>Deactivate</strong> / <strong>Reactivate</strong>. A deactivated person is signed out at once. The app will not let you remove or demote the last active Admin.</p>
+<h3>Changing your own password</h3>
+<ol>
+<li>Menu → <strong>Settings</strong> → <strong>My profile</strong>.</li>
+<li>Under <strong>Change password</strong>, enter <strong>Current password</strong>, <strong>New password</strong> and <strong>New password again</strong>. Click <strong>Change password</strong>.</li>
+<li>You stay signed in here. You are signed out on every other device.</li>
+</ol>
+<p>Forgot your password? Ask an Admin to use <strong>Reset password</strong> on the Users page. There is no "forgot password" email.</p>
+</section>
+<section id="4-home-today-and-my-tasks" class="flow">
+<h2>4. Home, Today and My Tasks</h2>
+<p><strong>Home</strong> (the dashboard)</p>
+<ul>
+<li>Nine numbers: <strong>Leads created</strong>, <strong>Qualified leads</strong>, <strong>Active leads</strong>, <strong>Open deals</strong>, <strong>Open pipeline value</strong>, <strong>Weighted value</strong>, <strong>Won revenue</strong>, <strong>Win rate</strong>, <strong>Overdue tasks</strong>.</li>
+<li>Four charts: <strong>Leads by source</strong>, <strong>Leads by status</strong>, <strong>Pipeline by stage</strong>, <strong>Monthly won revenue</strong>. Plus a <strong>Recent activity</strong> list.</li>
+<li><strong>Date range</strong>: <strong>This month</strong>, <strong>Last 30 days</strong> or <strong>Custom range</strong>.</li>
+<li><strong>All</strong> / <strong>Mine</strong>: everyone's records, or only the ones you own or are assigned.</li>
+</ul>
+<p>Open deals and pipeline value always show "right now". They ignore the date range.</p>
+<h3>Today</h3>
+<p>One card per question: <strong>Overdue</strong>, <strong>Tasks due today</strong>, <strong>Meetings this week</strong>, <strong>New leads</strong>, <strong>Deals closing soon</strong> (next 14 days), <strong>Deals with no next activity</strong>, <strong>Recently updated deals</strong>.</p>
+<ul>
+<li><strong>Mine</strong> (default) or <strong>All</strong> at the top.</li>
+<li>Click a row to open the record. Click <strong>Complete</strong> to tick off a task. Click <strong>Add follow-up</strong> to schedule the next step.</li>
+</ul>
+<h3>My Tasks</h3>
+<ul>
+<li>Tabs: <strong>Open</strong>, <strong>Overdue</strong>, <strong>Done</strong>.</li>
+<li>Filters: <strong>Any type</strong>, <strong>Any priority</strong>, <strong>Due from</strong>, <strong>Due to</strong>.</li>
+<li><strong>Complete</strong> or <strong>Cancel</strong> an item from the list.</li>
+</ul>
+<p>Note: despite its name, My Tasks currently lists open items for everyone in the organisation, not only yours. Use <strong>Today → Mine</strong> for your own list.</p>
+<h3>Adding activities (all record pages)</h3>
+<p>Every lead, company, contact and deal page has a <strong>Timeline</strong> tab with an <strong>Add activity</strong> box:</p>
+<ol>
+<li>Pick <strong>Task</strong>, <strong>Call</strong>, <strong>Meeting</strong> or <strong>Note</strong>.</li>
+<li>Type a <strong>Subject</strong>. Add a due date (or start and end times for a meeting), <strong>Priority</strong>, <strong>Assignee</strong> and <strong>Description</strong> if useful.</li>
+<li>Click <strong>Save activity</strong> (or <strong>Save note</strong>).</li>
+</ol>
+<p>An activity added to a deal also shows on its company's and contacts' timelines.</p>
+</section>
+<section id="5-leads">
+<h2>5. Leads</h2>
+<p>A lead is a possible customer who has not yet been qualified.</p>
+<h3>Add a lead</h3>
+<ol>
+<li>Menu → <strong>Leads</strong> → <strong>Add lead</strong>.</li>
+<li>Fill in <strong>First name</strong> (required) and an <strong>Email</strong> or <strong>Phone</strong> (one of them is required). Everything else is optional: company name, job title, <strong>Source</strong> (defaults to "Manual"), <strong>Priority</strong>, <strong>Owner</strong>, budget, timeline, <strong>Next follow-up</strong>, <strong>Requirement</strong>, <strong>Notes</strong>.</li>
+<li>Click <strong>Add lead</strong>.</li>
+</ol>
+<p>If the email, phone or company name matches an existing lead, a yellow <strong>"This might already exist."</strong> box appears with a link. It is a warning only. You can still save.</p>
+<h3>Edit, owner and status</h3>
+<ul>
+<li>Click <strong>Edit</strong>, change fields (including <strong>Owner</strong>), click <strong>Save changes</strong>. The Requirement cannot be changed after creation, so the original enquiry is kept.</li>
+<li>On the <strong>Overview</strong> tab, under <strong>Change status</strong>, click <strong>New</strong>, <strong>Contacted</strong>, <strong>Qualified</strong> or <strong>Unqualified</strong>.</li>
+<li>The <strong>History</strong> tab lists every status change, who made it and when.</li>
+</ul>
+<h3>Convert a lead</h3>
+<p>Only a <strong>Qualified</strong> lead can be converted. Otherwise the <strong>Convert</strong> button is greyed out ("Qualify the lead first").</p>
+<ol>
+<li>Click <strong>Convert</strong>.</li>
+<li><strong>Company</strong>: <strong>Link existing</strong> (suggested if one matches) or <strong>Create new</strong>.</li>
+<li><strong>Contact</strong>: <strong>Link existing</strong> or <strong>Create new</strong> (made from the lead's name, email and phone).</li>
+<li><strong>Deal</strong>: leave <strong>Create a deal</strong> on to start a deal in the first pipeline stage. Adjust <strong>Deal name</strong>, <strong>Value (₹)</strong> and <strong>Expected close date</strong> if needed.</li>
+<li>Click <strong>Convert lead</strong>. Links to the new or linked records appear.</li>
+</ol>
+<p>The lead stays in the system with status <strong>Converted</strong>, its history and a <strong>Converted</strong> panel linking to what it became.</p>
+<h3>Archive, filters, export and import</h3>
+<ul>
+<li><strong>Archive</strong> hides a lead from the list. Nothing is permanently deleted. Switch the last filter to <strong>Archived</strong> to see it, then click <strong>Restore</strong>.</li>
+<li>Search box plus filters: <strong>Any status</strong>, <strong>Any source</strong>, <strong>Any priority</strong>, <strong>Any owner</strong>, a created-date range. Click a column heading to sort. Filters stay in the web address, so a filtered view can be bookmarked.</li>
+<li><strong>Download CSV</strong> exports exactly what the current filters show.</li>
+<li>There are no bulk actions (for example, selecting several leads to reassign them at once).</li>
+</ul>
+<h3>Import leads from a CSV file</h3>
+<ol>
+<li>Leads → <strong>Import CSV</strong>. Optional: <strong>Download a sample file</strong>.</li>
+<li>Click <strong>Choose CSV file</strong> (CSV only, up to 1 MB and 1,000 rows). From Excel, use File → Save As → CSV UTF-8.</li>
+<li><strong>Match the columns</strong>: the app guesses each one. Change any column, or set it to <strong>Don't import</strong>. Unused columns are still saved on the lead as "Other captured answers".</li>
+<li>Click <strong>Check rows</strong>. Every row is marked <strong>Ready</strong>, <strong>Duplicate</strong> (same email as an existing lead, or earlier in the file) or <strong>Error</strong> (with the reason).</li>
+<li>Click <strong>Import N leads</strong>. You can download the skipped rows with their reasons.</li>
+</ol>
+</section>
+<section id="6-companies-and-contacts" class="flow">
+<h2>6. Companies and Contacts</h2>
+<h3>Companies</h3>
+<ol>
+<li>Menu → <strong>Companies</strong> → <strong>Add company</strong>. Only <strong>Company name</strong> is required. Click <strong>More details</strong> for legal name, size, revenue, address and description.</li>
+<li>Click <strong>Add company</strong>.</li>
+</ol>
+<p>A company page has tabs: <strong>Overview</strong>, <strong>Contacts</strong>, <strong>Deals</strong>, <strong>Quotations</strong>, <strong>Timeline</strong>. You can add a contact, deal or quotation straight from its tab.</p>
+<h3>Contacts</h3>
+<ol>
+<li>Menu → <strong>Contacts</strong> → <strong>Add contact</strong> (a pop-up form).</li>
+<li><strong>First name</strong> plus an email or phone are required. Pick a <strong>Company</strong> by typing its name.</li>
+<li>Click <strong>Add contact</strong>.</li>
+</ol>
+<p>A contact page has <strong>Overview</strong>, <strong>Deals</strong> and <strong>Timeline</strong> tabs. Click <strong>Edit</strong> to change it.</p>
+<p>Both lists have search, an owner filter, <strong>Archive</strong> / <strong>Restore</strong> and <strong>Download CSV</strong>. Contacts also has <strong>Import CSV</strong>. A company name in the file that doesn't exist yet is created once, and the preview lists it first.</p>
+</section>
+<section id="7-deals-and-the-pipeline">
+<h2>7. Deals and the pipeline</h2>
+<p>A deal is a sales opportunity with a value.</p>
+<p><strong>Add a deal</strong>: Menu → <strong>Deals</strong> → <strong>Add deal</strong>. Enter <strong>Deal name</strong>, <strong>Company</strong>, <strong>Stage</strong>, <strong>Value</strong>, <strong>Owner</strong> and expected close date. Click <strong>Add deal</strong>.</p>
+<h3>List and Board</h3>
+<ul>
+<li><strong>List</strong>: a table with search and filters (stage, status, owner, company) and <strong>Download CSV</strong>.</li>
+<li><strong>Board</strong>: one column per open stage, with totals. Move a card by dragging it, or with its <strong>Move to…</strong> button.</li>
+</ul>
+<h3>On a deal page</h3>
+<ul>
+<li>Key facts: Stage, Value, Probability, <strong>Weighted value</strong> (value × probability), Expected close, Owner, Next activity.</li>
+<li><strong>Move stage</strong>: pick another open stage. Each move is recorded on the <strong>Stage history</strong> tab.</li>
+<li><strong>Contacts</strong> tab: <strong>Add contact</strong>, <strong>Make primary</strong>, remove.</li>
+<li><strong>Close as Won</strong>: probability becomes 100%.</li>
+<li><strong>Close as Lost</strong>: you must pick a <strong>Lost reason</strong> (Price, Competitor, No budget, No decision, Timing, Not a fit, Unresponsive, Other) and can add a note. Probability becomes 0%.</li>
+<li>A closed deal is read-only. <strong>Reopen</strong> sends it back to the first open stage.</li>
+<li><strong>Archive</strong> / <strong>Restore</strong> work on open or closed deals.</li>
+</ul>
+<p>The stages and their probabilities are set in Settings → Pipeline stages (Admin only). There is one pipeline.</p>
+</section>
+<section id="8-enquiries-inbox-and-the-website-form" class="flow">
+<h2>8. Enquiries inbox and the website form</h2>
+<h3>How the website form will feed the CRM</h3>
+<p>The CRM is ready to receive enquiries from the Grow Spark website. Once connected, the website will send a copy of each contact-form enquiry to the CRM. The website's own saving, emails and HubSpot flow stay exactly as they are. <strong>Today the website is not yet connected.</strong> That work is on hold until the CRM is finished. Until then, enquiries arrive only from test submissions.</p>
+<p>When an enquiry arrives, the CRM:</p>
+<ul>
+<li>stores it exactly as received,</li>
+<li>creates a lead with source <strong>Website</strong>, unless it has no email or phone (then it is kept as <strong>Rejected</strong>, with the reason),</li>
+<li>quietly marks obvious bot submissions as <strong>Spam</strong>,</li>
+<li>ignores a repeat of the same submission, so retries never create duplicates,</li>
+<li>notifies every active user.</li>
+</ul>
+<h3>Using the inbox</h3>
+<ol>
+<li>Menu → <strong>Enquiries</strong>. Filter by status (<strong>Received</strong>, <strong>Lead created</strong>, <strong>Rejected</strong>, <strong>Spam</strong>), form type or date.</li>
+<li>Open an enquiry. <strong>Overview</strong> shows the details and a link to its lead. <strong>Raw payload</strong> shows exactly what the website sent.</li>
+<li><strong>Mark as spam</strong>: also archives the lead it created.</li>
+<li><strong>Archive</strong> hides it. <strong>Restore</strong> brings it back.</li>
+</ol>
+</section>
+<section id="9-quotations">
+<h2>9. Quotations</h2>
+<h3>Create a quotation</h3>
+<ol>
+<li>Menu → <strong>Quotations</strong> → <strong>New quotation</strong> (or from a company's or deal's <strong>Quotations</strong> tab).</li>
+<li>Choose <strong>Company</strong>, then <strong>Contact</strong> (only that company's people), and optionally a <strong>Deal</strong>.</li>
+<li><strong>Issue date</strong> defaults to today. <strong>Valid until</strong> defaults to 30 days later.</li>
+<li>Add <strong>Line items</strong>: <strong>Description</strong>, <strong>Qty</strong>, <strong>Unit price (₹)</strong>, optional <strong>Disc. %</strong>. Click <strong>Add line</strong> for more.</li>
+<li>Set <strong>Quotation discount (%)</strong> and <strong>GST (%)</strong> (default 18). Add <strong>Terms</strong> and <strong>Notes</strong> if needed.</li>
+<li>The totals box updates as you type: <strong>Subtotal</strong>, discount, <strong>Taxable amount</strong>, GST, <strong>Total</strong>. Click <strong>Create quotation</strong>.</li>
+</ol>
+<p>Each quotation gets a number like <strong>Q-2026-0001</strong>. The numbers restart each year.</p>
+<p><strong>PDF</strong>: click <strong>Download PDF</strong>. It shows your organisation's details (from Settings → Organisation), the customer, the lines and the totals. Each edit makes a new version (…-v1, …-v2).</p>
+<h3>Statuses</h3>
+<ul>
+<li><strong>Draft</strong> → click <strong>Mark as sent</strong> → <strong>Sent</strong>. A draft whose Valid until date has passed can't be sent until you change the date.</li>
+<li><strong>Sent</strong> → <strong>Accepted</strong> or <strong>Rejected</strong>. Both are final.</li>
+<li><strong>Expired</strong>: a Sent quotation past its Valid until date becomes Expired automatically.</li>
+<li>When you accept a quotation linked to an open deal, the app asks <strong>"Mark the deal as Won?"</strong>. Choose <strong>Mark deal as Won</strong> or <strong>Not now</strong>.</li>
+</ul>
+<p>Only drafts can be edited. <strong>Duplicate</strong> makes a new draft copy with a new number (useful after a rejection). <strong>Archive</strong> / <strong>Restore</strong> as elsewhere.</p>
+</section>
+<section id="10-notifications" class="flow">
+<h2>10. Notifications</h2>
+<p>The bell (top right) shows how many unread notifications you have. It checks about once a minute. Click it to open <strong>Notifications</strong>: <strong>All</strong> or <strong>Unread</strong>, <strong>Mark read</strong> on one row, or <strong>Mark all as read</strong>. Click a title to open the record.</p>
+<p>You are notified when:</p>
+<ul>
+<li>a lead or deal is assigned to you by someone else,</li>
+<li>a website enquiry arrives (everyone is told),</li>
+<li>a quotation you own is accepted or rejected by someone else,</li>
+<li>a task assigned to you is due today or overdue (checked when you open the app).</li>
+</ul>
+<p>You only see your own notifications. There are no emails.</p>
+</section>
+<section id="11-reports">
+<h2>11. Reports</h2>
+<p>Menu → <strong>Reports</strong>. Use the same <strong>Date range</strong> and <strong>All</strong> / <strong>Mine</strong> controls as Home. Five reports, each with a table, a <strong>Total</strong> row and a <strong>Download CSV</strong> button:</p>
+<ol>
+<li><strong>Pipeline by stage</strong>: open deals right now (ignores the date range).</li>
+<li><strong>Lead sources and conversion</strong>: leads created in the range, by source, and how many converted.</li>
+<li><strong>Sales performance by owner</strong>: deals won (count and value), lost, win rate.</li>
+<li><strong>Quotations summary</strong>: quotations issued in the range, by status.</li>
+<li><strong>Overdue tasks by assignee</strong>: open items due before today with a due date inside the range. For all overdue items, pick a wide custom range.</li>
+</ol>
+<p>Reports and Home use the same calculations, so their numbers agree.</p>
+</section>
+<section id="12-global-search" class="flow">
+<h2>12. Global search</h2>
+<p>The <strong>Search…</strong> box sits in the top bar on every page.</p>
+<ol>
+<li>Click it, or press <strong>Ctrl+K</strong> (⌘K on Mac) or <strong>/</strong>.</li>
+<li>Type at least 2 characters. Results appear grouped: Leads, Contacts, Companies, Deals, Quotations (up to 5 each).</li>
+<li>Use the <strong>↑</strong> and <strong>↓</strong> keys and <strong>Enter</strong>, or click a result. If a group has more, click <strong>See all matching …</strong>.</li>
+<li><strong>Esc</strong> closes the results. Press <strong>Esc</strong> again to clear the box.</li>
+</ol>
+<p>Each word must match, so "asha rao" finds Asha Rao. Archived records are not shown.</p>
+</section>
+<section id="13-settings-users-api-keys-and-audit-log" class="flow">
+<h2>13. Settings, Users, API keys and Audit log</h2>
+<p>Menu → <strong>Settings</strong>. Staff see only <strong>My profile</strong>. Admins also see an <strong>Administration</strong> section.</p>
+<ul>
+<li><strong>Organisation</strong> (Admin only): display name, legal name, GSTIN, address, phone, email, website. These print on quotation PDFs. Currency (INR) and time zone (Asia/Kolkata) are shown but cannot be changed.</li>
+<li><strong>Lead sources</strong> (Admin only): <strong>Add source</strong>, <strong>Rename</strong>, <strong>Deactivate</strong> / <strong>Reactivate</strong>, reorder with the arrows. "Website", "Manual" and "Import" are <strong>System</strong> sources and cannot be changed. A deactivated source stays on old leads but is no longer offered.</li>
+<li><strong>Pipeline stages</strong> (Admin only): <strong>Add stage</strong>, <strong>Edit</strong> (name and probability), reorder open stages, <strong>Delete</strong> (only for a stage no deal has ever used). Won (100%) and Lost (0%) are always last. New deals start in the first open stage.</li>
+<li><strong>Users</strong> (Admin only): see section 3.</li>
+<li><strong>API keys</strong> (Admin only): <strong>New API key</strong> → name → <strong>Create key</strong>. The full key is shown <strong>once only</strong>, so copy it then. <strong>Rotate</strong> issues a new key and stops the old one. <strong>Revoke</strong> stops it for good.</li>
+<li><strong>Audit log</strong> (Admin only): a list of important actions (users, deactivations, archives, conversions, deal outcomes, quotations, settings, imports, API keys) with <strong>When</strong>, <strong>Actor</strong>, <strong>Action</strong>, <strong>Record</strong>, <strong>Details</strong>. Filter by action, record type, person and date. It shows field names, never passwords or keys.</li>
+</ul>
+</section>
+<section id="14-good-to-know">
+<h2>14. Good to know</h2>
+<ul>
+<li><strong>The first click can be slow.</strong> The test (staging) setup uses free hosting that sleeps after about 15 minutes without use. The first request afterwards can take up to a minute. After that it runs at normal speed. The free database can also pause after a long idle period, and someone must un-pause it from its dashboard.</li>
+<li><strong>Fictional data only</strong> on staging and in demos. Never enter real customer details.</li>
+<li><strong>Nothing is deleted.</strong> Leads, companies, contacts, deals, quotations and enquiries are archived and can be restored.</li>
+<li><strong>Not in this version</strong> (agreed or reported, not forgotten):<ul><li>no "forgot password" email; an Admin resets passwords</li><li>no emails of any kind (notifications are in-app only)</li><li>no product or service catalogue; quotation lines are typed in</li><li>one GST rate per quotation, no CGST/SGST/IGST split</li><li>no Excel (.xlsx) import; save as CSV instead</li><li>no custom fields, no saved filters (bookmark the filtered web address instead)</li><li>no PDF reports; reports download as CSV</li><li>no notification settings, and no notifications for deal stage changes or Won/Lost</li><li>no bulk actions on lists, and no calendar view</li><li>currency and time zone are fixed (INR, India time)</li><li>the website form is not connected yet (section 8)</li></ul></li>
+</ul>
+</section>
+<section id="15-likely-evaluator-questions">
+<h2>15. Likely evaluator questions</h2>
+<div class="qa"><p class="q">How do roles and permissions work?</p><p>There are two roles, Admin and Staff. Each action needs a permission (for example "leads:write"). The server checks it on every request. Hiding a button is only for convenience: if Staff tried an Admin action directly, the server would refuse it.</p></div>
+<div class="qa"><p class="q">Can Staff see each other's records?</p><p>Yes. Sales records are shared across the team. "Owner" records who is responsible. <strong>Mine</strong> filters let each person focus on their own.</p></div>
+<div class="qa"><p class="q">How does login work?</p><p>Email and password. Passwords are stored only as a scrambled one-way hash. After sign-in the browser holds a random session code. The server keeps the session, so it can end it instantly. Deactivating a user or changing a password signs that person out everywhere.</p></div>
+<div class="qa"><p class="q">What stops password guessing?</p><p>After several failed attempts for the same email, further attempts are refused for a while ("Too many attempts. Try again later.").</p></div>
+<div class="qa"><p class="q">How does the website form reach the CRM?</p><p>The website's server sends each enquiry to a private CRM address, with an API key created on the API keys page. Browsers never see the key. The connection itself is not switched on yet (section 8).</p></div>
+<div class="qa"><p class="q">What if the CRM is down when someone submits the website form?</p><p>The plan is that the website keeps saving and emailing enquiries exactly as it does today, so an enquiry is not lost if the CRM is down. If the website sends the same enquiry again later, the CRM recognises its submission ID and ignores the repeat. Retrying from the website side is part of the connection work that is still on hold.</p></div>
+<div class="qa"><p class="q">How are quotation totals calculated?</p><p>Line amount = quantity × unit price, minus the line discount. Subtotal = sum of lines. Then the quotation discount, then GST on the taxable amount, then the total. Rounding to the paisa (half-up) happens once per line, once for the discount and once for GST, so the printed figures always add up.</p></div>
+<div class="qa"><p class="q">Why are the totals exact?</p><p>Money is calculated with exact decimal arithmetic, not computer floating-point, which can drift by a paisa. The server always recalculates the totals itself, and the screen, the list and the PDF show the same figure.</p></div>
+<div class="qa"><p class="q">How are duplicates handled?</p><p>When you add a lead or company by hand, a matching email, phone or name shows a warning, but you can still save. CSV imports skip rows whose email already exists, and list them. A repeated website submission is ignored. Conversion suggests existing companies and contacts so you can link them instead of creating copies.</p></div>
+<div class="qa"><p class="q">What happens when a lead is converted?</p><p>In one step, the app links or creates the company and contact, can start a deal, and marks the lead Converted. If any part fails, nothing is saved. The lead and its history are kept.</p></div>
+<div class="qa"><p class="q">What is audited?</p><p>Creating, editing, archiving and restoring records; lead status changes and conversions; deal stage moves and Won/Lost; quotation changes; user, role and password changes; settings; API keys; imports; and the outcome of each website enquiry. The log entry is saved together with the change, so a change can't happen without one.</p></div>
+<div class="qa"><p class="q">Can data be deleted?</p><p>Business records are archived, never deleted. The one exception: an Admin can delete a pipeline stage that no deal has ever used.</p></div>
+<div class="qa"><p class="q">Do the dashboard numbers match the data?</p><p>Yes. Automated tests compare every dashboard number with an independent database count, and check that Reports agree with Home.</p></div>
+<div class="qa"><p class="q">Why were some PRD items left out?</p><p>To finish the full core journey reliably in the time available. Each item left out is recorded with a reason. Some were approved by the project owner, and some are awaiting a decision (section 17).</p></div>
+<div class="qa"><p class="q">How was it tested?</p><p>791 automated tests run against a real database. Step-by-step manual test scripts exist for every feature. Running them in a browser is the next step.</p></div>
+</section>
+<section id="16-technical-overview">
+<h2>16. Technical overview</h2>
+<h3>Three parts</h3>
+<div class="table-wrap"><table>
+<thead><tr><th>Part</th><th>What it is</th><th>Where it runs (staging)</th></tr></thead>
+<tbody>
+<tr><td>Web app</td><td>The screens (Next.js, React, TypeScript)</td><td>Vercel (free plan)</td></tr>
+<tr><td>API</td><td>Business rules and permissions (Express, TypeScript)</td><td>Render (free plan)</td></tr>
+<tr><td>Database</td><td>PostgreSQL 17, in its own separate area</td><td>Supabase (free plan)</td></tr>
+</tbody></table></div>
+<p>The browser talks only to the web app, which passes requests to the API. Only the API talks to the database. The CRM's data lives in its own database area with its own login, separate from the website's data. For local use the whole app also starts with one Docker command.</p>
+<h3>Login and sessions</h3>
+<ul>
+<li>Email and password. Passwords are hashed with Argon2.</li>
+<li>On sign-in the server creates a random session token. The browser stores it in a cookie that page scripts cannot read; the database stores only a hash of it.</li>
+<li>Sessions last 7 days and are extended while the app is in use. Logout, deactivation or a password change ends them immediately.</li>
+<li>Two roles (Admin, Staff) map to 19 named permissions, checked by the API on every route.</li>
+</ul>
+<h3>Security measures</h3>
+<ul>
+<li>Permission check on every API route, and every query is limited to the user's organisation.</li>
+<li>Input checked against one shared set of validation rules.</li>
+<li>Rate limits on login and on website intake (per key and per address).</li>
+<li>Same-site request check against cross-site attacks; standard security headers.</li>
+<li>API keys stored only as hashes and shown once. They can be revoked or rotated.</li>
+<li>Website intake: idempotency (no duplicates on retry), a hidden bot trap, and size and type limits.</li>
+<li>CSV exports are protected against spreadsheet formula injection.</li>
+<li>Errors give a reference ID, never internal details. The audit log shows only approved fields.</li>
+<li>Related changes are saved together in one database transaction, including their audit row.</li>
+</ul>
+<h3>Free-tier hosting</h3>
+<p>Everything runs on free plans with no paid dependency. The trade-offs: the API sleeps after about 15 minutes idle (up to a minute to wake), the database can pause when unused for long, and connections are limited. This is fine for evaluation, not for production.</p>
+</section>
+<section id="17-prd-coverage">
+<h2>17. PRD coverage</h2>
+<p>Status of every item in PRD section 5. Key: <strong>Built</strong>, <strong>Built differently</strong>, <strong>Not built</strong>. "Approved" means the project owner approved the change (decision number in brackets). "Awaiting decision" means it was reported and is not yet approved. "Not recorded" means no decision about it was written down.</p>
+<div class="table-wrap"><table>
+<thead><tr><th>PRD item</th><th>Status</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td><strong>5.1</strong> Secure login/logout</td><td>Built</td><td></td></tr>
+<tr><td>5.1 Password reset</td><td>Built differently</td><td>Admin resets passwords; no self-service email reset (the app sends no email). Listed as not built in the README.</td></tr>
+<tr><td>5.1 Roles; create/edit/activate/deactivate users</td><td>Built</td><td></td></tr>
+<tr><td>5.1 Permission enforcement; multiple Admins</td><td>Built</td><td></td></tr>
+<tr><td>5.1 Profile and sessions; protect last Admin</td><td>Built</td><td>Name and email are changed by an Admin.</td></tr>
+<tr><td><strong>5.2</strong> KPIs</td><td>Built differently</td><td>Uses the owner-approved metric set (D53). "Leads created" follows the date range (pick today for "today"). No "total leads" or lost-deal count card; lost counts are in Reports.</td></tr>
+<tr><td>5.2 Today's tasks, meetings, overdue, recent</td><td>Built differently</td><td>On the separate Today page; Home shows Recent activity and Overdue tasks.</td></tr>
+<tr><td>5.2 Source/status breakdowns, pipeline, monthly revenue</td><td>Built</td><td></td></tr>
+<tr><td>5.2 Role-aware data; date filters</td><td>Built</td><td>All/Mine and date range.</td></tr>
+<tr><td><strong>5.3</strong> Manual lead create/edit</td><td>Built</td><td></td></tr>
+<tr><td>5.3 CSV/Excel import with field mapping</td><td>Built differently</td><td>CSV only; Excel can save as CSV. Awaiting decision (D95).</td></tr>
+<tr><td>5.3 Website form through a secured API</td><td>Built differently</td><td>CRM side built and tested; website not connected (on hold by owner instruction).</td></tr>
+<tr><td>5.3 Source/detail, status, owner, captured enquiry</td><td>Built</td><td></td></tr>
+<tr><td>5.3 Search, filters, sorting, duplicate detection</td><td>Built</td><td>Duplicates warn, never block.</td></tr>
+<tr><td>5.3 Bulk operations</td><td>Not built</td><td>Not recorded.</td></tr>
+<tr><td>5.3 Qualify, convert, notes, history, original submission</td><td>Built</td><td></td></tr>
+<tr><td><strong>5.4</strong> Company and contact records</td><td>Built</td><td>Company "notes" is the Description field.</td></tr>
+<tr><td>5.4 Many contacts per company; contacts on many deals</td><td>Built</td><td></td></tr>
+<tr><td>5.4 History, tasks, notes, related deals</td><td>Built</td><td>Timeline and Deals tabs.</td></tr>
+<tr><td><strong>5.5</strong> Deals with value, currency, owner, close date, probability</td><td>Built</td><td>Currency is INR; probability comes from the stage.</td></tr>
+<tr><td>5.5 Deal linked to company and several contacts</td><td>Built</td><td></td></tr>
+<tr><td>5.5 Configurable stages; Board and List; history; drag</td><td>Built</td><td></td></tr>
+<tr><td>5.5 Won/Lost with lost reason; pipeline and weighted value</td><td>Built</td><td></td></tr>
+<tr><td>5.5 One configurable pipeline</td><td>Built</td><td></td></tr>
+<tr><td><strong>5.6</strong> Tasks, calls, meetings, notes linked to records</td><td>Built</td><td></td></tr>
+<tr><td>5.6 Reminders</td><td>Built differently</td><td>Only "task due today" and "overdue" notifications (approved, D91).</td></tr>
+<tr><td>5.6 Due date, priority, status, assignee, completion</td><td>Built</td><td></td></tr>
+<tr><td>5.6 Today, upcoming, overdue</td><td>Built</td><td>Today page, My Tasks.</td></tr>
+<tr><td>5.6 Calendar view</td><td>Not built</td><td>Not recorded.</td></tr>
+<tr><td>5.6 Timeline on lead, contact, company, deal</td><td>Built</td><td></td></tr>
+<tr><td><strong>5.7</strong> Product/service catalogue</td><td>Not built</td><td>Approved (D87); future item.</td></tr>
+<tr><td>5.7 Items with qty, price, discount, tax</td><td>Built differently</td><td>Lines typed in; one GST % per quotation; on quotations, not deals (approved, D87).</td></tr>
+<tr><td>5.7 Number, validity, customer, totals</td><td>Built</td><td></td></tr>
+<tr><td>5.7 PDF; linked to deal; status tracking</td><td>Built</td><td>The PDF is generated on demand, not stored (approved, D87).</td></tr>
+<tr><td><strong>5.8</strong> Enquiries inbox with filters and lead context</td><td>Built</td><td></td></tr>
+<tr><td>5.8 Inbox read/unread</td><td>Not built</td><td>Status, archive and spam instead. Not recorded.</td></tr>
+<tr><td>5.8 Open or create the lead from an enquiry</td><td>Built differently</td><td>The lead is created automatically on arrival and linked; there is no manual "create lead" for a Rejected enquiry.</td></tr>
+<tr><td>5.8 Notifications: leads, assignments, reminders, overdue</td><td>Built differently</td><td>A manual lead notifies only its owner; reminders are due-today only (approved, D91).</td></tr>
+<tr><td>5.8 Notifications: deal changes, invitations</td><td>Not built</td><td>Approved (D91). There is no invite flow.</td></tr>
+<tr><td>5.8 Inbox separate from notifications</td><td>Built</td><td></td></tr>
+<tr><td><strong>5.9</strong> Daily workspace (Today)</td><td>Built</td><td>All seven sections, open record, complete task, add follow-up.</td></tr>
+<tr><td><strong>5.10</strong> Reports: leads by source, conversion, Won/Lost, revenue, pipeline</td><td>Built</td><td></td></tr>
+<tr><td>5.10 Leads by status and date; monthly revenue trend</td><td>Built differently</td><td>On Home, not Reports. Awaiting decision (D92).</td></tr>
+<tr><td>5.10 Salesperson performance; overdue follow-ups</td><td>Built</td><td>Sales by owner; overdue by assignee.</td></tr>
+<tr><td>5.10 Salesperson activity report</td><td>Not built</td><td>Awaiting decision (D92).</td></tr>
+<tr><td>5.10 Date filters, tables, charts, totals</td><td>Built</td><td></td></tr>
+<tr><td>5.10 CSV/Excel export</td><td>Built differently</td><td>CSV only (opens in Excel). Awaiting decision (D92).</td></tr>
+<tr><td>5.10 PDF reports</td><td>Not built</td><td>Approved (D87).</td></tr>
+<tr><td>5.10 Report access respects permissions</td><td>Built</td><td></td></tr>
+<tr><td><strong>5.11</strong> Organisation profile, lead sources, pipeline stages</td><td>Built</td><td></td></tr>
+<tr><td>5.11 Currency/date settings</td><td>Built differently</td><td>Shown read-only. Awaiting decision (D93).</td></tr>
+<tr><td>5.11 Custom fields</td><td>Not built</td><td>Awaiting decision (D93).</td></tr>
+<tr><td>5.11 Global search</td><td>Built</td><td>Also covers quotations.</td></tr>
+<tr><td>5.11 Filters and sorting</td><td>Built</td><td></td></tr>
+<tr><td>5.11 Saved filters</td><td>Not built</td><td>Filters live in the web address and can be bookmarked. Awaiting decision (D93).</td></tr>
+<tr><td>5.11 Audit logs</td><td>Built</td><td></td></tr>
+<tr><td>5.11 Notification preferences</td><td>Not built</td><td>Approved (D91).</td></tr>
+<tr><td>5.11 Administrative settings</td><td>Built</td><td></td></tr>
+</tbody></table></div>
+</section>
+<section id="18-5-minute-demo-walkthrough">
+<h2>18. 5-minute demo walkthrough</h2>
+<p>Before the demo: have sample data loaded, and ask the developer to send one test website enquiry with the test script. The website itself is not connected yet. Allow a minute for the first page to wake up.</p>
+<ol>
+<li><strong>Enquiry arrives.</strong> Sign in as Admin. Notice the bell's red number. Open <strong>Enquiries</strong> and open the new enquiry. Show <strong>Overview</strong> and <strong>Raw payload</strong>.</li>
+<li><strong>Lead.</strong> On the enquiry, click the linked lead. Its source is <strong>Website</strong> and the original message is under <strong>Original enquiry</strong>.</li>
+<li><strong>Work the lead.</strong> Open the <strong>Timeline</strong> tab, add a <strong>Call</strong> ("Intro call"), then click <strong>Qualified</strong> under <strong>Change status</strong>.</li>
+<li><strong>Convert.</strong> Click <strong>Convert</strong>, keep <strong>Create new</strong> for company and contact, leave <strong>Create a deal</strong> on, enter a <strong>Value (₹)</strong>, click <strong>Convert lead</strong>.</li>
+<li><strong>Deal.</strong> Click the new deal link. Go to <strong>Deals → Board</strong> and drag the card (or use <strong>Move to…</strong>) into the next stage.</li>
+<li><strong>Quotation.</strong> Open <strong>Quotations → New quotation</strong>. Pick the new company, contact and deal. Add two lines and watch the totals update. Click <strong>Create quotation</strong>.</li>
+<li><strong>PDF.</strong> Click <strong>Download PDF</strong> and open it.</li>
+<li><strong>Send and accept.</strong> Click <strong>Mark as sent</strong>, then <strong>Accepted</strong> → <strong>Mark accepted</strong>.</li>
+<li><strong>Won.</strong> In the "Mark the deal as Won?" box, click <strong>Mark deal as Won</strong>. Open the deal: it shows <strong>Won</strong>.</li>
+<li><strong>Report.</strong> Open <strong>Reports</strong>: the win appears under <strong>Sales performance by owner</strong>. Open <strong>Home</strong>: <strong>Won revenue</strong> matches. Finish with <strong>Audit Log</strong> to show every step was recorded.</li>
+</ol>
+</section>
+</main>
+<footer>Generated from docs/USER-GUIDE.md. To make a PDF: Print → Save as PDF (A4).</footer>
+</div>
+</body>
+</html>

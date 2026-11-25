@@ -130,7 +130,10 @@ describe('Lead conversion (Day 3, the conversion transaction)', () => {
     const app = createApp();
     const api = authed(app, token);
     // No companyName on the lead itself — would 422 without the override.
-    const leadId = await createQualifiedLead(api, tenant, { companyName: undefined });
+    // D98: a lead can no longer be *created* without one, but website
+    // enquiries and leads from before D98 can lack it, so blank it directly.
+    const leadId = await createQualifiedLead(api, tenant);
+    await prisma.lead.update({ where: { id: leadId }, data: { companyName: null, companyNameNormalized: null } });
 
     const res = await api.post(`/api/v1/leads/${leadId}/convert`, { companyName: 'Typed In Dialog Co' });
     expect(res.status).toBe(200);
@@ -145,7 +148,8 @@ describe('Lead conversion (Day 3, the conversion transaction)', () => {
     const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
     const app = createApp();
     const api = authed(app, token);
-    const leadId = await createQualifiedLead(api, tenant, { companyName: undefined });
+    const leadId = await createQualifiedLead(api, tenant);
+    await prisma.lead.update({ where: { id: leadId }, data: { companyName: null, companyNameNormalized: null } });
 
     const res = await api.post(`/api/v1/leads/${leadId}/convert`, {});
     expect(res.status).toBe(422);
@@ -229,7 +233,7 @@ describe('Lead conversion (Day 3, the conversion transaction)', () => {
     const app = createApp();
     const api = authed(app, token);
 
-    const createRes = await api.post('/api/v1/leads', {
+    const createRes = await api.post('/api/v1/leads', { companyName: 'Fixture Co',
       firstName: 'New Lead',
       email: 'new-lead@example.com',
       sourceId: tenant.leadSource.id,

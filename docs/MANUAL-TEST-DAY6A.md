@@ -175,6 +175,10 @@ company with a contact, a deal and a quotation all mentioning "Zephyr".
 
 ## 5. CSV import (leads and contacts)
 
+> **Updated by Day 6b (D98)**: every imported lead and contact now needs a
+> company. The files below already include one where a row should import;
+> rows without one show the extra error "Company name is required.".
+
 Use only fictional data. Make the small files below in Excel or Notepad and
 save them as **CSV UTF-8** (Excel: File → Save As → "CSV UTF-8 (Comma
 delimited)").
@@ -209,8 +213,8 @@ Ravi Test,ravi.test@example.test,,=SUM(1+1),Billboard,
 ,,,,,
 Meera Test,not-an-email,,,,
 Karthik Test,,12345,,,
-Nisha Test,nisha.test@example.test,,,,
-Nisha Again,NISHA.TEST@example.test,,,,
+Nisha Test,nisha.test@example.test,,Nisha Co,,
+Nisha Again,NISHA.TEST@example.test,,Nisha Co,,
 ```
 
 1. [ ] Import it. **Expected** in step 2: Full Name → Full name, E-mail →
@@ -222,7 +226,9 @@ Nisha Again,NISHA.TEST@example.test,,,,
        - Ravi: Ready, with a grey note that "Billboard" is not an active
          lead source and will be saved as "Import".
        - Meera: Error — "Email "not-an-email" is not a valid email address."
-       - Karthik: Error — the phone "12345" is not recognisable.
+         and "Company name is required." (D98: every lead needs a company).
+       - Karthik: Error — the phone "12345" is not recognisable, and
+         "Company name is required."
        - Nisha Again: Duplicate — "Same email as row 7".
 3. [ ] Click the **Errors (2)** tab. **Expected**: only Meera and Karthik.
 4. [ ] Click **Import 3 leads**. **Expected**: 3 imported, 1 duplicate, 2
@@ -266,9 +272,11 @@ Divya Contact,divya.contact@example.test,BRAND NEW TEST CO,Buyer
        1 MB" straight away.
 2. [ ] Try a file whose header row is `Foo,Bar`. **Expected**: step 2 with
        both columns on "Don't import"; **Check rows** shows "Choose a column
-       for First name or Full name" and "Choose a column for Email or Phone".
+       for First name or Full name", "Choose a column for Email or Phone" and
+       (D98) "Choose a column for Company".
 3. [ ] Try an empty file. **Expected**: "The file is empty."
 4. [ ] Export your leads (Leads → Download CSV) and import that file into
        Contacts. **Expected**: phone numbers are recognised (not errors).
+       (Any lead with no company name shows as an Error — D98.)
 5. [ ] Sign in as **Staff** and import a small leads file. **Expected**: it
        works the same (Staff can create leads and contacts).

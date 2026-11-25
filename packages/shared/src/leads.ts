@@ -28,7 +28,11 @@ export const leadCreatableFields = {
   // D41: country-code-select + number composed client-side into a single
   // canonical E.164 string; validated strictly here for manual CRM entry.
   phone: phoneFieldSchema.optional(),
-  companyName: optionalTrimmed(300),
+  // D98: required on create. Optional in updateLeadSchema (a PATCH may leave
+  // it out, so older leads without one keep working), but never blank when
+  // sent. Website enquiries create leads through the intake service, which
+  // does not use this schema and is never rejected over a missing company.
+  companyName: z.string('Company name is required').trim().min(1, 'Company name is required').max(300, 'Company name is too long'),
   website: optionalTrimmed(2000),
   jobTitle: optionalTrimmed(200),
   industry: optionalTrimmed(200),
@@ -42,7 +46,8 @@ export const leadCreatableFields = {
 };
 
 /**
- * D29: a lead needs a name plus at least one of an email or a phone.
+ * D29/D98: a lead needs a first name, a company name and at least one of an
+ * email or a phone.
  * `requirement`/`capturedFields` are only settable here — see
  * updateLeadSchema below for why they're read-only after creation.
  */

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { prisma } from '../../src/db/prisma.js';
-import { createTwoTestTenants } from '../helpers/tenant.js';
+import { createTwoTestTenants, createTestCompany } from '../helpers/tenant.js';
 import { createSession } from '../../src/lib/session.js';
 import { ALLOWED_ORIGIN, sessionCookieHeader } from '../helpers/http.js';
 
@@ -83,7 +83,7 @@ describe('contacts: organisation isolation', () => {
       .post('/api/v1/contacts')
       .set('Origin', ALLOWED_ORIGIN)
       .set('Cookie', sessionCookieHeader(token))
-      .send({ firstName: 'Org A Person', email: 'shared@example.com' });
+      .send({ firstName: 'Org A Person', email: 'shared@example.com', companyId: (await createTestCompany(orgA.organization.id)).id });
     expect(res.status).toBe(201);
     expect(res.body.duplicates).toEqual([]);
   });

@@ -86,13 +86,13 @@ describe('Settings — lead sources', () => {
   it('a lead cannot be created with, or moved to, an inactive source — but editing a lead that already has one still works', async () => {
     const tenant = await createTestTenant();
     const admin = await adminApi(tenant);
-    const lead = await admin.post('/api/v1/leads', { firstName: 'Asha', email: 'asha@example.test', sourceId: tenant.leadSource.id });
+    const lead = await admin.post('/api/v1/leads', { companyName: 'Fixture Co', firstName: 'Asha', email: 'asha@example.test', sourceId: tenant.leadSource.id });
     expect(lead.status).toBe(201);
 
     const other = await prisma.leadSource.create({
       data: { organizationId: tenant.organization.id, name: 'Retired', sortOrder: 5, isActive: false },
     });
-    const create = await admin.post('/api/v1/leads', { firstName: 'Ravi', email: 'ravi@example.test', sourceId: other.id });
+    const create = await admin.post('/api/v1/leads', { companyName: 'Fixture Co', firstName: 'Ravi', email: 'ravi@example.test', sourceId: other.id });
     expect(create.status).toBe(422);
     expect(create.body.error.details[0].path).toBe('sourceId');
 
