@@ -218,3 +218,11 @@ export {
   markAllNotificationsReadResponseSchema,
 } from './notifications.js';
 export type { NotificationType, ListNotificationsQuery, NotificationResponse, NotificationsListResponse } from './notifications.js';
+export {
+  reportsQuerySchema,
+  REPORT_KEYS,
+  reportKeySchema,
+  reportExportParamsSchema,
+  reportsResponseSchema,
+} from './reports.js';
+export type { ReportsQuery, ReportKey, ReportExportParams, ReportsResponse, ReportsData } from './reports.js';

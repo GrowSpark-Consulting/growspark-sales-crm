@@ -1,4 +1,4 @@
-# Manual test script — Day 5c (Quotations, Notifications; Reports to follow)
+# Manual test script — Day 5c (Quotations, Notifications, Reports)
 
 Written for someone who has never used this app before. This environment
 has no browser-automation tool, so none of this has been clicked through by
@@ -12,8 +12,8 @@ terminal.
 
 - [ ] `pnpm db:verify-fresh` (rebuilds `crm_test` with migrations
       `20261124181711_add_quotations` and `20261124191130_add_notifications`),
-      then `pnpm typecheck && pnpm lint && pnpm test` — expected 693 tests:
-      572 `apps/api`, 121 `apps/web`.
+      then `pnpm typecheck && pnpm lint && pnpm test` — expected 719 tests:
+      593 `apps/api`, 126 `apps/web`.
 - [ ] Apply the migrations to your own local database: `pnpm db:migrate`
       (applies both migrations above to `crm_dev`; additive only).
       Without this, every quotation screen shows an error.
@@ -235,3 +235,75 @@ profile share one sign-in — see PROJECT-STATE §10).
 1. [ ] Light and dark (user menu → Theme): the bell, its red number and the
        Notifications page (bold unread rows, the dot, the buttons) are
        readable in both.
+
+## 9. Reports
+
+Sign in as **Admin**. The sample data (or the records you created in §1–§8)
+is enough; the point is that Reports and Home agree.
+
+### 9.1 The page
+
+1. [ ] In the left sidebar, click **Reports** (after Enquiries).
+       **Expected**: page title **Reports**; a **Date range** dropdown
+       (This month), **All** / **Mine** buttons, a line "Showing <1st of
+       this month> – <last day> · everyone in the organisation", and five
+       cards: **Pipeline by stage**, **Lead sources and conversion**, **Sales
+       performance by owner**, **Quotations summary**, **Overdue tasks by
+       assignee**. Each card has a one-line explanation and a **Download
+       CSV** button.
+2. [ ] Each table ends with a bold **Total** row. Pipeline, Lead sources and
+       Sales by owner also show a bar chart.
+
+### 9.2 Reports agree with Home
+
+1. [ ] Open **Home** in a second tab, same range (This month) and **All**.
+2. [ ] Compare:
+       - Home **Leads created** = Reports → Lead sources → Total **Leads
+         created**.
+       - Home **Open deals** / **Open pipeline value** / **Weighted value**
+         = Reports → Pipeline by stage → Total row (Home shows rounded
+         values like ₹12.5L; Reports shows exact rupees).
+       - Home **Won revenue** / **Win rate** = Reports → Sales performance
+         → Total **Won value** / **Win rate**.
+3. [ ] Switch both pages to **Mine**. **Expected**: they still agree, and the
+       "Showing" line says "only records you own or are assigned".
+4. [ ] Overdue: on Reports choose **Custom range**, From `2000-01-01`, To
+       today. **Expected**: Overdue tasks → Total = Home's **Overdue
+       tasks** card. Back on **This month**, the Reports number may be
+       smaller (only items due this month count; known, D92).
+
+### 9.3 Ranges
+
+1. [ ] **Last 30 days**, then **Custom range** with a single past month.
+       **Expected**: the "Showing" line changes; Lead sources, Sales by
+       owner, Quotations and Overdue change; **Pipeline by stage does not**
+       (it's "right now", as its card says).
+2. [ ] Reload the page. **Expected**: the same range and scope stay (they
+       are in the address bar).
+
+### 9.4 Quotations summary and Expired
+
+1. [ ] With the quotations from §1–§5 in range: the summary lists Draft,
+       Sent, Accepted, Rejected and Expired with a count and value each.
+       Compare with the Quotations list: set its Status filter and Issued
+       from/to to the same dates. **Expected**: same counts.
+
+### 9.5 CSV downloads
+
+1. [ ] On **Sales performance by owner**, click **Download CSV**.
+       **Expected**: a file named like
+       `report-sales-by-owner-2026-11-01-to-2026-11-30.csv` downloads.
+2. [ ] Open it in **Excel**. **Expected**: it opens straight away (no "SYLK"
+       warning); columns Owner, Deals won, Won value (INR), Deals lost, Win
+       rate (%); plain numbers like `125000.50`; "Unassigned" where a deal
+       has no owner; a last row **Total** matching the screen.
+3. [ ] Download the other four. **Expected**: each opens, has a Total row,
+       and matches its card. With **Mine** selected, the file name ends in
+       `-mine.csv`.
+
+### 9.6 Staff, and both themes
+
+1. [ ] Sign in as **Staff**. **Expected**: Reports is in the sidebar and
+       everything above works the same (All shows the whole organisation).
+2. [ ] Light and dark theme: the cards, tables, Total rows, status badges
+       and charts are readable in both.

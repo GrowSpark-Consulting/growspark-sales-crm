@@ -12,7 +12,7 @@ type CountRow = { count: number };
 type NumberRow = { value: string | number };
 type OpenDealsRow = { count: number; value: string | number; weighted: string | number };
 
-async function countLeads(ctx: RequestContext, from: Date, to: Date, ownerId?: string): Promise<number> {
+export async function countLeads(ctx: RequestContext, from: Date, to: Date, ownerId?: string): Promise<number> {
   const [row] = await prisma.$queryRaw<CountRow[]>`
     SELECT COUNT(*)::int AS count FROM leads
     WHERE organization_id = ${ctx.orgId}::uuid AND archived_at IS NULL
@@ -41,7 +41,7 @@ async function countActiveLeads(ctx: RequestContext, ownerId?: string): Promise<
   return row?.count ?? 0;
 }
 
-async function cohortConversionRate(ctx: RequestContext, from: Date, to: Date, ownerId?: string): Promise<string> {
+export async function cohortConversionRate(ctx: RequestContext, from: Date, to: Date, ownerId?: string): Promise<string> {
   const [row] = await prisma.$queryRaw<NumberRow[]>`
     SELECT COALESCE(100.0 * COUNT(*) FILTER (WHERE status = 'CONVERTED'::lead_status) / NULLIF(COUNT(*), 0), 0)::numeric(7,2)::text AS value
     FROM leads WHERE organization_id = ${ctx.orgId}::uuid AND archived_at IS NULL
@@ -61,7 +61,7 @@ async function openDealsSnapshot(ctx: RequestContext, ownerId?: string): Promise
   return row ?? { count: 0, value: '0.00', weighted: '0.00' };
 }
 
-async function closedDealCounts(ctx: RequestContext, from: Date, to: Date, ownerId?: string): Promise<{ won: number; lost: number }> {
+export async function closedDealCounts(ctx: RequestContext, from: Date, to: Date, ownerId?: string): Promise<{ won: number; lost: number }> {
   const [row] = await prisma.$queryRaw<{ won: number; lost: number }[]>`
     SELECT COUNT(*) FILTER (WHERE status = 'WON'::deal_status)::int AS won,
       COUNT(*) FILTER (WHERE status = 'LOST'::deal_status)::int AS lost
@@ -72,7 +72,7 @@ async function closedDealCounts(ctx: RequestContext, from: Date, to: Date, owner
   return row ?? { won: 0, lost: 0 };
 }
 
-async function wonRevenue(ctx: RequestContext, from: Date, to: Date, ownerId?: string): Promise<string> {
+export async function wonRevenue(ctx: RequestContext, from: Date, to: Date, ownerId?: string): Promise<string> {
   const [row] = await prisma.$queryRaw<NumberRow[]>`
     SELECT COALESCE(SUM(value),0)::numeric(14,2)::text AS value FROM deals
     WHERE organization_id = ${ctx.orgId}::uuid AND archived_at IS NULL AND status = 'WON'::deal_status
@@ -82,7 +82,7 @@ async function wonRevenue(ctx: RequestContext, from: Date, to: Date, ownerId?: s
   return String(row?.value ?? '0.00');
 }
 
-async function winRate(ctx: RequestContext, from: Date, to: Date, ownerId?: string): Promise<string> {
+export async function winRate(ctx: RequestContext, from: Date, to: Date, ownerId?: string): Promise<string> {
   const [row] = await prisma.$queryRaw<NumberRow[]>`
     SELECT COALESCE(100.0 * COUNT(*) FILTER (WHERE status = 'WON'::deal_status) / NULLIF(COUNT(*),0),0)::numeric(7,2)::text AS value
     FROM deals WHERE organization_id = ${ctx.orgId}::uuid AND archived_at IS NULL
@@ -92,7 +92,7 @@ async function winRate(ctx: RequestContext, from: Date, to: Date, ownerId?: stri
   return String(row?.value ?? '0.00');
 }
 
-async function overdueActivities(ctx: RequestContext, start: Date, ownerId?: string): Promise<number> {
+export async function overdueActivities(ctx: RequestContext, start: Date, ownerId?: string): Promise<number> {
   const [row] = await prisma.$queryRaw<CountRow[]>`
     SELECT COUNT(*)::int AS count FROM activities WHERE organization_id = ${ctx.orgId}::uuid
       AND status = 'OPEN'::activity_status AND type IN ('TASK'::activity_type,'CALL'::activity_type,'MEETING'::activity_type)
@@ -133,7 +133,24 @@ async function monthlyRevenue(ctx: RequestContext, now: Date, timeZone: string, 
   })));
 }
 
-export async function getDashboard(ctx: RequestContext, query: DashboardQuery, now = new Date()) {
+export interface ReportingRange {
+  timeZone: string;
+  /** Half-open UTC instants: [from, to). */
+  from: Date;
+  to: Date;
+  /** The same range as inclusive organisation calendar dates (YYYY-MM-DD). */
+  fromKey: string;
+  toKey: string;
+}
+
+/**
+ * The Home dashboard's date-range rule, shared with Reports (D92) so the two
+ * can never disagree about what "this range" means: a missing end takes the
+ * other end (a single day); no range at all means the organisation's current
+ * calendar month; every boundary is a calendar day in the organisation's
+ * time zone.
+ */
+export async function resolveReportingRange(ctx: RequestContext, query: Pick<DashboardQuery, 'from' | 'to'>, now: Date): Promise<ReportingRange> {
   const organization = await prisma.organization.findUnique({ where: { id: ctx.orgId }, select: { timezone: true } });
   if (!organization) throw new ApiError(404, 'NOT_FOUND', 'Organisation not found');
   const timeZone = organization.timezone;
@@ -142,6 +159,11 @@ export async function getDashboard(ctx: RequestContext, query: DashboardQuery, n
   const toDate = query.to ?? query.from;
   const from = fromDate ? orgDateBounds(fromDate, timeZone).start : currentMonth.start;
   const to = toDate ? orgDateBounds(toDate, timeZone).end : currentMonth.end;
+  return { timeZone, from, to, fromKey: orgDateKey(from, timeZone), toKey: orgDateKey(new Date(to.getTime() - 1), timeZone) };
+}
+
+export async function getDashboard(ctx: RequestContext, query: DashboardQuery, now = new Date()) {
+  const { timeZone, from, to, fromKey, toKey } = await resolveReportingRange(ctx, query, now);
   const ownerId = query.scope === 'mine' ? ctx.userId : undefined;
   const [created, newLeads, qualified, active, conversion, open, closed, revenue, rate, overdue,
     sourceRows, statusRows, pipelineByStage, monthlyWonRevenue, recentActivity] = await Promise.all([
@@ -153,7 +175,7 @@ export async function getDashboard(ctx: RequestContext, query: DashboardQuery, n
     prisma.activity.findMany({ where: { ...scoped(ctx), ...(ownerId ? { assigneeId: ownerId } : {}) }, orderBy: { createdAt: 'desc' }, take: 10 }),
   ]);
   return { data: {
-    range: { from: orgDateKey(from, timeZone), to: orgDateKey(new Date(to.getTime() - 1), timeZone) }, scope: query.scope,
+    range: { from: fromKey, to: toKey }, scope: query.scope,
     metrics: { leadsCreated: created, newLeads, qualifiedLeads: qualified, activeLeads: active,
       leadConversionRate: conversion, openDeals: { count: open.count, value: String(open.value), weightedValue: String(open.weighted) },
       wonDeals: closed.won, lostDeals: closed.lost, wonRevenue: revenue, winRate: rate, overdueActivities: overdue },

@@ -1,26 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { LEAD_STATUSES } from "@growspark/shared";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { StatCard } from "@/components/ui/stat-card";
 import { DashboardBarChart } from "@/components/dashboard/dashboard-bar-chart";
 import { useDashboard } from "@/hooks/use-dashboard";
-import { useListUrlState } from "@/hooks/use-list-url-state";
+import { RangeScopeControls, useRangeScope } from "@/components/dashboard/range-scope-controls";
 import { formatDate, formatINRCompact, formatTime } from "@/lib/format";
 import { leadStatusChartColor, leadStatusLabel } from "@/lib/lead-presentation";
 import { activityRecordHref, activityTypeLabel } from "@/lib/activity-presentation";
-
-type Range = "month" | "30d" | "custom";
-
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
 
 function monthLabel(month: string): string {
   const [year, monthIndex] = month.split("-").map(Number);
@@ -30,86 +21,15 @@ function monthLabel(month: string): string {
 }
 
 export function DashboardPageClient() {
-  const { searchParams, setParams } = useListUrlState();
-  const scope = searchParams.get("scope") === "mine" ? "mine" : "all";
-  const range: Range =
-    searchParams.get("range") === "30d" ? "30d" : searchParams.get("range") === "custom" ? "custom" : "month";
-  const customFrom = searchParams.get("from") ?? "";
-  const customTo = searchParams.get("to") ?? "";
-  // "Now" is read once per mount via a lazy useState initializer — the
-  // sanctioned way to capture an impure value (the current date) without
-  // calling `new Date()`/`Date.now()` directly in the render body, which the
-  // React Compiler's purity check (`react-hooks/purity`) flags as an error.
-  const [now] = useState(() => new Date());
-
-  const { from, to } =
-    range === "30d"
-      ? { from: isoDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)), to: isoDate(now) }
-      : range === "custom"
-        ? { from: customFrom || undefined, to: customTo || undefined }
-        : { from: undefined, to: undefined };
+  const rangeScope = useRangeScope();
+  const { from, to, scope } = rangeScope;
 
   const dashboard = useDashboard({ from, to, scope });
   const data = dashboard.data?.data;
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <label className="label text-ink-muted" htmlFor="dashboard-range">
-            Date range
-          </label>
-          <Select value={range} onValueChange={(value) => setParams({ range: value === "month" ? undefined : value })}>
-            <SelectTrigger id="dashboard-range" className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="month">This month</SelectItem>
-              <SelectItem value="30d">Last 30 days</SelectItem>
-              <SelectItem value="custom">Custom range</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {range === "custom" && (
-          <div className="flex items-center gap-1">
-            <Input
-              type="date"
-              aria-label="From date"
-              value={customFrom}
-              onChange={(event) => setParams({ from: event.target.value || undefined })}
-              className="w-36"
-            />
-            <span className="text-ink-muted">–</span>
-            <Input
-              type="date"
-              aria-label="To date"
-              value={customTo}
-              onChange={(event) => setParams({ to: event.target.value || undefined })}
-              className="w-36"
-            />
-          </div>
-        )}
-        <div className="inline-flex rounded-md border border-line-strong p-0.5" role="group" aria-label="Dashboard scope">
-          <Button
-            type="button"
-            variant={scope === "all" ? "default" : "ghost"}
-            size="sm"
-            aria-pressed={scope === "all"}
-            onClick={() => setParams({ scope: undefined })}
-          >
-            All
-          </Button>
-          <Button
-            type="button"
-            variant={scope === "mine" ? "default" : "ghost"}
-            size="sm"
-            aria-pressed={scope === "mine"}
-            onClick={() => setParams({ scope: "mine" })}
-          >
-            Mine
-          </Button>
-        </div>
-      </div>
+      <RangeScopeControls state={rangeScope} idPrefix="dashboard" scopeLabel="Dashboard scope" />
 
       {dashboard.isLoading && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">

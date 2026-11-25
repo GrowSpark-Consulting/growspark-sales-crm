@@ -79,7 +79,7 @@ next.
    detailed reference; skim its table of contents (the `##` headings) and
    come back to specific sections as needed rather than reading linearly
    every time.
-4. **`docs/decisions.md`** — every approved decision, D1 through D90 (D3
+4. **`docs/decisions.md`** — every approved decision, D1 through D92 (D3
    and D5 don't exist — never assigned; D83+ is Day 5c), append-only, each with the
    reasoning behind it. Don't re-litigate something already decided here
    without a new entry. D46–D50 cover all of Day 3 (lead conversion, the
@@ -269,16 +269,24 @@ specific package you're about to work on.
   `crm_test` and `crm_dev` (run by the user); **not yet on staging**.
   **apps/api 572/572, apps/web 121/121 (693).** Not clicked through in a
   browser (`docs/MANUAL-TEST-DAY5C.md` §8). PRD 5.8/5.11 gaps (deal-change
-  and invitation notifications, preferences) are reported in D90, not built.
+  and invitation notifications, preferences) are approved deviations (D91).
   For this phase the user commits and pushes; this tool does neither.
+- **Day 5c feature 3, Reports, is done (D92, 2026-11-25) — Day 5c is
+  complete.** `/reports` (permission `reports:read`, both roles): pipeline
+  by stage, lead sources and conversion, sales by owner, quotations summary
+  (effective status), overdue tasks by assignee; Home's date range and
+  All/Mine controls; a CSV per report (`reports:export`); a reconciliation
+  test proving Reports agree with `GET /dashboard`. **apps/api 593/593,
+  apps/web 126/126 (719).** Not clicked through in a browser
+  (`MANUAL-TEST-DAY5C.md` §9). PRD 5.10 gaps reported in D92, not built.
 
 ## The next work, in order
 
-Day 5c continues, each step only after the user's "continue":
-**Reports** (the last feature). The full approved scope and every
-already-made decision are in `docs/DAY-5C-HANDOVER-PROMPT.md` (a
-ready-to-paste resume prompt) — read it before starting. Day 6 (testing,
-stabilisation) comes after Day 5c; confirm its scope with the user first.
+Day 5c is finished. Next, in order: (1) the user's browser pass of
+`docs/MANUAL-TEST-DAY5C.md` §1–§9 and any fixes it surfaces; (2) the user's
+organisation PDF details and `pnpm staging:migrate` (both Day 5c
+migrations); (3) Day 6 (testing, stabilisation) — confirm its scope with the
+user first. Context for any Day 5c follow-up: `docs/DAY-5C-HANDOVER-PROMPT.md`.
 
 ## Staging deployment (package 4C — built, database steps confirmed working)
 

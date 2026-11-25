@@ -32,12 +32,15 @@ from the start).
 | Docker: one-command full stack for a reviewer | Done |
 | Audit log (Admin-only page: filter, paginate, actor/action/entity/date) | Done |
 | Quotations (line items, GST, Draft → Sent → Accepted/Rejected/Expired, duplicate, PDF download) | Done |
+| In-app notifications (bell, list, mark read; assignments, new enquiries, quotation decisions, due/overdue tasks) | Done |
+| Reports (pipeline, lead sources and conversion, sales by owner, quotations, overdue tasks; date range, All/Mine, CSV) | Done |
 
 Not built yet (see `docs/decisions.md` and the project state docs for the
-full P0/P1/P2 breakdown): in-app notifications and a predefined reports page
-(both in progress, Day 5c), a product/service catalogue and a CGST/SGST/IGST
-split for quotations (future items, D87), global search, self-service
-password reset, and everything explicitly scoped to P1/P2 in the roadmap.
+full P0/P1/P2 breakdown): a product/service catalogue and a CGST/SGST/IGST
+split for quotations (future items, D87), notification preferences and
+deal-change notifications (future items, D91), PDF reports (D87), global
+search, self-service password reset, and everything explicitly scoped to
+P1/P2 in the roadmap.
 
 ## Stack
 
@@ -194,6 +197,8 @@ there is no path where hiding a button is the actual security control.
 | Dashboard, Today, CSV export | Yes | Yes |
 | Website Enquiries inbox | Yes | Yes |
 | Quotations — read, write, change status, duplicate, download PDF | Yes | Yes |
+| Notifications (your own only) | Yes | Yes |
+| Reports — read (`reports:read`) and CSV download (`reports:export`) | Yes | Yes |
 | Manage users, roles, deactivate | Yes | No |
 | Read the audit log | Yes | No |
 | Manage settings and API keys | Yes | No |

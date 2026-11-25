@@ -3830,3 +3830,130 @@ The migration from D89 needed no change.
   endpoints answer 401 without a session, and `/notifications` answers 200.
   Not clicked through in a browser. Not committed (the user commits and
   pushes); nothing run against staging or written to `crm_dev`.
+
+## D91 — Notifications: approved PRD deviations and future items (2026-11-25)
+
+The user approved Notifications (D90) and accepted the five differences from
+PRD 5.8/5.11 that D90 reported, as **approved deviations**:
+
+1. **No notifications for deal changes**: stage moves and Won/Lost notify
+   nobody (PRD 5.8 "deal changes").
+2. **No invitation notifications**: the app has no invite flow (an Admin
+   creates users directly), so there is nothing to notify about (PRD 5.8
+   "invitations").
+3. **No notification preferences** (PRD 5.11): every user receives every
+   notification type that applies to them; nothing can be switched off.
+4. **"Reminders" are covered only by "task due today"** (PRD 5.8
+   "reminders"): the activity's own `reminderAt` time is not used, and calls
+   and meetings get no reminder.
+5. **A manually created lead notifies only its owner** (through the
+   assignment rule, and only when the owner is someone other than the
+   creator); only website enquiries notify every active user (PRD 5.8 "new
+   leads").
+
+**Future items added** (alongside D87's GST split and product catalogue):
+**notification preferences** and **deal-change notifications**.
+
+## D92 — Day 5c, feature 3: Reports (2026-11-25)
+
+Built to the approved plan in `docs/DAY-5C-HANDOVER-PROMPT.md`.
+
+- **Permission**: new `reports:read` (`PERMISSIONS.REPORTS_READ`), Admin and
+  Staff (not on the Admin-only list), the one permission-table change
+  approved. CSV downloads use the existing `reports:export` (D76). No
+  migration, no new dependency.
+- **API**: `GET /api/v1/reports?from&to&scope` returns all five reports in
+  one response; `GET /api/v1/reports/:report/export?from&to&scope` returns
+  one CSV (`report` ∈ `pipeline-by-stage`, `lead-sources`, `sales-by-owner`,
+  `quotations`, `overdue-tasks`; anything else is 422). The query schema
+  **is** the dashboard's (`reportsQuerySchema = dashboardQuerySchema`):
+  optional ISO dates, `from ≤ to`, scope `all` (default) or `mine`.
+- **One range rule for Home and Reports**: `getDashboard`'s inline
+  date-range code was extracted to `resolveReportingRange()` in
+  `workspace.service.ts` (behaviour unchanged, proven by the existing
+  dashboard tests). A missing end takes the other end; no range = the
+  organisation's current calendar month; every boundary is an organisation
+  calendar day. The helpers Home already used (`countLeads`,
+  `cohortConversionRate`, `closedDealCounts`, `wonRevenue`, `winRate`) are
+  now exported and Reports' totals call **the same functions**, so the
+  shared figures cannot drift. On the web side, Home's range + All/Mine
+  controls were extracted to `components/dashboard/range-scope-controls.tsx`
+  and are used by both pages (same URL parameters).
+- **"Mine"** narrows by the same column Home uses: lead/deal/quotation
+  `owner_id`, activity `assignee_id`. Both roles see organisation-wide data
+  with "All", as Leads/Deals already allow.
+- **The five reports** (archived records excluded everywhere, as on Home;
+  all sums in Postgres NUMERIC, returned as 2-dp strings):
+  1. **Pipeline by stage**: the current open snapshot, the date range
+     ignored (stated on screen). Open stages only, from `getPipelineSummary`
+     (Home's source), count / value / weighted value; totals = Home's
+     "open deals".
+  2. **Lead sources and conversion**: leads created in the range, by source,
+     with how many of those are now Converted and the rate; totals = Home's
+     "Leads created" and conversion rate.
+  3. **Sales performance by owner**: deals closed (`closed_at`) in the
+     range, by owner (unassigned kept as its own row): won count, won value
+     and, **beyond the plan's "count and value"**, lost count and win rate,
+     since PRD 5.10 names "deals Won/Lost" (cheap, same query); totals =
+     Home's won, lost, won revenue and win rate.
+  4. **Quotations summary**: quotations issued (issue date, inclusive) in
+     the range, count and value by **effective** status through
+     `quotationStatusWhere()` (D86), so a lapsed Sent quotation counts as
+     Expired even if nobody has opened it. **Read-only**: Reports never runs
+     the auto-expiry write (tested: the stored row stays SENT and no audit
+     row appears).
+  5. **Overdue tasks by assignee**: Home's "Overdue tasks" definition
+     unchanged (open **tasks, calls and meetings** due before the start of
+     the organisation's today), plus, as approved, a due date inside the
+     range; count and oldest due date per assignee.
+- **CSV**: one file per report through `rowsToCsv` (BOM, formula escaping,
+  never a bare "ID" first header: "Stage", "Lead source", "Owner",
+  "Quotation status", "Assignee"), rows plus a final **Total** row, plain
+  decimals (`125000.50`, no ₹ or grouping) so a spreadsheet can sum them,
+  "Unassigned" for a missing owner. Filename
+  `report-<key>-<from>-to-<to>[-mine].csv`.
+- **Screen**: `/reports` (sidebar item after Enquiries, both roles). Range
+  and All/Mine controls, a "Showing … · everyone / only yours" line, and one
+  card per report: a short definition, **Download CSV** (same filters as the
+  screen), a table with a Total row (amounts via the shared exact
+  `formatRupees`), and a bar chart for pipeline value, leads by source and
+  won value by owner (reusing `DashboardBarChart`, which carries its own
+  screen-reader table). No PDF (D87).
+- **Reconciliation (PRD §12, "metrics reconcile with underlying data")**:
+  `tests/reports/reconciliation.test.ts` seeds a deliberately mixed
+  organisation (two owners plus unassigned, every status, in and out of
+  range, the IST midnight edge, archived rows) and, for All, Mine-as-Admin
+  and Mine-as-Staff, asserts every shared figure equals `GET /dashboard` for
+  the same range, every report's rows add up to its totals (money summed
+  exactly in paise), each quotation status count equals the Quotations
+  list's own Status filter for the same issue dates, and Overdue over an
+  all-time range equals Home's "Overdue tasks". **Shown to fail**: with
+  the lead-sources query's `archived_at IS NULL` temporarily removed, the
+  All case failed (9 vs 8), then passed again once restored.
+- **Differences from PRD 5.10 (for the user to decide; not built, not yet
+  approved deviations)**: leads by **status** and by **date** (a trend) are
+  on Home's dashboard, not on Reports; **monthly revenue trend** is on Home
+  only; **salesperson activity** (calls/meetings/tasks logged per person)
+  is not a report; export is **CSV** only (opens in Excel; no .xlsx); no PDF
+  reports (already approved, D87).
+- **Worth knowing**: because the approved plan filters Overdue by due date,
+  the default view ("This month") hides overdue items due in earlier months.
+  Pick a wider custom range to see them all. The pipeline report ignores
+  the range by design.
+- **Tests**: API `tests/reports/{reports,reconciliation,export}.test.ts` (21)
+  with a seeding helper `tests/helpers/reports.ts`; web
+  `tests/components/reports-page-client.test.tsx` (5). Fixtures first failed
+  on a wrong "23:30 IST the day before" timestamp (UTC −1 h instead of −6 h)
+  and on 2-dp formatting (the pipeline summary passes `"100"` through; the
+  report now always prints `"100.00"`, and the reconciliation compares
+  exactly as decimals); a literal BOM character in a test regex tripped
+  `no-irregular-whitespace` (now `﻿`).
+- **Verified**: `pnpm typecheck` clean; `pnpm lint` 0 errors (the same 3
+  older web warnings); `pnpm test` **apps/api 593/593 (up from 572),
+  apps/web 126/126 (up from 121), 719 total**; `pnpm --filter web build`
+  lists `/reports`; read-only smoke against the running dev servers (web
+  PID 6960; API now PID 23016 — `tsx watch` restarted its own child when API
+  files changed; nothing was stopped by this tool): `/api/v1/reports` and an
+  export answer 401 unauthenticated, `/reports` answers 200. Not clicked
+  through in a browser. Not committed; nothing run against staging or
+  written to `crm_dev`.

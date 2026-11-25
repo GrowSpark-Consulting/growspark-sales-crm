@@ -293,9 +293,21 @@ today / overdue generated when the user loads the app (org time zone,
 de-duplicated, capped at 50 per load). All written after the main
 transaction commits, best-effort. No new permission, dependency or
 migration change. PRD 5.8/5.11 items **not** built: deal-change and
-invitation notifications, notification preferences (reported, D90).
-**apps/api 572/572, apps/web 121/121 (693).** Next: Reports, after the
-user's "continue".
+invitation notifications, notification preferences (reported, D90;
+approved as deviations, D91). **apps/api 572/572, apps/web 121/121 (693).**
+
+**Update, 2026-11-25 (later still) — Day 5c, feature 3 of 3 (Reports) is
+done (D92); Day 5c is complete.** New permission `reports:read` (both roles;
+the one approved permission-table change). `/reports` with Home's date range
+and All/Mine controls (extracted into a shared component) and five reports:
+pipeline by stage (open snapshot), lead sources and conversion, sales by
+owner (won/lost/value/win rate), quotations by effective status, overdue
+tasks by assignee; a CSV per report (`reports:export`). Totals reuse Home's
+own query functions and a shared range resolver; a reconciliation test
+proves Reports = `GET /dashboard`. No migration or dependency. PRD 5.10 gaps
+reported (leads by status/date and revenue trend live on Home only; no
+per-person activity report; CSV only). **apps/api 593/593, apps/web 126/126
+(719).** Not clicked through in a browser; staging not yet migrated.
 
 ## 2. Hard constraints
 
@@ -1914,6 +1926,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D87 — Approved PRD deviations (no catalogue, no GST split, no PDF reports, owner added) and future items
 - D88 — A Draft with a past valid-until date cannot be marked Sent (409 VALID_UNTIL_PASSED)
 - D89 — Notifications started: migration `20261124191130_add_notifications` + shared schemas only; no text/personal data stored, titles built at read time
+- D91 — Notifications: five approved PRD deviations; future items notification preferences and deal-change notifications
+- D92 — Reports: `reports:read`, five reports + CSV, shared range rule/queries with Home, reconciliation test, PRD 5.10 gaps reported
 - D90 — Notifications built: service, four endpoints (org + user scoped), triggers after commit (best-effort), task reminders on load (dedupe keys, 50 cap), bell polling 60 s paused when hidden, Render free-tier effect, PRD 5.8/5.11 gaps reported
 
 ## 10. Gotchas and lessons learned
@@ -2369,18 +2383,18 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   Docker packaging, the P0 freeze) is not yet
   detailed in this repo — confirm exact scope with the user before starting
   it. *(Superseded: Day 5b was then built — see §1 and D76–D82.)*
-- **Day 5c is in progress (2026-11-25).** Quotations (D83–D88) and
-  Notifications (D90) are done (§1, `docs/DAY-5C-SUMMARY.md`). Next, after
-  the user's "continue": **Reports**
-  (`reports:read`; pipeline by stage, lead sources and conversion, sales by
-  owner, quotations summary — must reuse `quotationStatusWhere` (D86) —
-  overdue tasks by owner; date range; CSV per report; reconciliation test
-  against the Home dashboard). Ready-to-paste resume prompt:
+- **Day 5c is complete (2026-11-25)**: Quotations (D83–D88),
+  Notifications (D90/D91) and Reports (D92), see §1 and
+  `docs/DAY-5C-SUMMARY.md`. Next: the user's browser pass
+  (`docs/MANUAL-TEST-DAY5C.md`), `pnpm staging:migrate`, then Day 6 (confirm
+  scope with the user first). Ready-to-paste resume prompt:
   `docs/DAY-5C-HANDOVER-PROMPT.md`.
 - **Future items (not scheduled; D87)**: **GST split** (CGST/SGST/IGST,
   place of supply, HSN/SAC) and **product catalogue** (products/services
   with SKU, category and price, picked into quotation lines) — both PRD
-  5.7/13.1 capabilities deliberately left out of Day 5c.
+  5.7/13.1 capabilities deliberately left out of Day 5c. **Notification
+  preferences** (PRD 5.11) and **deal-change notifications** (stage moves,
+  Won/Lost; PRD 5.8) — added by D91.
 
 ## 14. Open questions and unverified items
 
@@ -3497,3 +3511,32 @@ log just records that a session happened and what it covered.
 - Reported to the user: PRD 5.8/5.11 items not in the approved plan
   (deal-change and invitation notifications, notification preferences), and
   the Render free-tier effect of polling. Next: Reports, on "continue".
+
+### 2026-11-25 (night) — D91 recorded; Day 5c, feature 3: Reports (D92)
+
+- The user approved Notifications and the five PRD differences as
+  deviations (D91); future items gained notification preferences and
+  deal-change notifications.
+- Built Reports: `PERMISSIONS.REPORTS_READ` (`reports:read`, both roles);
+  shared `packages/shared/src/reports.ts`; `apps/api/src/modules/reports/`
+  (service + routes, registered in `app.ts`); `workspace.service.ts` now
+  exports its count helpers and `resolveReportingRange()` (Home's range
+  rule, extracted, behaviour unchanged); web `hooks/use-reports.ts`,
+  `components/reports/reports-page-client.tsx`,
+  `app/(protected)/reports/page.tsx`, sidebar item and title; Home's range
+  and All/Mine controls extracted to
+  `components/dashboard/range-scope-controls.tsx` (Home now uses it too).
+  README status and permission tables updated.
+- Tests: API `tests/reports/{reports,reconciliation,export}.test.ts` (21) +
+  `tests/helpers/reports.ts`; web `reports-page-client.test.tsx` (5). The
+  reconciliation test was shown to fail on a deliberately broken query.
+- Verified: `pnpm typecheck` clean; `pnpm lint` 0 errors (3 older
+  warnings); `pnpm test` **apps/api 593/593, apps/web 126/126 (719)**;
+  `pnpm --filter web build` lists `/reports`; read-only smoke (web PID 6960,
+  API PID 23016 after `tsx watch` restarted its child on file changes):
+  reports endpoints 401 unauthenticated, `/reports` 200. Not clicked through
+  in a browser; not committed; nothing run against staging or written to
+  `crm_dev`.
+- **Day 5c is complete.** Remaining for the user: the browser pass
+  (`MANUAL-TEST-DAY5C.md` §1–§9), organisation PDF details, `pnpm
+  staging:migrate` (both Day 5c migrations). Then Day 6.

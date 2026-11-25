@@ -1,8 +1,8 @@
 # Day 5c — summary
 
 Day 5c adds three PRD features that were still missing, one at a time, each
-stopping for review: **(1) Quotations**, (2) Notifications, (3) Reports.
-This file is filled in as each feature is finished. Decisions: D83 onward in
+stopping for review: **(1) Quotations**, **(2) Notifications**, **(3) Reports** —
+all three done (2026-11-25). Decisions: D83 onward in
 `docs/decisions.md`. Click-through steps: `docs/MANUAL-TEST-DAY5C.md`.
 
 ## 1. Quotations — done (2026-11-25)
@@ -154,7 +154,7 @@ number through one shared formatter. Full rule: D85.
 
 ### Things to know
 
-- **Differences from the PRD, not approved deviations.** PRD 5.8 also lists
+- **Differences from the PRD — approved deviations (D91).** PRD 5.8 also lists
   notifications for **deal changes** (stage moves, Won/Lost) and
   **invitations**, and 5.11 lists **notification preferences**. None of
   these are built. There's no invite flow at all: an Admin creates users
@@ -166,3 +166,70 @@ number through one shared formatter. Full rule: D85.
   "due today" per task per day; up to 50 task reminders are created per page
   load (latest due first); reassigning back and forth notifies again each
   time; old notifications are never deleted.
+
+## 3. Reports — done (2026-11-25)
+
+### What a user can now do
+
+- Open **Reports** in the sidebar (Admin and Staff). Pick a date range
+  (This month, Last 30 days, or Custom) and **All** or **Mine** — the same
+  controls as Home.
+- See five reports, each with a table (and a Total row), a chart where it
+  helps, and its own **Download CSV**:
+  1. **Pipeline by stage** — open deals right now: how many, value, weighted
+     value per stage (not affected by the date range).
+  2. **Lead sources and conversion** — leads created in the range per
+     source, how many were converted, the conversion rate.
+  3. **Sales performance by owner** — deals won (count and value) and lost
+     in the range per owner, and each owner's win rate.
+  4. **Quotations summary** — quotations issued in the range, count and
+     value per status (a sent quotation past its date counts as Expired).
+  5. **Overdue tasks by assignee** — open tasks, calls and meetings due
+     before today (and within the range), per person, with the oldest.
+- The CSV files open in Excel (plain numbers you can add up, a Total row,
+  no formula tricks possible from names typed into the app).
+
+### Does it agree with Home?
+
+Yes, and this is tested, not assumed: for the same range and scope, every
+figure Reports shares with Home (leads created, conversion rate, open
+pipeline, won/lost, won revenue, win rate, overdue) is identical, and each
+report's rows add up to its total. The test was shown to catch a
+deliberately broken query. Reports uses the very same calculations as Home
+for those totals.
+
+### What was checked
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | clean |
+| `pnpm lint` | 0 errors (the same 3 older warnings) |
+| `pnpm test` | **apps/api 593/593** (was 572), **apps/web 126/126** (was 121), 719 total |
+| Web production build | `/reports` compiles |
+| Running app | the reports API and CSV answer 401 when not signed in; `/reports` answers 200 |
+| Clicked through in a browser | **No**: see `MANUAL-TEST-DAY5C.md` §9 |
+
+### Tested vs. reasoning only
+
+| Requirement | Proven by |
+|---|---|
+| Each report's figures (ranges in the org time zone, archived excluded, unassigned kept, Mine) | `apps/api/tests/reports/reports.test.ts` |
+| Quotations counted by effective status, without writing anything | `reports.test.ts` |
+| Reports = Home dashboard; rows = totals; quotation counts = Quotations list filter | `tests/reports/reconciliation.test.ts` (shown to fail on a broken query) |
+| CSV: BOM, safe headers, Total row, same figures, formula escaping, isolation | `tests/reports/export.test.ts` |
+| Staff access, 401, 422, other organisations never included | `reports.test.ts`, `export.test.ts` |
+| Page: five reports, totals, CSV links carry the on-screen filters, Mine toggle | `apps/web/tests/components/reports-page-client.test.tsx` |
+| How the charts and tables look in a browser, both themes | **Not yet**: manual script |
+
+### Things to know
+
+- **Added beyond the plan**: lost count and win rate in the sales-by-owner
+  report (PRD 5.10 names "deals Won/Lost").
+- **"Overdue" means tasks, calls and meetings**, exactly like Home's
+  "Overdue tasks" card, so the two always agree.
+- **The overdue report follows the date range** (as planned), so "This
+  month" hides older overdue items; use a wide custom range to see all.
+- **Differences from PRD 5.10, for you to decide (not built)**: leads by
+  status and by date (trend) and the monthly revenue trend are on Home, not
+  on Reports; no per-person activity report (calls/meetings logged); CSV
+  only, no .xlsx; no PDF reports (already approved, D87).

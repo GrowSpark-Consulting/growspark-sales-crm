@@ -22,6 +22,7 @@ import { registerIntakeRoutes } from './modules/intake/intake.routes.js';
 import { registerEnquiriesRoutes } from './modules/enquiries/enquiries.routes.js';
 import { registerQuotationsRoutes } from './modules/quotations/quotations.routes.js';
 import { registerNotificationsRoutes } from './modules/notifications/notifications.routes.js';
+import { registerReportsRoutes } from './modules/reports/reports.routes.js';
 import { resetRouteRegistry } from './lib/route-registry.js';
 import { env } from './env.js';
 
@@ -79,6 +80,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
   registerEnquiriesRoutes(app);
   registerQuotationsRoutes(app);
   registerNotificationsRoutes(app);
+  registerReportsRoutes(app);
   options.extraRoutes?.(app);
 
   app.use(errorHandler);

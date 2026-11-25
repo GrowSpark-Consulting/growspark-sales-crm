@@ -1,82 +1,60 @@
 # Day 5c handover prompt — paste everything below the line into a fresh session
 
-Last updated: 2026-11-25, after Notifications was finished (D90).
+Last updated: 2026-11-25, after Reports was finished (D92). **Day 5c is
+complete**; this prompt is for follow-up work on it (fixes from my browser
+pass, staging) before Day 6.
 
 ---
 
-We are in the middle of Day 5c of the Grow Spark Sales & CRM: three missing
-PRD features, built one at a time, each ending with a short plain-language
-report and a wait for my "continue": (1) Quotations — DONE, (2) Notifications
-— DONE, (3) Reports — not started. The PRD is the source of truth; where
-it differs from my brief, the PRD wins unless a recorded decision says
-otherwise, and you tell me about the difference.
+Day 5c of the Grow Spark Sales & CRM is complete: (1) Quotations, (2)
+Notifications, (3) Reports — all built and automatically tested, none yet
+clicked through in a browser. I am running `docs/MANUAL-TEST-DAY5C.md` and
+may bring back bugs. The PRD is the source of truth; where it differs from
+my brief, the PRD wins unless a recorded decision says otherwise, and you
+tell me about the difference.
 
 ## Read first, in this order (no code until you have)
 
 1. `CLAUDE.md`
 2. `docs/NEXT-SESSION-START.md`
-3. `docs/PROJECT-STATE.md` (skim the headings; read §1's last update, §10
+3. `docs/PROJECT-STATE.md` (skim the headings; read §1's last updates, §10
    gotchas, §12 conventions, the end of §15 session log)
-4. `docs/decisions.md` — D76/D82 (CSV export and its Excel fix) and all of
-   **D83–D90** (Day 5c)
+4. `docs/decisions.md` — all of **D83–D92** (Day 5c)
 5. `docs/DAY-5C-SUMMARY.md`, `docs/MANUAL-TEST-DAY5C.md`
-6. Code to copy patterns from: `apps/api/src/modules/workspace/
-   workspace.service.ts` (the Home dashboard queries — reuse for Reports),
-   `apps/api/src/modules/quotations/quotations.service.ts`
-   (`quotationStatusWhere`, `expireLapsedQuotations`),
-   `apps/api/src/modules/leads/leads.routes.ts` (a CSV export route),
-   `apps/api/src/lib/{csv,org-time,route-registry}.ts`,
-   `packages/shared/src/permissions.ts`,
-   `apps/web/components/dashboard/` (charts + screen-reader tables, the
-   date-range and All/Mine controls), `apps/web/lib/export.ts`,
-   `apps/web/components/app-shell.tsx`.
+6. The code for whichever feature a bug report is about:
+   `apps/api/src/modules/{quotations,notifications,reports}/`,
+   `apps/api/src/modules/workspace/workspace.service.ts` (shared range rule
+   and the Home queries Reports reuses), `apps/web/components/{quotations,
+   notifications,reports,dashboard}/`, `apps/web/hooks/use-{quotations,
+   notifications,reports}.ts`.
 
 Then run the read-only checks (git status/log, node/pnpm/docker versions,
 `netstat -ano | findstr ":3000 :4000"`), and wait for my first prompt.
 
-## Done and tested
+## State at handover
 
-- **Quotations (D83–D88)** — see DAY-5C-SUMMARY §1.
-- **Notifications (D90)** — bell (60 s polling, paused while hidden),
-  `/notifications`, mark read / read all; events for lead/deal assignment,
-  new website enquiry, quotation accepted/rejected, task due today/overdue
-  generated on load. PRD 5.8/5.11 gaps reported, not built: deal-change and
-  invitation notifications, notification preferences.
 - Migrations `20261124181711_add_quotations` and
   `20261124191130_add_notifications` are applied to `crm_test` and `crm_dev`
-  (by me); **not yet to staging**.
-- Last verified state: `pnpm typecheck` clean; `pnpm lint` 0 errors (3
-  older web warnings); `pnpm test` **apps/api 572/572, apps/web 121/121
-  (693)**; web production build compiles every route.
-- Nothing from Day 5c has been clicked through in a browser yet; that's my
-  job (`docs/MANUAL-TEST-DAY5C.md` §1–§8).
+  (by me); **not yet to staging**. Reports needed no migration.
+- Permissions added in Day 5c: `quotations:read`, `quotations:write`,
+  `reports:read` (Admin + Staff). Dependency added: `pdfkit@0.20.2` (+ dev
+  `@types/pdfkit@0.17.7`).
+- Last verified: `pnpm typecheck` clean; `pnpm lint` 0 errors (3 older web
+  warnings); `pnpm test` **apps/api 593/593, apps/web 126/126 (719)**; web
+  production build compiles every route.
 
-## Reports — not started (approved plan, do not re-ask)
+## Approved PRD deviations and future items
 
-- New permission `reports:read` (Admin + Staff; add to PERMISSIONS — the
-  only permission-table change approved); CSV uses the existing
-  `reports:export`.
-- `/reports` page: date-range filter and an **All / Mine** toggle like Home
-  (both roles see organisation-wide data, as Leads/Deals already allow).
-- Five reports, each with a CSV export through the safe helper (`rowsToCsv`:
-  formula escaping, BOM, never a bare "ID" first header):
-  1. Pipeline by stage (count and value) — current open snapshot, as Home
-  2. Lead sources and conversion — leads created in range, converted among them
-  3. Sales performance by owner — deals won in range (closed_at), count and value
-  4. Quotations summary — issued in range, count and value by status; must
-     use `quotationStatusWhere()` (D86) so Expired is counted correctly
-  5. Overdue tasks by owner — currently overdue; date range filters by due date
-- Reuse Home's dashboard queries where they overlap and add a
-  **reconciliation test** proving Reports and `GET /dashboard` agree.
-- Tables plus simple charts; no PDF reports (D87).
-- Docs on completion: decisions D91+, PROJECT-STATE, NEXT-SESSION-START,
-  DAY-5C-SUMMARY §3, MANUAL-TEST-DAY5C §Reports with exact clicks.
-
-## Approved PRD deviations (D87) and future items
-
-No product catalogue; no CGST/SGST/IGST split; no PDF reports; owner added
-to quotations; the PDF is regenerated, never stored. Future items: **GST
-split**, **product catalogue**.
+- Quotations (D87): no product catalogue; no CGST/SGST/IGST split; no PDF
+  reports; owner added to quotations; the PDF is regenerated, never stored.
+- Notifications (D91): no deal-change notifications; no invitation
+  notifications (no invite flow); no notification preferences; "reminders"
+  = task due today only; a manual lead notifies only its owner.
+- Reports (D92) — reported, **not yet decided by me**: leads by status/date
+  and the revenue trend are on Home only; no per-person activity report;
+  CSV only (no .xlsx).
+- Future items: **GST split**, **product catalogue**, **notification
+  preferences**, **deal-change notifications**.
 
 ## Guardrails
 
@@ -88,21 +66,21 @@ split**, **product catalogue**.
 - No `sh` scripts; Windows/cmd-friendly commands in anything you give me.
 - Don't stop or restart my running dev servers; prove ports by PID. (A
   `pnpm --filter web build` is safe alongside `next dev`: Next 16 keeps dev
-  output in `.next/dev`.)
-- Ask before any new dependency or any permission-table change beyond
-  `reports:read` (already approved).
+  output in `.next/dev`. `tsx watch` restarts its own child process when API
+  files change, so the API's PID can change without anyone stopping it.)
+- Ask before any new dependency or any permission-table change.
 
 ## Steps I still have to do myself
 
 1. Organisation PDF details: copy `apps\api\org-details.example.json`,
    fill it in, `pnpm org:set-details --file <file>`, then again with
    `--confirm`.
-2. Click through `docs\MANUAL-TEST-DAY5C.md` (Quotations, Notifications).
-3. At the very end of Day 5c: from `apps\api`, `pnpm staging:migrate`, then
+2. Click through `docs\MANUAL-TEST-DAY5C.md` §1–§9.
+3. From `apps\api`: `pnpm staging:migrate`, then
    `pnpm staging:set-org-details --file <file>` (dry run, then `--confirm`).
 
 ## First thing to do in the new session
 
-After reading and the checks above, wait for my "continue", then build
-Reports as planned above, starting with the `reports:read` permission and
-the API service.
+After reading and the checks above, wait for my first prompt (bug reports
+from the browser pass, a decision on the D92 Reports differences, or Day 6
+scope).

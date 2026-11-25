@@ -20,6 +20,7 @@ export const PERMISSIONS = {
   ACTIVITIES_WRITE: 'activities:write',
   RECORDS_ARCHIVE: 'records:archive',
   DASHBOARD_READ: 'dashboard:read',
+  REPORTS_READ: 'reports:read',
   REPORTS_EXPORT: 'reports:export',
   USERS_MANAGE: 'users:manage',
   AUDIT_READ: 'audit:read',
