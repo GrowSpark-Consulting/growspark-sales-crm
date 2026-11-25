@@ -128,7 +128,7 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <tr><td>Sign in</td><td>Login page</td><td>Yes</td><td>Yes</td><td>Email and password sign-in.</td></tr>
 <tr><td>Home</td><td>Menu → <strong>Home</strong></td><td>Yes</td><td>Yes</td><td>Dashboard: 9 key numbers, 4 charts, recent activity.</td></tr>
 <tr><td>Today</td><td>Menu → <strong>Today</strong></td><td>Yes</td><td>Yes</td><td>What needs attention today, in 7 cards.</td></tr>
-<tr><td>My Tasks</td><td>Menu → <strong>My Tasks</strong></td><td>Yes</td><td>Yes</td><td>Open, overdue and done tasks, calls and meetings.</td></tr>
+<tr><td>My Tasks</td><td>Menu → <strong>My Tasks</strong></td><td>Yes</td><td>Yes</td><td>Your open, overdue and done tasks, calls and meetings (or anyone's).</td></tr>
 <tr><td>Leads</td><td>Menu → <strong>Leads</strong></td><td>Yes</td><td>Yes</td><td>List, add, edit, qualify, convert and archive leads.</td></tr>
 <tr><td>Import leads</td><td>Leads → <strong>Import CSV</strong></td><td>Yes</td><td>Yes</td><td>Load leads from a CSV file.</td></tr>
 <tr><td>Companies</td><td>Menu → <strong>Companies</strong></td><td>Yes</td><td>Yes</td><td>Company records with contacts, deals, quotations and timeline.</td></tr>
@@ -197,10 +197,11 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <h3>My Tasks</h3>
 <ul>
 <li>Tabs: <strong>Open</strong>, <strong>Overdue</strong>, <strong>Done</strong>.</li>
+<li><strong>Assigned to</strong>: <strong>Assigned to me</strong> (the default), <strong>Everyone</strong>, or one colleague by name. When the list is not only yours, an <strong>Assigned to</strong> column shows whose each item is ("You", a name, or "Unassigned").</li>
 <li>Filters: <strong>Any type</strong>, <strong>Any priority</strong>, <strong>Due from</strong>, <strong>Due to</strong>.</li>
 <li><strong>Complete</strong> or <strong>Cancel</strong> an item from the list.</li>
 </ul>
-<p>Note: despite its name, My Tasks currently lists open items for everyone in the organisation, not only yours. Use <strong>Today → Mine</strong> for your own list.</p>
+<p>The choice stays in the web address, so a refresh or a shared link keeps it. A new activity is assigned to the person who creates it unless they pick someone else.</p>
 <h3>Adding activities (all record pages)</h3>
 <p>Every lead, company, contact and deal page has a <strong>Timeline</strong> tab with an <strong>Add activity</strong> box:</p>
 <ol>
@@ -216,13 +217,22 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <h3>Add a lead</h3>
 <ol>
 <li>Menu → <strong>Leads</strong> → <strong>Add lead</strong>.</li>
-<li>Fill in <strong>First name</strong> (required) and an <strong>Email</strong> or <strong>Phone</strong> (one of them is required). Everything else is optional: company name, job title, <strong>Source</strong> (defaults to "Manual"), <strong>Priority</strong>, <strong>Owner</strong>, budget, timeline, <strong>Next follow-up</strong>, <strong>Requirement</strong>, <strong>Notes</strong>.</li>
+<li>Fill in the required fields: <strong>First name *</strong>, <strong>Company name *</strong>, and an <strong>Email</strong> or a <strong>Phone</strong> (one of the two; until one is filled the form says "Provide an email or a phone number.").</li>
+<li>Everything else is optional: last name, website, job title, industry, <strong>Source</strong>, <strong>Priority</strong>, <strong>Owner</strong>, budget, timeline, <strong>Next follow-up</strong>, <strong>Requirement</strong>, <strong>Notes</strong>. <strong>Source</strong> starts as <strong>Not specified (saved as Manual)</strong>.</li>
 <li>Click <strong>Add lead</strong>.</li>
 </ol>
+<p><strong>Typing a phone number</strong> (the same box on leads, contacts, companies and Settings → Organisation)</p>
+<ul>
+<li>Pick the country on the left. <strong>India (+91)</strong> is the default.</li>
+<li>Type the number without the leading 0. Only digits are accepted.</li>
+<li>An Indian number has exactly 10 digits (mobiles and landlines with their area code). Once the box is full, extra digits can't be typed, and a short note appears under the box, for example "India (+91) numbers have at most 10 digits."</li>
+<li>Pasting "+91 98400 12345" or "098400 12345" is tidied up automatically. A pasted number that is too long is refused rather than cut short.</li>
+<li>A number that is too short shows a message such as "Enter all 10 digits of the number for India (+91)".</li>
+</ul>
 <p>If the email, phone or company name matches an existing lead, a yellow <strong>"This might already exist."</strong> box appears with a link. It is a warning only. You can still save.</p>
 <h3>Edit, owner and status</h3>
 <ul>
-<li>Click <strong>Edit</strong>, change fields (including <strong>Owner</strong>), click <strong>Save changes</strong>. The Requirement cannot be changed after creation, so the original enquiry is kept.</li>
+<li>Click <strong>Edit</strong>, change fields (including <strong>Owner</strong>), click <strong>Save changes</strong>. The Requirement cannot be changed after creation, so the original enquiry is kept. An older lead saved without a company name asks for one when you edit it.</li>
 <li>On the <strong>Overview</strong> tab, under <strong>Change status</strong>, click <strong>New</strong>, <strong>Contacted</strong>, <strong>Qualified</strong> or <strong>Unqualified</strong>.</li>
 <li>The <strong>History</strong> tab lists every status change, who made it and when.</li>
 </ul>
@@ -241,13 +251,13 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <li><strong>Archive</strong> hides a lead from the list. Nothing is permanently deleted. Switch the last filter to <strong>Archived</strong> to see it, then click <strong>Restore</strong>.</li>
 <li>Search box plus filters: <strong>Any status</strong>, <strong>Any source</strong>, <strong>Any priority</strong>, <strong>Any owner</strong>, a created-date range. Click a column heading to sort. Filters stay in the web address, so a filtered view can be bookmarked.</li>
 <li><strong>Download CSV</strong> exports exactly what the current filters show.</li>
-<li>There are no bulk actions (for example, selecting several leads to reassign them at once).</li>
+<li>There are no bulk actions (for example, selecting several leads to reassign them at once). This was agreed for this version.</li>
 </ul>
 <h3>Import leads from a CSV file</h3>
 <ol>
 <li>Leads → <strong>Import CSV</strong>. Optional: <strong>Download a sample file</strong>.</li>
 <li>Click <strong>Choose CSV file</strong> (CSV only, up to 1 MB and 1,000 rows). From Excel, use File → Save As → CSV UTF-8.</li>
-<li><strong>Match the columns</strong>: the app guesses each one. Change any column, or set it to <strong>Don't import</strong>. Unused columns are still saved on the lead as "Other captured answers".</li>
+<li><strong>Match the columns</strong>: the app guesses each one. Change any column, or set it to <strong>Don't import</strong>. Unused columns are still saved on the lead as "Other captured answers". Each row needs a first name, a company and an email or phone, so one column must be matched to <strong>Company</strong>.</li>
 <li>Click <strong>Check rows</strong>. Every row is marked <strong>Ready</strong>, <strong>Duplicate</strong> (same email as an existing lead, or earlier in the file) or <strong>Error</strong> (with the reason).</li>
 <li>Click <strong>Import N leads</strong>. You can download the skipped rows with their reasons.</li>
 </ol>
@@ -263,11 +273,13 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <h3>Contacts</h3>
 <ol>
 <li>Menu → <strong>Contacts</strong> → <strong>Add contact</strong> (a pop-up form).</li>
-<li><strong>First name</strong> plus an email or phone are required. Pick a <strong>Company</strong> by typing its name.</li>
+<li>Required: <strong>First name *</strong>, <strong>Company *</strong> and an email or phone.</li>
+<li>Click the <strong>Company</strong> box: it lists the first 20 companies A–Z straight away. Type to narrow the list, then click one (or use the arrow keys and <strong>Enter</strong>).</li>
 <li>Click <strong>Add contact</strong>.</li>
 </ol>
+<p>A contact's company can be changed later but not removed. Every company picker in the app (deals, quotations, converting a lead) and the contact picker on quotations and deals work the same way.</p>
 <p>A contact page has <strong>Overview</strong>, <strong>Deals</strong> and <strong>Timeline</strong> tabs. Click <strong>Edit</strong> to change it.</p>
-<p>Both lists have search, an owner filter, <strong>Archive</strong> / <strong>Restore</strong> and <strong>Download CSV</strong>. Contacts also has <strong>Import CSV</strong>. A company name in the file that doesn't exist yet is created once, and the preview lists it first.</p>
+<p>Both lists have search, an owner filter, <strong>Archive</strong> / <strong>Restore</strong> and <strong>Download CSV</strong>. Contacts also has <strong>Import CSV</strong>; every row needs a company. A company name in the file that doesn't exist yet is created once, and the preview lists it first.</p>
 </section>
 <section id="7-deals-and-the-pipeline">
 <h2>7. Deals and the pipeline</h2>
@@ -275,7 +287,7 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <p><strong>Add a deal</strong>: Menu → <strong>Deals</strong> → <strong>Add deal</strong>. Enter <strong>Deal name</strong>, <strong>Company</strong>, <strong>Stage</strong>, <strong>Value</strong>, <strong>Owner</strong> and expected close date. Click <strong>Add deal</strong>.</p>
 <h3>List and Board</h3>
 <ul>
-<li><strong>List</strong>: a table with search and filters (stage, status, owner, company) and <strong>Download CSV</strong>.</li>
+<li><strong>List</strong>: a table with search and filters (stage, status, owner, and an <strong>Any company</strong> box you can type in) and <strong>Download CSV</strong>.</li>
 <li><strong>Board</strong>: one column per open stage, with totals. Move a card by dragging it, or with its <strong>Move to…</strong> button.</li>
 </ul>
 <h3>On a deal page</h3>
@@ -292,12 +304,12 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 </section>
 <section id="8-enquiries-inbox-and-the-website-form" class="flow">
 <h2>8. Enquiries inbox and the website form</h2>
-<h3>How the website form will feed the CRM</h3>
-<p>The CRM is ready to receive enquiries from the Grow Spark website. Once connected, the website will send a copy of each contact-form enquiry to the CRM. The website's own saving, emails and HubSpot flow stay exactly as they are. <strong>Today the website is not yet connected.</strong> That work is on hold until the CRM is finished. Until then, enquiries arrive only from test submissions.</p>
+<h3>How the website form feeds the CRM</h3>
+<p>The Grow Spark website's contact form is connected (live since 25 November 2026). Every enquiry is forwarded to the CRM, using an API key. This is in addition to the website's own saving, emails and HubSpot flow, which are unchanged. If the CRM is asleep or down, the website still works.</p>
 <p>When an enquiry arrives, the CRM:</p>
 <ul>
 <li>stores it exactly as received,</li>
-<li>creates a lead with source <strong>Website</strong>, unless it has no email or phone (then it is kept as <strong>Rejected</strong>, with the reason),</li>
+<li>creates a lead with source <strong>Website</strong>, unless it has no email or phone (then it is kept as <strong>Rejected</strong>, with the reason). A website lead does not need a company name,</li>
 <li>quietly marks obvious bot submissions as <strong>Spam</strong>,</li>
 <li>ignores a repeat of the same submission, so retries never create duplicates,</li>
 <li>notifies every active user.</li>
@@ -309,13 +321,14 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <li><strong>Mark as spam</strong>: also archives the lead it created.</li>
 <li><strong>Archive</strong> hides it. <strong>Restore</strong> brings it back.</li>
 </ol>
+<p>There is no read/unread marker; use the status and <strong>Archive</strong> instead. This was agreed for this version.</p>
 </section>
 <section id="9-quotations">
 <h2>9. Quotations</h2>
 <h3>Create a quotation</h3>
 <ol>
 <li>Menu → <strong>Quotations</strong> → <strong>New quotation</strong> (or from a company's or deal's <strong>Quotations</strong> tab).</li>
-<li>Choose <strong>Company</strong>, then <strong>Contact</strong> (only that company's people), and optionally a <strong>Deal</strong>.</li>
+<li>Choose <strong>Company</strong>, then <strong>Contact</strong> (only that company's people), and optionally a <strong>Deal</strong>. Each box lists its options as soon as you click it.</li>
 <li><strong>Issue date</strong> defaults to today. <strong>Valid until</strong> defaults to 30 days later.</li>
 <li>Add <strong>Line items</strong>: <strong>Description</strong>, <strong>Qty</strong>, <strong>Unit price (₹)</strong>, optional <strong>Disc. %</strong>. Click <strong>Add line</strong> for more.</li>
 <li>Set <strong>Quotation discount (%)</strong> and <strong>GST (%)</strong> (default 18). Add <strong>Terms</strong> and <strong>Notes</strong> if needed.</li>
@@ -344,7 +357,7 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 </ul>
 <p>You only see your own notifications. There are no emails.</p>
 </section>
-<section id="11-reports">
+<section id="11-reports" class="flow">
 <h2>11. Reports</h2>
 <p>Menu → <strong>Reports</strong>. Use the same <strong>Date range</strong> and <strong>All</strong> / <strong>Mine</strong> controls as Home. Five reports, each with a table, a <strong>Total</strong> row and a <strong>Download CSV</strong> button:</p>
 <ol>
@@ -371,7 +384,7 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <h2>13. Settings, Users, API keys and Audit log</h2>
 <p>Menu → <strong>Settings</strong>. Staff see only <strong>My profile</strong>. Admins also see an <strong>Administration</strong> section.</p>
 <ul>
-<li><strong>Organisation</strong> (Admin only): display name, legal name, GSTIN, address, phone, email, website. These print on quotation PDFs. Currency (INR) and time zone (Asia/Kolkata) are shown but cannot be changed.</li>
+<li><strong>Organisation</strong> (Admin only): display name, legal name, GSTIN, address, phone (same rules as section 5), email, website. These print on quotation PDFs. Currency (INR) and time zone (Asia/Kolkata) are shown but cannot be changed.</li>
 <li><strong>Lead sources</strong> (Admin only): <strong>Add source</strong>, <strong>Rename</strong>, <strong>Deactivate</strong> / <strong>Reactivate</strong>, reorder with the arrows. "Website", "Manual" and "Import" are <strong>System</strong> sources and cannot be changed. A deactivated source stays on old leads but is no longer offered.</li>
 <li><strong>Pipeline stages</strong> (Admin only): <strong>Add stage</strong>, <strong>Edit</strong> (name and probability), reorder open stages, <strong>Delete</strong> (only for a stage no deal has ever used). Won (100%) and Lost (0%) are always last. New deals start in the first open stage.</li>
 <li><strong>Users</strong> (Admin only): see section 3.</li>
@@ -379,13 +392,13 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <li><strong>Audit log</strong> (Admin only): a list of important actions (users, deactivations, archives, conversions, deal outcomes, quotations, settings, imports, API keys) with <strong>When</strong>, <strong>Actor</strong>, <strong>Action</strong>, <strong>Record</strong>, <strong>Details</strong>. Filter by action, record type, person and date. It shows field names, never passwords or keys.</li>
 </ul>
 </section>
-<section id="14-good-to-know">
+<section id="14-good-to-know" class="flow">
 <h2>14. Good to know</h2>
 <ul>
-<li><strong>The first click can be slow.</strong> The test (staging) setup uses free hosting that sleeps after about 15 minutes without use. The first request afterwards can take up to a minute. After that it runs at normal speed. The free database can also pause after a long idle period, and someone must un-pause it from its dashboard.</li>
+<li><strong>The first click can be slow.</strong> The test (staging) setup is deployed: the web app on Vercel, the API on Render, the database on Supabase, all on free plans. The API sleeps after about 15 minutes without use, and the first request afterwards can take up to a minute. After that it runs at normal speed. The free database can also pause after a long idle period, and someone must un-pause it from its dashboard.</li>
 <li><strong>Fictional data only</strong> on staging and in demos. Never enter real customer details.</li>
 <li><strong>Nothing is deleted.</strong> Leads, companies, contacts, deals, quotations and enquiries are archived and can be restored.</li>
-<li><strong>Not in this version</strong> (agreed or reported, not forgotten):<ul><li>no "forgot password" email; an Admin resets passwords</li><li>no emails of any kind (notifications are in-app only)</li><li>no product or service catalogue; quotation lines are typed in</li><li>one GST rate per quotation, no CGST/SGST/IGST split</li><li>no Excel (.xlsx) import; save as CSV instead</li><li>no custom fields, no saved filters (bookmark the filtered web address instead)</li><li>no PDF reports; reports download as CSV</li><li>no notification settings, and no notifications for deal stage changes or Won/Lost</li><li>no bulk actions on lists, and no calendar view</li><li>currency and time zone are fixed (INR, India time)</li><li>the website form is not connected yet (section 8)</li></ul></li>
+<li><strong>Not in this version</strong> (agreed or reported, not forgotten):<ul><li>no "forgot password" email; an Admin resets passwords</li><li>no emails of any kind (notifications are in-app only)</li><li>no product or service catalogue; quotation lines are typed in</li><li>one GST rate per quotation, no CGST/SGST/IGST split</li><li>no Excel (.xlsx) import; save as CSV instead</li><li>no custom fields, no saved filters (bookmark the filtered web address instead)</li><li>no PDF reports; reports download as CSV</li><li>no notification settings, and no notifications for deal stage changes or Won/Lost</li><li>no bulk actions on lists, no calendar view, no read/unread on enquiries</li><li>currency and time zone are fixed (INR, India time)</li></ul></li>
 </ul>
 </section>
 <section id="15-likely-evaluator-questions">
@@ -394,8 +407,8 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <div class="qa"><p class="q">Can Staff see each other's records?</p><p>Yes. Sales records are shared across the team. "Owner" records who is responsible. <strong>Mine</strong> filters let each person focus on their own.</p></div>
 <div class="qa"><p class="q">How does login work?</p><p>Email and password. Passwords are stored only as a scrambled one-way hash. After sign-in the browser holds a random session code. The server keeps the session, so it can end it instantly. Deactivating a user or changing a password signs that person out everywhere.</p></div>
 <div class="qa"><p class="q">What stops password guessing?</p><p>After several failed attempts for the same email, further attempts are refused for a while ("Too many attempts. Try again later.").</p></div>
-<div class="qa"><p class="q">How does the website form reach the CRM?</p><p>The website's server sends each enquiry to a private CRM address, with an API key created on the API keys page. Browsers never see the key. The connection itself is not switched on yet (section 8).</p></div>
-<div class="qa"><p class="q">What if the CRM is down when someone submits the website form?</p><p>The plan is that the website keeps saving and emailing enquiries exactly as it does today, so an enquiry is not lost if the CRM is down. If the website sends the same enquiry again later, the CRM recognises its submission ID and ignores the repeat. Retrying from the website side is part of the connection work that is still on hold.</p></div>
+<div class="qa"><p class="q">How does the website form reach the CRM?</p><p>The website's server sends each enquiry to a private CRM address, with an API key created on the API keys page. Browsers never see the key. It has been live since 25 November 2026.</p></div>
+<div class="qa"><p class="q">What if the CRM is down when someone submits the website form?</p><p>The website still works. It keeps saving, emailing and sending enquiries to HubSpot as before, so the enquiry is not lost. If the same enquiry reaches the CRM twice, the CRM recognises its submission ID and ignores the repeat.</p></div>
 <div class="qa"><p class="q">How are quotation totals calculated?</p><p>Line amount = quantity × unit price, minus the line discount. Subtotal = sum of lines. Then the quotation discount, then GST on the taxable amount, then the total. Rounding to the paisa (half-up) happens once per line, once for the discount and once for GST, so the printed figures always add up.</p></div>
 <div class="qa"><p class="q">Why are the totals exact?</p><p>Money is calculated with exact decimal arithmetic, not computer floating-point, which can drift by a paisa. The server always recalculates the totals itself, and the screen, the list and the PDF show the same figure.</p></div>
 <div class="qa"><p class="q">How are duplicates handled?</p><p>When you add a lead or company by hand, a matching email, phone or name shows a warning, but you can still save. CSV imports skip rows whose email already exists, and list them. A repeated website submission is ignored. Conversion suggests existing companies and contacts so you can link them instead of creating copies.</p></div>
@@ -404,7 +417,7 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <div class="qa"><p class="q">Can data be deleted?</p><p>Business records are archived, never deleted. The one exception: an Admin can delete a pipeline stage that no deal has ever used.</p></div>
 <div class="qa"><p class="q">Do the dashboard numbers match the data?</p><p>Yes. Automated tests compare every dashboard number with an independent database count, and check that Reports agree with Home.</p></div>
 <div class="qa"><p class="q">Why were some PRD items left out?</p><p>To finish the full core journey reliably in the time available. Each item left out is recorded with a reason. Some were approved by the project owner, and some are awaiting a decision (section 17).</p></div>
-<div class="qa"><p class="q">How was it tested?</p><p>791 automated tests run against a real database. Step-by-step manual test scripts exist for every feature. Running them in a browser is the next step.</p></div>
+<div class="qa"><p class="q">How was it tested?</p><p>841 automated tests run against a real database. Step-by-step manual test scripts exist for every feature. Running them in a browser is the next step.</p></div>
 </section>
 <section id="16-technical-overview">
 <h2>16. Technical overview</h2>
@@ -441,7 +454,7 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 </section>
 <section id="17-prd-coverage">
 <h2>17. PRD coverage</h2>
-<p>Status of every item in PRD section 5. Key: <strong>Built</strong>, <strong>Built differently</strong>, <strong>Not built</strong>. "Approved" means the project owner approved the change (decision number in brackets). "Awaiting decision" means it was reported and is not yet approved. "Not recorded" means no decision about it was written down.</p>
+<p>Status of every item in PRD section 5. Key: <strong>Built</strong>, <strong>Built differently</strong>, <strong>Not built</strong>. "Approved" means the project owner approved the change (decision number in brackets). "Awaiting decision" means it was reported and is not yet approved.</p>
 <div class="table-wrap"><table>
 <thead><tr><th>PRD item</th><th>Status</th><th>Note</th></tr></thead>
 <tbody>
@@ -456,10 +469,10 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <tr><td>5.2 Role-aware data; date filters</td><td>Built</td><td>All/Mine and date range.</td></tr>
 <tr><td><strong>5.3</strong> Manual lead create/edit</td><td>Built</td><td></td></tr>
 <tr><td>5.3 CSV/Excel import with field mapping</td><td>Built differently</td><td>CSV only; Excel can save as CSV. Awaiting decision (D95).</td></tr>
-<tr><td>5.3 Website form through a secured API</td><td>Built differently</td><td>CRM side built and tested; website not connected (on hold by owner instruction).</td></tr>
+<tr><td>5.3 Website form through a secured API</td><td>Built</td><td>Live since 25 November 2026, alongside the website's own flow.</td></tr>
 <tr><td>5.3 Source/detail, status, owner, captured enquiry</td><td>Built</td><td></td></tr>
 <tr><td>5.3 Search, filters, sorting, duplicate detection</td><td>Built</td><td>Duplicates warn, never block.</td></tr>
-<tr><td>5.3 Bulk operations</td><td>Not built</td><td>Not recorded.</td></tr>
+<tr><td>5.3 Bulk operations</td><td>Not built</td><td>Approved (D96).</td></tr>
 <tr><td>5.3 Qualify, convert, notes, history, original submission</td><td>Built</td><td></td></tr>
 <tr><td><strong>5.4</strong> Company and contact records</td><td>Built</td><td>Company "notes" is the Description field.</td></tr>
 <tr><td>5.4 Many contacts per company; contacts on many deals</td><td>Built</td><td></td></tr>
@@ -473,14 +486,14 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <tr><td>5.6 Reminders</td><td>Built differently</td><td>Only "task due today" and "overdue" notifications (approved, D91).</td></tr>
 <tr><td>5.6 Due date, priority, status, assignee, completion</td><td>Built</td><td></td></tr>
 <tr><td>5.6 Today, upcoming, overdue</td><td>Built</td><td>Today page, My Tasks.</td></tr>
-<tr><td>5.6 Calendar view</td><td>Not built</td><td>Not recorded.</td></tr>
+<tr><td>5.6 Calendar view</td><td>Not built</td><td>Approved (D96). My Tasks and Today instead.</td></tr>
 <tr><td>5.6 Timeline on lead, contact, company, deal</td><td>Built</td><td></td></tr>
 <tr><td><strong>5.7</strong> Product/service catalogue</td><td>Not built</td><td>Approved (D87); future item.</td></tr>
 <tr><td>5.7 Items with qty, price, discount, tax</td><td>Built differently</td><td>Lines typed in; one GST % per quotation; on quotations, not deals (approved, D87).</td></tr>
 <tr><td>5.7 Number, validity, customer, totals</td><td>Built</td><td></td></tr>
 <tr><td>5.7 PDF; linked to deal; status tracking</td><td>Built</td><td>The PDF is generated on demand, not stored (approved, D87).</td></tr>
 <tr><td><strong>5.8</strong> Enquiries inbox with filters and lead context</td><td>Built</td><td></td></tr>
-<tr><td>5.8 Inbox read/unread</td><td>Not built</td><td>Status, archive and spam instead. Not recorded.</td></tr>
+<tr><td>5.8 Inbox read/unread</td><td>Not built</td><td>Approved (D96). Status, archive and spam instead.</td></tr>
 <tr><td>5.8 Open or create the lead from an enquiry</td><td>Built differently</td><td>The lead is created automatically on arrival and linked; there is no manual "create lead" for a Rejected enquiry.</td></tr>
 <tr><td>5.8 Notifications: leads, assignments, reminders, overdue</td><td>Built differently</td><td>A manual lead notifies only its owner; reminders are due-today only (approved, D91).</td></tr>
 <tr><td>5.8 Notifications: deal changes, invitations</td><td>Not built</td><td>Approved (D91). There is no invite flow.</td></tr>
@@ -507,7 +520,7 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 </section>
 <section id="18-5-minute-demo-walkthrough">
 <h2>18. 5-minute demo walkthrough</h2>
-<p>Before the demo: have sample data loaded, and ask the developer to send one test website enquiry with the test script. The website itself is not connected yet. Allow a minute for the first page to wake up.</p>
+<p>Before the demo: have sample data loaded, and submit the website's contact form once with fictional details. It also goes through the website's normal emails and HubSpot, so tell the team it is a test. Allow a minute for the first page to wake up.</p>
 <ol>
 <li><strong>Enquiry arrives.</strong> Sign in as Admin. Notice the bell's red number. Open <strong>Enquiries</strong> and open the new enquiry. Show <strong>Overview</strong> and <strong>Raw payload</strong>.</li>
 <li><strong>Lead.</strong> On the enquiry, click the linked lead. Its source is <strong>Website</strong> and the original message is under <strong>Original enquiry</strong>.</li>
@@ -520,6 +533,7 @@ footer { color: var(--ink-muted); font-size: 12px; border-top: 1px solid var(--l
 <li><strong>Won.</strong> In the "Mark the deal as Won?" box, click <strong>Mark deal as Won</strong>. Open the deal: it shows <strong>Won</strong>.</li>
 <li><strong>Report.</strong> Open <strong>Reports</strong>: the win appears under <strong>Sales performance by owner</strong>. Open <strong>Home</strong>: <strong>Won revenue</strong> matches. Finish with <strong>Audit Log</strong> to show every step was recorded.</li>
 </ol>
+<p><strong>Recent changes (25 November 2026):</strong> website contact form connected; staging deployed; leads and contacts now need a first name, a company and an email or phone; Source optional; company and contact boxes list options on click; new phone input rules; My Tasks shows your own tasks by default; bulk actions, calendar view and enquiry read/unread recorded as agreed omissions.</p>
 </section>
 </main>
 <footer>Generated from docs/USER-GUIDE.md. To make a PDF: Print → Save as PDF (A4).</footer>

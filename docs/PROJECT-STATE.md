@@ -3724,3 +3724,31 @@ log just records that a session happened and what it covered.
   (the user commits). Docs: `decisions.md` D96–D100,
   `docs/MANUAL-TEST-DAY6B.md`, README, NEXT-SESSION-START, this file,
   `docs/DAY-6B-HANDOVER-PROMPT.md`.
+
+### 2026-11-25 (after Day 6b) — user guide updated (docs only)
+
+- Updated `docs/USER-GUIDE.md` and regenerated `docs/user-guide.html` from
+  it (one-off converter kept outside the repo; both now match). Docs only:
+  no app code, tests, migrations, config or dependencies changed; nothing
+  run against staging or `crm_dev`; not committed (the user commits).
+- Per the user: the Grow Spark website contact form **is now connected**
+  (every enquiry forwarded to the CRM with an API key, live since
+  25 Nov 2026, alongside the website's unchanged save/email/HubSpot flow),
+  and the staging setup **is deployed** (Vercel web, Render API, Supabase
+  database). Stated as told; not verified from this repo (the website repo
+  is off limits).
+- Guide brought up to Day 6b (D96–D100), re-checked against the code:
+  required first name + company + email or phone on leads and contacts
+  ("Not specified (saved as Manual)" source default); pickers list options
+  on click (Contacts, Deals, Quotations, Convert; "Any company" filter);
+  phone input rules (India +91 default, 10 digits, extra digits refused,
+  paste tidied; no digit counter mentioned); My Tasks "Assigned to"
+  (Assigned to me / Everyone / a colleague); PRD table marks bulk
+  operations, calendar view and enquiry read/unread as approved (D96);
+  test count 841; demo no longer needs a scripted enquiry; "Recent
+  changes" line added. Print grouping: sections 11 and 14 now follow on
+  (about 6,000 words, aimed at ≤ 15 A4 pages; not printed here).
+- **Docs now out of date with what the user reported** (not edited — the
+  user's call): `CLAUDE.md` and §2(a) here still say website integration
+  is on hold; `docs/NEXT-SESSION-START.md` still says neither Render nor
+  Vercel has been deployed.

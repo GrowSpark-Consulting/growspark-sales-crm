@@ -63,7 +63,7 @@ Every screen in the app. "Menu" is the left sidebar unless stated.
 | Sign in | Login page | Yes | Yes | Email and password sign-in. |
 | Home | Menu → **Home** | Yes | Yes | Dashboard: 9 key numbers, 4 charts, recent activity. |
 | Today | Menu → **Today** | Yes | Yes | What needs attention today, in 7 cards. |
-| My Tasks | Menu → **My Tasks** | Yes | Yes | Open, overdue and done tasks, calls and meetings. |
+| My Tasks | Menu → **My Tasks** | Yes | Yes | Your open, overdue and done tasks, calls and meetings (or anyone's). |
 | Leads | Menu → **Leads** | Yes | Yes | List, add, edit, qualify, convert and archive leads. |
 | Import leads | Leads → **Import CSV** | Yes | Yes | Load leads from a CSV file. |
 | Companies | Menu → **Companies** | Yes | Yes | Company records with contacts, deals, quotations and timeline. |
@@ -160,11 +160,15 @@ no next activity**, **Recently updated deals**.
 **My Tasks**
 
 - Tabs: **Open**, **Overdue**, **Done**.
+- **Assigned to**: **Assigned to me** (the default), **Everyone**, or one
+  colleague by name. When the list is not only yours, an **Assigned to**
+  column shows whose each item is ("You", a name, or "Unassigned").
 - Filters: **Any type**, **Any priority**, **Due from**, **Due to**.
 - **Complete** or **Cancel** an item from the list.
 
-Note: despite its name, My Tasks currently lists open items for everyone in
-the organisation, not only yours. Use **Today → Mine** for your own list.
+The choice stays in the web address, so a refresh or a shared link keeps
+it. A new activity is assigned to the person who creates it unless they
+pick someone else.
 
 **Adding activities (all record pages)**
 
@@ -188,11 +192,28 @@ A lead is a possible customer who has not yet been qualified.
 **Add a lead**
 
 1. Menu → **Leads** → **Add lead**.
-2. Fill in **First name** (required) and an **Email** or **Phone** (one of
-   them is required). Everything else is optional: company name, job title,
-   **Source** (defaults to "Manual"), **Priority**, **Owner**, budget,
-   timeline, **Next follow-up**, **Requirement**, **Notes**.
-3. Click **Add lead**.
+2. Fill in the required fields: **First name \***, **Company name \***, and
+   an **Email** or a **Phone** (one of the two; until one is filled the form
+   says "Provide an email or a phone number.").
+3. Everything else is optional: last name, website, job title, industry,
+   **Source**, **Priority**, **Owner**, budget, timeline, **Next
+   follow-up**, **Requirement**, **Notes**. **Source** starts as **Not
+   specified (saved as Manual)**.
+4. Click **Add lead**.
+
+**Typing a phone number** (the same box on leads, contacts, companies and
+Settings → Organisation)
+
+- Pick the country on the left. **India (+91)** is the default.
+- Type the number without the leading 0. Only digits are accepted.
+- An Indian number has exactly 10 digits (mobiles and landlines with their
+  area code). Once the box is full, extra digits can't be typed, and a short
+  note appears under the box, for example "India (+91) numbers have at most
+  10 digits."
+- Pasting "+91 98400 12345" or "098400 12345" is tidied up automatically.
+  A pasted number that is too long is refused rather than cut short.
+- A number that is too short shows a message such as "Enter all 10 digits
+  of the number for India (+91)".
 
 If the email, phone or company name matches an existing lead, a yellow
 **"This might already exist."** box appears with a link. It is a warning
@@ -202,7 +223,8 @@ only. You can still save.
 
 - Click **Edit**, change fields (including **Owner**), click **Save
   changes**. The Requirement cannot be changed after creation, so the
-  original enquiry is kept.
+  original enquiry is kept. An older lead saved without a company name
+  asks for one when you edit it.
 - On the **Overview** tab, under **Change status**, click **New**,
   **Contacted**, **Qualified** or **Unqualified**.
 - The **History** tab lists every status change, who made it and when.
@@ -235,7 +257,7 @@ The lead stays in the system with status **Converted**, its history and a
   bookmarked.
 - **Download CSV** exports exactly what the current filters show.
 - There are no bulk actions (for example, selecting several leads to
-  reassign them at once).
+  reassign them at once). This was agreed for this version.
 
 **Import leads from a CSV file**
 
@@ -244,7 +266,8 @@ The lead stays in the system with status **Converted**, its history and a
    Excel, use File → Save As → CSV UTF-8.
 3. **Match the columns**: the app guesses each one. Change any column, or
    set it to **Don't import**. Unused columns are still saved on the lead
-   as "Other captured answers".
+   as "Other captured answers". Each row needs a first name, a company and
+   an email or phone, so one column must be matched to **Company**.
 4. Click **Check rows**. Every row is marked **Ready**, **Duplicate** (same
    email as an existing lead, or earlier in the file) or **Error** (with
    the reason).
@@ -269,17 +292,23 @@ straight from its tab.
 **Contacts**
 
 1. Menu → **Contacts** → **Add contact** (a pop-up form).
-2. **First name** plus an email or phone are required. Pick a **Company**
-   by typing its name.
-3. Click **Add contact**.
+2. Required: **First name \***, **Company \*** and an email or phone.
+3. Click the **Company** box: it lists the first 20 companies A–Z straight
+   away. Type to narrow the list, then click one (or use the arrow keys
+   and **Enter**).
+4. Click **Add contact**.
+
+A contact's company can be changed later but not removed. Every company
+picker in the app (deals, quotations, converting a lead) and the contact
+picker on quotations and deals work the same way.
 
 A contact page has **Overview**, **Deals** and **Timeline** tabs. Click
 **Edit** to change it.
 
 Both lists have search, an owner filter, **Archive** / **Restore** and
-**Download CSV**. Contacts also has **Import CSV**. A company name in the
-file that doesn't exist yet is created once, and the preview lists it
-first.
+**Download CSV**. Contacts also has **Import CSV**; every row needs a
+company. A company name in the file that doesn't exist yet is created once,
+and the preview lists it first.
 
 ---
 
@@ -293,8 +322,8 @@ A deal is a sales opportunity with a value.
 
 **List and Board**
 
-- **List**: a table with search and filters (stage, status, owner, company)
-  and **Download CSV**.
+- **List**: a table with search and filters (stage, status, owner, and an
+  **Any company** box you can type in) and **Download CSV**.
 - **Board**: one column per open stage, with totals. Move a card by
   dragging it, or with its **Move to…** button.
 
@@ -320,20 +349,19 @@ The stages and their probabilities are set in Settings → Pipeline stages
 
 ## 8. Enquiries inbox and the website form
 
-**How the website form will feed the CRM**
+**How the website form feeds the CRM**
 
-The CRM is ready to receive enquiries from the Grow Spark website. Once
-connected, the website will send a copy of each contact-form enquiry to the
-CRM. The website's own saving, emails and HubSpot flow stay exactly as they
-are. **Today the website is not yet connected.** That work is on hold until
-the CRM is finished. Until then, enquiries arrive only from test
-submissions.
+The Grow Spark website's contact form is connected (live since 25 November
+2026). Every enquiry is forwarded to the CRM, using an API key. This is in
+addition to the website's own saving, emails and HubSpot flow, which are
+unchanged. If the CRM is asleep or down, the website still works.
 
 When an enquiry arrives, the CRM:
 
 - stores it exactly as received,
 - creates a lead with source **Website**, unless it has no email or phone
-  (then it is kept as **Rejected**, with the reason),
+  (then it is kept as **Rejected**, with the reason). A website lead does
+  not need a company name,
 - quietly marks obvious bot submissions as **Spam**,
 - ignores a repeat of the same submission, so retries never create
   duplicates,
@@ -348,6 +376,9 @@ When an enquiry arrives, the CRM:
 3. **Mark as spam**: also archives the lead it created.
 4. **Archive** hides it. **Restore** brings it back.
 
+There is no read/unread marker; use the status and **Archive** instead.
+This was agreed for this version.
+
 ---
 
 ## 9. Quotations
@@ -357,7 +388,8 @@ When an enquiry arrives, the CRM:
 1. Menu → **Quotations** → **New quotation** (or from a company's or deal's
    **Quotations** tab).
 2. Choose **Company**, then **Contact** (only that company's people), and
-   optionally a **Deal**.
+   optionally a **Deal**. Each box lists its options as soon as you click
+   it.
 3. **Issue date** defaults to today. **Valid until** defaults to 30 days
    later.
 4. Add **Line items**: **Description**, **Qty**, **Unit price (₹)**,
@@ -449,7 +481,8 @@ Menu → **Settings**. Staff see only **My profile**. Admins also see an
 **Administration** section.
 
 - **Organisation** (Admin only): display name, legal name, GSTIN, address,
-  phone, email, website. These print on quotation PDFs. Currency (INR) and
+  phone (same rules as section 5), email, website. These print on
+  quotation PDFs. Currency (INR) and
   time zone (Asia/Kolkata) are shown but cannot be changed.
 - **Lead sources** (Admin only): **Add source**, **Rename**,
   **Deactivate** / **Reactivate**, reorder with the arrows. "Website",
@@ -473,11 +506,12 @@ Menu → **Settings**. Staff see only **My profile**. Admins also see an
 
 ## 14. Good to know
 
-- **The first click can be slow.** The test (staging) setup uses free
-  hosting that sleeps after about 15 minutes without use. The first request
-  afterwards can take up to a minute. After that it runs at normal speed.
-  The free database can also pause after a long idle period, and someone
-  must un-pause it from its dashboard.
+- **The first click can be slow.** The test (staging) setup is deployed:
+  the web app on Vercel, the API on Render, the database on Supabase, all
+  on free plans. The API sleeps after about 15 minutes without use, and the
+  first request afterwards can take up to a minute. After that it runs at
+  normal speed. The free database can also pause after a long idle period,
+  and someone must un-pause it from its dashboard.
 - **Fictional data only** on staging and in demos. Never enter real
   customer details.
 - **Nothing is deleted.** Leads, companies, contacts, deals, quotations and
@@ -493,9 +527,9 @@ Menu → **Settings**. Staff see only **My profile**. Admins also see an
   - no PDF reports; reports download as CSV
   - no notification settings, and no notifications for deal stage changes
     or Won/Lost
-  - no bulk actions on lists, and no calendar view
+  - no bulk actions on lists, no calendar view, no read/unread on
+    enquiries
   - currency and time zone are fixed (INR, India time)
-  - the website form is not connected yet (section 8)
 
 ---
 
@@ -523,15 +557,14 @@ refused for a while ("Too many attempts. Try again later.").
 
 **How does the website form reach the CRM?**
 The website's server sends each enquiry to a private CRM address, with an
-API key created on the API keys page. Browsers never see the key. The
-connection itself is not switched on yet (section 8).
+API key created on the API keys page. Browsers never see the key. It has
+been live since 25 November 2026.
 
 **What if the CRM is down when someone submits the website form?**
-The plan is that the website keeps saving and emailing enquiries exactly
-as it does today, so an enquiry is not lost if the CRM is down. If the
-website sends the same enquiry again later, the CRM recognises its
-submission ID and ignores the repeat. Retrying from the website side is
-part of the connection work that is still on hold.
+The website still works. It keeps saving, emailing and sending enquiries
+to HubSpot as before, so the enquiry is not lost. If the same enquiry
+reaches the CRM twice, the CRM recognises its submission ID and ignores
+the repeat.
 
 **How are quotation totals calculated?**
 Line amount = quantity × unit price, minus the line discount. Subtotal =
@@ -579,7 +612,7 @@ left out is recorded with a reason. Some were approved by the project
 owner, and some are awaiting a decision (section 17).
 
 **How was it tested?**
-791 automated tests run against a real database. Step-by-step manual test
+841 automated tests run against a real database. Step-by-step manual test
 scripts exist for every feature. Running them in a browser is the next
 step.
 
@@ -643,8 +676,7 @@ is fine for evaluation, not for production.
 Status of every item in PRD section 5. Key: **Built**, **Built
 differently**, **Not built**. "Approved" means the project owner approved
 the change (decision number in brackets). "Awaiting decision" means it was
-reported and is not yet approved. "Not recorded" means no decision about it
-was written down.
+reported and is not yet approved.
 
 | PRD item | Status | Note |
 | --- | --- | --- |
@@ -659,10 +691,10 @@ was written down.
 | 5.2 Role-aware data; date filters | Built | All/Mine and date range. |
 | **5.3** Manual lead create/edit | Built | |
 | 5.3 CSV/Excel import with field mapping | Built differently | CSV only; Excel can save as CSV. Awaiting decision (D95). |
-| 5.3 Website form through a secured API | Built differently | CRM side built and tested; website not connected (on hold by owner instruction). |
+| 5.3 Website form through a secured API | Built | Live since 25 November 2026, alongside the website's own flow. |
 | 5.3 Source/detail, status, owner, captured enquiry | Built | |
 | 5.3 Search, filters, sorting, duplicate detection | Built | Duplicates warn, never block. |
-| 5.3 Bulk operations | Not built | Not recorded. |
+| 5.3 Bulk operations | Not built | Approved (D96). |
 | 5.3 Qualify, convert, notes, history, original submission | Built | |
 | **5.4** Company and contact records | Built | Company "notes" is the Description field. |
 | 5.4 Many contacts per company; contacts on many deals | Built | |
@@ -676,14 +708,14 @@ was written down.
 | 5.6 Reminders | Built differently | Only "task due today" and "overdue" notifications (approved, D91). |
 | 5.6 Due date, priority, status, assignee, completion | Built | |
 | 5.6 Today, upcoming, overdue | Built | Today page, My Tasks. |
-| 5.6 Calendar view | Not built | Not recorded. |
+| 5.6 Calendar view | Not built | Approved (D96). My Tasks and Today instead. |
 | 5.6 Timeline on lead, contact, company, deal | Built | |
 | **5.7** Product/service catalogue | Not built | Approved (D87); future item. |
 | 5.7 Items with qty, price, discount, tax | Built differently | Lines typed in; one GST % per quotation; on quotations, not deals (approved, D87). |
 | 5.7 Number, validity, customer, totals | Built | |
 | 5.7 PDF; linked to deal; status tracking | Built | The PDF is generated on demand, not stored (approved, D87). |
 | **5.8** Enquiries inbox with filters and lead context | Built | |
-| 5.8 Inbox read/unread | Not built | Status, archive and spam instead. Not recorded. |
+| 5.8 Inbox read/unread | Not built | Approved (D96). Status, archive and spam instead. |
 | 5.8 Open or create the lead from an enquiry | Built differently | The lead is created automatically on arrival and linked; there is no manual "create lead" for a Rejected enquiry. |
 | 5.8 Notifications: leads, assignments, reminders, overdue | Built differently | A manual lead notifies only its owner; reminders are due-today only (approved, D91). |
 | 5.8 Notifications: deal changes, invitations | Not built | Approved (D91). There is no invite flow. |
@@ -711,9 +743,10 @@ was written down.
 
 ## 18. 5-minute demo walkthrough
 
-Before the demo: have sample data loaded, and ask the developer to send one
-test website enquiry with the test script. The website itself is not
-connected yet. Allow a minute for the first page to wake up.
+Before the demo: have sample data loaded, and submit the website's contact
+form once with fictional details. It also goes through the website's normal
+emails and HubSpot, so tell the team it is a test. Allow a minute for the
+first page to wake up.
 
 1. **Enquiry arrives.** Sign in as Admin. Notice the bell's red number.
    Open **Enquiries** and open the new enquiry. Show **Overview** and **Raw
@@ -738,3 +771,12 @@ connected yet. Allow a minute for the first page to wake up.
 10. **Report.** Open **Reports**: the win appears under **Sales performance
     by owner**. Open **Home**: **Won revenue** matches. Finish with
     **Audit Log** to show every step was recorded.
+
+---
+
+**Recent changes (25 November 2026):** website contact form connected;
+staging deployed; leads and contacts now need a first name, a company and
+an email or phone; Source optional; company and contact boxes list options
+on click; new phone input rules; My Tasks shows your own tasks by default;
+bulk actions, calendar view and enquiry read/unread recorded as agreed
+omissions.
