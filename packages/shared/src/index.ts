@@ -64,8 +64,8 @@ export { PRIORITIES, prioritySchema } from './priorities.js';
 export type { Priority } from './priorities.js';
 export { duplicateMatchSchema } from './duplicates.js';
 export type { DuplicateMatch } from './duplicates.js';
-export { leadSourceResponseSchema, leadSourcesListResponseSchema } from './lead-sources.js';
-export type { LeadSourceResponse } from './lead-sources.js';
+export { leadSourceResponseSchema, leadSourcesListResponseSchema, listLeadSourcesQuerySchema } from './lead-sources.js';
+export type { LeadSourceResponse, ListLeadSourcesQuery } from './lead-sources.js';
 export {
   createCompanySchema,
   updateCompanySchema,
@@ -226,3 +226,78 @@ export {
   reportsResponseSchema,
 } from './reports.js';
 export type { ReportsQuery, ReportKey, ReportExportParams, ReportsResponse, ReportsData } from './reports.js';
+export {
+  GSTIN_PATTERN,
+  organizationDetailsSchema,
+  updateOrganizationSchema,
+  organizationResponseSchema,
+  organizationResponseEnvelopeSchema,
+  LOCKED_LEAD_SOURCE_NAMES,
+  isLockedLeadSourceName,
+  createLeadSourceSchema,
+  updateLeadSourceSchema,
+  reorderSchema,
+  settingsLeadSourceResponseSchema,
+  settingsLeadSourcesListResponseSchema,
+  settingsLeadSourceEnvelopeSchema,
+  createPipelineStageSchema,
+  updatePipelineStageSchema,
+  settingsPipelineStageResponseSchema,
+  settingsPipelineStagesListResponseSchema,
+  settingsPipelineStageEnvelopeSchema,
+} from './settings.js';
+export type {
+  OrganizationDetailsInput,
+  UpdateOrganizationInput,
+  OrganizationResponse,
+  CreateLeadSourceInput,
+  UpdateLeadSourceInput,
+  ReorderInput,
+  SettingsLeadSourceResponse,
+  CreatePipelineStageInput,
+  UpdatePipelineStageInput,
+  SettingsPipelineStageResponse,
+} from './settings.js';
+export {
+  SEARCH_MIN_LENGTH,
+  SEARCH_MAX_LENGTH,
+  SEARCH_RESULTS_PER_GROUP,
+  SEARCH_GROUP_TYPES,
+  searchQuerySchema,
+  searchGroupTypeSchema,
+  searchResultSchema,
+  searchGroupSchema,
+  searchResponseSchema,
+} from './search.js';
+export type { SearchQuery, SearchGroupType, SearchResult, SearchGroup, SearchResponse } from './search.js';
+export {
+  IMPORT_ENTITIES,
+  IMPORT_MAX_BYTES,
+  IMPORT_MAX_ROWS,
+  IMPORT_MAX_COLUMNS,
+  IMPORT_FIELDS,
+  IMPORT_ROW_STATUSES,
+  importEntitySchema,
+  importEntityParamsSchema,
+  importRequestSchema,
+  importPreviewRowSchema,
+  importSummarySchema,
+  importPreviewResponseSchema,
+  importCommitResponseSchema,
+  normalizeHeader,
+  suggestImportMapping,
+} from './imports.js';
+export type {
+  ImportEntity,
+  ImportFieldDefinition,
+  ImportField,
+  LeadImportField,
+  ContactImportField,
+  ImportRequest,
+  ImportEntityParams,
+  ImportRowStatus,
+  ImportPreviewRow,
+  ImportSummary,
+  ImportPreviewResponse,
+  ImportCommitResponse,
+} from './imports.js';

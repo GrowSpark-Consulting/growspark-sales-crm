@@ -23,6 +23,9 @@ import { registerEnquiriesRoutes } from './modules/enquiries/enquiries.routes.js
 import { registerQuotationsRoutes } from './modules/quotations/quotations.routes.js';
 import { registerNotificationsRoutes } from './modules/notifications/notifications.routes.js';
 import { registerReportsRoutes } from './modules/reports/reports.routes.js';
+import { registerSettingsRoutes } from './modules/settings/settings.routes.js';
+import { registerSearchRoutes } from './modules/search/search.routes.js';
+import { registerImportsRoutes, IMPORT_JSON_BODY_LIMIT, IMPORT_PATH_PREFIX } from './modules/imports/imports.routes.js';
 import { resetRouteRegistry } from './lib/route-registry.js';
 import { env } from './env.js';
 
@@ -61,7 +64,12 @@ export function createApp(options: CreateAppOptions = {}): Express {
   // (never the Content-Type check) for this one path.
   app.use('/api/v1/intake', attachApiKeyContext);
   app.use(enforceOriginAndContentType);
-  app.use(express.json({ limit: '100kb' }));
+  // 100 KB for every route except CSV import (D95), whose body carries a
+  // whole file of up to 1 MB. Chosen by path before parsing, so no other
+  // route can ever accept a larger body.
+  const defaultJson = express.json({ limit: '100kb' });
+  const importJson = express.json({ limit: IMPORT_JSON_BODY_LIMIT });
+  app.use((req, res, next) => (req.path.startsWith(IMPORT_PATH_PREFIX) ? importJson : defaultJson)(req, res, next));
 
   registerHealthRoutes(app);
   registerAuthRoutes(app);
@@ -81,6 +89,9 @@ export function createApp(options: CreateAppOptions = {}): Express {
   registerQuotationsRoutes(app);
   registerNotificationsRoutes(app);
   registerReportsRoutes(app);
+  registerSettingsRoutes(app);
+  registerSearchRoutes(app);
+  registerImportsRoutes(app);
   options.extraRoutes?.(app);
 
   app.use(errorHandler);

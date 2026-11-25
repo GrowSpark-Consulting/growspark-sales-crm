@@ -309,6 +309,44 @@ reported (leads by status/date and revenue trend live on Home only; no
 per-person activity report; CSV only). **apps/api 593/593, apps/web 126/126
 (719).** Not clicked through in a browser; staging not yet migrated.
 
+**Update, 2026-11-25 (Day 6a) — feature 1 of 3 (Settings) is done (D93).**
+Day 6a builds Settings, then global search, then CSV import. Settings: a
+`/settings` hub (both roles; Staff see only My profile), organisation
+profile (the quotation PDF header details, editable at last), lead sources
+(add/rename/deactivate/reorder; Website/Manual/Import locked), pipeline
+stages (rename, probability, reorder, add, delete only if never used), and
+My profile with change password. No migration, dependency or permission
+change (all Admin screens use `settings:manage`). Two real fixes: a wrong
+current password answered 401 (which signed the user out) — now a 422 field
+error; and leads/deals accepted inactive sources — now refused, except an
+edit keeping the record's own source. **apps/api 613/613, apps/web 135/135
+(748).** Not clicked through in a browser (`MANUAL-TEST-DAY6A.md` §1–§3).
+
+**Update, same day (Day 6a) — feature 2 of 3 (Global search) is done (D94).**
+One search box in the top bar (Ctrl+K or /), `GET /api/v1/search` across
+leads, contacts, companies, deals and quotations — per-word matching, 5 per
+group with "see all", archived and other-organisation records excluded, each
+group gated by its read permission. No migration, dependency or permission
+change. Found and fixed in search: Prisma's `contains` treats % and _ as
+wildcards (the list pages share this pre-existing quirk; reported, not
+changed). **apps/api 621/621, apps/web 142/142 (763).** Not clicked through
+in a browser (`MANUAL-TEST-DAY6A.md` §4).
+
+**Update, same day (Day 6a) — feature 3 of 3 (CSV import) is done (D95);
+Day 6a is complete.** `/leads/import` and `/contacts/import`: choose file →
+match columns (suggested from headers) → row-by-row preview (Ready /
+Duplicate / Error with reasons) → import, then a downloadable file of the
+skipped rows. Server-side, stateless (the file is never stored; commit
+re-validates everything), hand-written CSV parser, 1 MB / 1,000 rows / 50
+columns (3 MB JSON limit on the import routes only). Duplicate emails are
+skipped (archived records count); unknown companies on a contacts import
+are created once each; leads keep unmapped columns as captured fields. One
+`import.completed` audit row per import with origin and counts; no
+notifications. Fixed along the way: the app's own exports (apostrophe
+formula guard on phones) now re-import. No migration, dependency or
+permission change. **apps/api 644/644, apps/web 147/147 (791).** Not
+clicked through in a browser (`MANUAL-TEST-DAY6A.md` §5).
+
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
@@ -2389,6 +2427,17 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
   (`docs/MANUAL-TEST-DAY5C.md`), `pnpm staging:migrate`, then Day 6 (confirm
   scope with the user first). Ready-to-paste resume prompt:
   `docs/DAY-5C-HANDOVER-PROMPT.md`.
+- **Day 6a is complete (2026-11-25)**: Settings (D93), Global search (D94),
+  CSV import (D95). No migration in any of them. Next: the user's browser
+  pass of `docs/MANUAL-TEST-DAY6A.md` (and the still-unrun Day 5c one), then
+  the rest of Day 6 (testing, stabilisation) — confirm its scope first.
+  **Approved-deviation candidates awaiting the user's decision** (reported,
+  not built): custom fields; editable currency/date format/time zone; saved
+  filters (D93); Excel .xlsx import, semicolon-delimited files, importing
+  companies/deals, undo of an import, updating existing records from a file,
+  phone/company duplicate matching on import (D95). **Pre-existing quirk
+  reported, not changed (D94)**: every list page's `?q=` search treats `%`
+  and `_` as wildcards (over-matches; cannot leak across organisations).
 - **Future items (not scheduled; D87)**: **GST split** (CGST/SGST/IGST,
   place of supply, HSN/SAC) and **product catalogue** (products/services
   with SKU, category and price, picked into quotation lines) — both PRD
@@ -3540,3 +3589,58 @@ log just records that a session happened and what it covered.
 - **Day 5c is complete.** Remaining for the user: the browser pass
   (`MANUAL-TEST-DAY5C.md` §1–§9), organisation PDF details, `pnpm
   staging:migrate` (both Day 5c migrations). Then Day 6.
+
+### 2026-11-25 (Day 6a) — feature 1: Settings (D93)
+
+- Read the handover docs and the PRD; plan approved with six decisions (see
+  D93's opening paragraph). Built: `packages/shared/src/settings.ts`
+  (org-details validator moved here; `apps/api/src/lib/organization-
+  details.ts` re-exports it); `apps/api/src/modules/settings/` (service +
+  routes, registered in `app.ts`); `GET /lead-sources?includeInactive=true`;
+  an active-source rule in `leads.service.ts`/`deals.service.ts`; the
+  change-password 401 → 422 fix in `auth.service.ts`. Web:
+  `hooks/use-settings.ts`, `components/settings/*` (hub, profile,
+  organisation, lead sources, pipeline, `SettingItemDialog`),
+  `app/(protected)/settings/{page,profile,organization,lead-sources,
+  pipeline}`, `apiDelete`, `selectableLeadSources`, sidebar item and titles.
+- Tests: API `tests/settings/*` (20) + updated change-password test; web
+  `settings-pages.test.tsx` (9). Seven guards shown to fail when removed.
+- Verified: typecheck clean; lint 0 errors (3 older warnings); **apps/api
+  613/613, apps/web 135/135 (748)** (one load-related timeout in an
+  unchanged quotation test on one run; passed alone and on re-run); web
+  build lists the five new pages; read-only smoke against the user's dev
+  servers (web 6960, API 7188). Not committed (the user commits).
+
+### 2026-11-25 (Day 6a) — feature 2: Global search (D94)
+
+- Built `packages/shared/src/search.ts`, `apps/api/src/modules/search/`
+  (registered in `app.ts`), web `hooks/use-search.ts`,
+  `components/search/global-search.tsx` (mounted in `app-shell.tsx`'s top
+  bar).
+- Tests: API `tests/search/search.test.ts` (8); web
+  `global-search.test.tsx` (7). Six guards shown to fail when removed.
+- Verified: typecheck clean; lint 0 errors (3 older warnings); **apps/api
+  621/621, apps/web 142/142 (763)** (API and web suites run one after the
+  other); web build passes; smoke: `/api/v1/search` 401 unauthenticated.
+  Not committed.
+
+### 2026-11-25 (Day 6a) — feature 3: CSV import (D95); Day 6a complete
+
+- Built `packages/shared/src/imports.ts` (fields, aliases, limits,
+  schemas); `apps/api/src/lib/csv-parse.ts` (parser);
+  `restoreNeutralizedCell` in `apps/api/src/lib/csv.ts`;
+  `apps/api/src/modules/imports/` (service + routes, registered in
+  `app.ts`, which now picks a 3 MB JSON parser for `/api/v1/imports/*` and
+  100 KB for everything else); audit allowlist keys for the import counts.
+  Web: `components/imports/import-wizard.tsx`,
+  `app/(protected)/{leads,contacts}/import/page.tsx`, "Import CSV" buttons
+  on the Leads and Contacts lists, page titles.
+- Tests: API `tests/lib/csv-parse.test.ts` (10), `tests/imports/*` (13);
+  web `import-wizard.test.tsx` (5). Seven guards shown to fail when removed.
+- Verified: typecheck clean; lint 0 errors (3 older warnings); **apps/api
+  644/644, apps/web 147/147 (791)**; web build lists both import pages;
+  smoke: import routes 401 unauthenticated, pages 200 (web PID 6960, API PID
+  3764 after `tsx watch` restarted its child; nothing stopped by this tool).
+- README updated (status rows, "not built yet", permissions, test count).
+  `docs/MANUAL-TEST-DAY6A.md` §0–§5 written. Not committed (the user
+  commits); nothing run against staging or written to `crm_dev`.

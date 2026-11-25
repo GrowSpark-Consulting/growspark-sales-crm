@@ -90,15 +90,26 @@ async function assertCompanyInOrg(tx: Prisma.TransactionClient, organizationId: 
   }
 }
 
+/**
+ * The source must belong to the organisation (404 otherwise) and be active
+ * (422), unless it is the record's own current source: an edit that resends
+ * an inactive source the record already has must keep working (D93).
+ */
 async function assertSourceInOrg(
   tx: Prisma.TransactionClient,
   organizationId: string,
   sourceId: string | null | undefined,
+  currentSourceId?: string | null,
 ): Promise<void> {
   if (!sourceId) return;
   const source = await tx.leadSource.findFirst({ where: { id: sourceId, organizationId } });
   if (!source) {
     throw new ApiError(404, 'NOT_FOUND', 'Lead source not found');
+  }
+  if (!source.isActive && source.id !== currentSourceId) {
+    throw new ApiError(422, 'VALIDATION_FAILED', 'This lead source is no longer active', [
+      { path: 'sourceId', message: 'This lead source is no longer active' },
+    ]);
   }
 }
 
@@ -260,7 +271,7 @@ export async function updateDeal(ctx: RequestContext, id: string, input: UpdateD
 
     if (input.companyId !== undefined) await assertCompanyInOrg(tx, ctx.orgId, input.companyId);
     await assertOwnerInOrg(tx, ctx.orgId, input.ownerId);
-    await assertSourceInOrg(tx, ctx.orgId, input.sourceId);
+    await assertSourceInOrg(tx, ctx.orgId, input.sourceId, existing.sourceId);
 
     const data: Prisma.DealUpdateInput = {
       ...(input.name !== undefined ? { name: input.name } : {}),

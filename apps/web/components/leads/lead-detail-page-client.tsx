@@ -34,7 +34,7 @@ export function LeadDetailPageClient({ leadId }: { leadId: string }) {
   const leadQuery = useLead(leadId);
   const historyQuery = useLeadStatusHistory(leadId);
   const { data: userOptions } = useUserOptions();
-  const { data: sourcesData } = useLeadSources();
+  const { data: sourcesData } = useLeadSources({ includeInactive: true });
 
   async function archive() {
     await apiPost(`/api/v1/leads/${leadId}/archive`);

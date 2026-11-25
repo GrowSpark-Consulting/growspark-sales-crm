@@ -17,8 +17,8 @@ function stubFetch() {
         return Promise.resolve(
           jsonResponse(200, {
             data: [
-              { id: "src-1", name: "Manual" },
-              { id: "src-2", name: "Referral" },
+              { id: "src-1", name: "Manual", isActive: true, sortOrder: 1 },
+              { id: "src-2", name: "Referral", isActive: true, sortOrder: 2 },
             ],
           }),
         );

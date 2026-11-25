@@ -5,10 +5,11 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { Home, Users as UsersIcon, Building2, Contact, Target, Handshake, Sun, Moon, Monitor, LogOut, CalendarDays, ListTodo, Inbox, KeyRound, History, FileText, ChartColumn } from "lucide-react";
+import { Home, Users as UsersIcon, Building2, Contact, Target, Handshake, Sun, Moon, Monitor, LogOut, CalendarDays, ListTodo, Inbox, KeyRound, History, FileText, ChartColumn, Settings } from "lucide-react";
 import { cn } from "cn";
 import { useMe, ME_QUERY_KEY } from "@/hooks/use-me";
 import { NotificationBell } from "@/components/notifications/notification-bell";
+import { GlobalSearch } from "@/components/search/global-search";
 import { apiPost, ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/users": "Users",
   "/forbidden": "Forbidden",
   "/leads": "Leads",
+  "/leads/import": "Import Leads",
+  "/contacts/import": "Import Contacts",
   "/companies": "Companies",
   "/contacts": "Contacts",
   "/deals": "Deals",
@@ -38,6 +41,11 @@ const PAGE_TITLES: Record<string, string> = {
   "/enquiries": "Enquiries",
   "/notifications": "Notifications",
   "/reports": "Reports",
+  "/settings": "Settings",
+  "/settings/profile": "My Profile",
+  "/settings/organization": "Organisation",
+  "/settings/lead-sources": "Lead Sources",
+  "/settings/pipeline": "Pipeline Stages",
   "/settings/api-keys": "API Keys",
   "/settings/audit-log": "Audit Log",
 };
@@ -171,12 +179,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Audit Log
             </NavItem>
           )}
+          {/* Both roles: Staff see only "My profile" there (D93). */}
+          <NavItem href="/settings" active={pathname === "/settings" || ["/settings/profile", "/settings/organization", "/settings/lead-sources", "/settings/pipeline"].some((path) => pathname.startsWith(path))} icon={Settings}>
+            Settings
+          </NavItem>
         </nav>
       </aside>
       <div className="flex flex-1 flex-col">
-        <header className="flex h-(--topbar-height) shrink-0 items-center justify-between border-b border-line bg-surface px-6">
-          <h1 className="h1">{pageTitle(pathname)}</h1>
-          <div className="flex items-center gap-2">
+        <header className="flex h-(--topbar-height) shrink-0 items-center justify-between gap-4 border-b border-line bg-surface px-6">
+          <h1 className="h1 shrink-0">{pageTitle(pathname)}</h1>
+          <div className="flex flex-1 items-center justify-end gap-2">
+            <GlobalSearch />
             <NotificationBell />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

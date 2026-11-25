@@ -15,7 +15,7 @@ import { OwnerSelect } from "@/components/pickers/owner-select";
 import { CompanySelect } from "@/components/pickers/company-select";
 import { useCompany } from "@/hooks/use-companies";
 import { usePipelineStages } from "@/hooks/use-pipeline";
-import { useLeadSources } from "@/hooks/use-lead-sources";
+import { useLeadSources, selectableLeadSources } from "@/hooks/use-lead-sources";
 import { stripEmptyOptionalFields } from "@/lib/form-utils";
 import { handleApiFormError } from "@/lib/handle-form-error";
 
@@ -91,7 +91,7 @@ export function DealForm({
   const existingCompanyQuery = useCompany(companyId || undefined);
   const { data: stagesData } = usePipelineStages();
   const openStages = (stagesData?.data ?? []).filter((stage) => stage.type === "OPEN");
-  const { data: sourcesData } = useLeadSources();
+  const { data: sourcesData } = useLeadSources({ includeInactive: true });
 
   // Create-only: default Stage (and therefore Probability) to the
   // pipeline's first open stage once stages have loaded — the same
@@ -303,9 +303,9 @@ export function DealForm({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={NO_SOURCE}>No source</SelectItem>
-                      {(sourcesData?.data ?? []).map((source) => (
+                      {selectableLeadSources(sourcesData?.data ?? [], deal?.sourceId).map((source) => (
                         <SelectItem key={source.id} value={source.id}>
-                          {source.name}
+                          {source.label}
                         </SelectItem>
                       ))}
                     </SelectContent>

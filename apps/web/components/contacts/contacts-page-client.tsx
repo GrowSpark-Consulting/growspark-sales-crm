@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Pencil, Download } from "lucide-react";
+import { Pencil, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -139,6 +139,12 @@ export function ContactsPageClient() {
             <Download className="size-(--icon-md)" aria-hidden="true" />
             Download CSV
           </a>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href="/contacts/import">
+            <Upload className="size-(--icon-md)" aria-hidden="true" />
+            Import CSV
+          </Link>
         </Button>
         <ContactFormDialog trigger={<Button>Add contact</Button>} />
       </div>

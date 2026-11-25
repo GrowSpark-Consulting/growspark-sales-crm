@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { OwnerSelect } from "@/components/pickers/owner-select";
-import { useLeadSources } from "@/hooks/use-lead-sources";
+import { useLeadSources, selectableLeadSources } from "@/hooks/use-lead-sources";
 import { stripEmptyOptionalFields } from "@/lib/form-utils";
 import { apiGet } from "@/lib/api-client";
 import { handleApiFormError } from "@/lib/handle-form-error";
@@ -88,8 +88,8 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
   const [bannerError, setBannerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([]);
-  const { data: sourcesData } = useLeadSources();
-  const sources = sourcesData?.data ?? [];
+  const { data: sourcesData } = useLeadSources({ includeInactive: true });
+  const sources = selectableLeadSources(sourcesData?.data ?? [], lead?.sourceId);
 
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(mode === "create" ? createLeadFormSchema : editLeadFormSchema),
@@ -327,7 +327,7 @@ export function LeadForm({ mode, lead, onSubmit, submitLabel, pendingLabel, onCa
                   <SelectContent>
                     {sources.map((source) => (
                       <SelectItem key={source.id} value={source.id}>
-                        {source.name}
+                        {source.label}
                       </SelectItem>
                     ))}
                   </SelectContent>

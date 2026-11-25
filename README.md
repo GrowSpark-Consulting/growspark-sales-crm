@@ -34,13 +34,16 @@ from the start).
 | Quotations (line items, GST, Draft → Sent → Accepted/Rejected/Expired, duplicate, PDF download) | Done |
 | In-app notifications (bell, list, mark read; assignments, new enquiries, quotation decisions, due/overdue tasks) | Done |
 | Reports (pipeline, lead sources and conversion, sales by owner, quotations, overdue tasks; date range, All/Mine, CSV) | Done |
+| Settings (organisation profile, lead sources, pipeline stages, My profile + change password) | Done |
+| Global search (top bar, Ctrl+K; leads, contacts, companies, deals, quotations) | Done |
+| CSV import of leads and contacts (map columns, row-by-row preview, duplicate skip, errors file) | Done |
 
 Not built yet (see `docs/decisions.md` and the project state docs for the
 full P0/P1/P2 breakdown): a product/service catalogue and a CGST/SGST/IGST
 split for quotations (future items, D87), notification preferences and
-deal-change notifications (future items, D91), PDF reports (D87), global
-search, self-service password reset, and everything explicitly scoped to
-P1/P2 in the roadmap.
+deal-change notifications (future items, D91), PDF reports (D87), custom
+fields and saved filters (D93), Excel (.xlsx) import (D95), self-service
+password reset, and everything explicitly scoped to P1/P2 in the roadmap.
 
 ## Stack
 
@@ -199,9 +202,12 @@ there is no path where hiding a button is the actual security control.
 | Quotations — read, write, change status, duplicate, download PDF | Yes | Yes |
 | Notifications (your own only) | Yes | Yes |
 | Reports — read (`reports:read`) and CSV download (`reports:export`) | Yes | Yes |
+| Global search (each record type only if the role can read it) | Yes | Yes |
+| CSV import — leads (`leads:write`), contacts (`contacts:write`) | Yes | Yes |
+| My profile, change own password | Yes | Yes |
 | Manage users, roles, deactivate | Yes | No |
 | Read the audit log | Yes | No |
-| Manage settings and API keys | Yes | No |
+| Manage settings (organisation, lead sources, pipeline stages) and API keys | Yes | No |
 
 ## Key decisions worth knowing before you dig in
 
@@ -241,7 +247,7 @@ numbered D1 onward). A few that shape how the code reads:
 pnpm typecheck && pnpm lint && pnpm test
 ```
 
-Current count: **apps/api 483 tests, apps/web 101 tests — 584 total**, all
+Current count: **apps/api 644 tests, apps/web 147 tests — 791 total**, all
 against a real Postgres test database (`crm_test`), not mocked — including
 RBAC/permission matrix tests, the lead-conversion transaction (with a real
 concurrency/rollback test), dashboard-metric reconciliation against

@@ -45,6 +45,15 @@ const ALLOWED_METADATA_KEYS = new Set([
   'version',
   'total',
   'duplicatedFromNumber',
+  // CSV import (D95): where the records came from and the counts — never row contents.
+  'origin',
+  'entity',
+  'totalRows',
+  'imported',
+  'skippedDuplicates',
+  'errors',
+  'blankRowsSkipped',
+  'companiesCreated',
 ]);
 
 /**

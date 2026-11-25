@@ -13,6 +13,17 @@ export function neutralizeFormulaInjection(value: string): string {
   return FORMULA_TRIGGER_CHARS.has(value[0]!) ? `'${value}` : value;
 }
 
+/**
+ * The exact inverse, for CSV import (D95): drops the single quote that
+ * neutralizeFormulaInjection (or a person in Excel) put in front of a
+ * trigger character, so this app's own exports — "'+91 98400 12345" —
+ * re-import as "+91 98400 12345". The result is stored as plain text and
+ * neutralised again on any later export; nothing is ever evaluated.
+ */
+export function restoreNeutralizedCell(value: string): string {
+  return value.length > 1 && value[0] === "'" && FORMULA_TRIGGER_CHARS.has(value[1]!) ? value.slice(1) : value;
+}
+
 /** Wraps in double quotes (doubling any internal quotes) if the value contains a comma, a quote, or a line break — the one escaping rule RFC4180 requires. */
 function quoteCsvField(value: string): string {
   return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;

@@ -45,7 +45,7 @@ export function DealDetailPageClient({ dealId }: { dealId: string }) {
   const historyQuery = useDealStageHistory(dealId);
   const { data: stagesData } = usePipelineStages();
   const { data: userOptions } = useUserOptions();
-  const { data: sourcesData } = useLeadSources();
+  const { data: sourcesData } = useLeadSources({ includeInactive: true });
   const deal = dealQuery.data?.data;
   const companyQuery = useCompany(deal?.companyId);
 

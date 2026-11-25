@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plus, Pencil, Download } from "lucide-react";
+import { Plus, Pencil, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { LEAD_STATUSES, PRIORITIES, type LeadResponse, type LeadStatus, type Priority } from "@growspark/shared";
@@ -54,7 +54,7 @@ export function LeadsPageClient() {
   const { data: userOptions } = useUserOptions();
   const owners = userOptions?.data ?? [];
   const ownerNames = new Map(owners.map((u) => [u.id, u.name]));
-  const { data: sourcesData } = useLeadSources();
+  const { data: sourcesData } = useLeadSources({ includeInactive: true });
   const sources = sourcesData?.data ?? [];
   const sourceNames = new Map(sources.map((s) => [s.id, s.name]));
 
@@ -165,6 +165,12 @@ export function LeadsPageClient() {
             <Download className="size-(--icon-md)" aria-hidden="true" />
             Download CSV
           </a>
+        </Button>
+        <Button asChild variant="outline">
+          <Link href="/leads/import">
+            <Upload className="size-(--icon-md)" aria-hidden="true" />
+            Import CSV
+          </Link>
         </Button>
         <Button asChild>
           <Link href="/leads/new">

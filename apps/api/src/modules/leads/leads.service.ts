@@ -76,14 +76,25 @@ async function assertOwnerInOrg(
   }
 }
 
+/**
+ * The source must belong to the organisation (404 otherwise) and be active
+ * (422), unless it is the record's own current source: an edit that resends
+ * an inactive source the record already has must keep working (D93).
+ */
 async function assertSourceInOrg(
   tx: Prisma.TransactionClient,
   organizationId: string,
   sourceId: string,
+  currentSourceId?: string | null,
 ): Promise<void> {
   const source = await tx.leadSource.findFirst({ where: { id: sourceId, organizationId } });
   if (!source) {
     throw new ApiError(404, 'NOT_FOUND', 'Lead source not found');
+  }
+  if (!source.isActive && source.id !== currentSourceId) {
+    throw new ApiError(422, 'VALIDATION_FAILED', 'This lead source is no longer active', [
+      { path: 'sourceId', message: 'This lead source is no longer active' },
+    ]);
   }
 }
 
@@ -277,7 +288,7 @@ export async function updateLead(
     }
 
     if (input.sourceId !== undefined) {
-      await assertSourceInOrg(tx, ctx.orgId, input.sourceId);
+      await assertSourceInOrg(tx, ctx.orgId, input.sourceId, existing.sourceId);
     }
     await assertOwnerInOrg(tx, ctx.orgId, input.ownerId);
 

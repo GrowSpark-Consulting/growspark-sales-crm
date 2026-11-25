@@ -90,7 +90,12 @@ export async function changePassword(
 
   const matches = await verifyPassword(user.passwordHash, currentPassword);
   if (!matches) {
-    throw new ApiError(401, 'UNAUTHENTICATED', 'Current password is incorrect');
+    // 422 with a field error, never 401: the web app treats any 401 as an
+    // expired session and signs the user out, so a typo here would log them
+    // out (D93).
+    throw new ApiError(422, 'VALIDATION_FAILED', 'Current password is incorrect', [
+      { path: 'currentPassword', message: 'Current password is incorrect' },
+    ]);
   }
 
   const newHash = await hashPassword(newPassword);

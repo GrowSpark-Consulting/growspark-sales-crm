@@ -96,3 +96,8 @@ export function apiPatch<T>(path: string, data: unknown): Promise<T> {
 export function apiPut<T>(path: string, data: unknown): Promise<T> {
   return apiFetch<T>(path, { method: "PUT", body: JSON.stringify(data) });
 }
+
+/** Day 6a (D93): the first DELETE route this frontend calls (removing an unused pipeline stage). */
+export function apiDelete<T>(path: string): Promise<T> {
+  return apiFetch<T>(path, { method: "DELETE" });
+}

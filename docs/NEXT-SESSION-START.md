@@ -79,8 +79,8 @@ next.
    detailed reference; skim its table of contents (the `##` headings) and
    come back to specific sections as needed rather than reading linearly
    every time.
-4. **`docs/decisions.md`** — every approved decision, D1 through D92 (D3
-   and D5 don't exist — never assigned; D83+ is Day 5c), append-only, each with the
+4. **`docs/decisions.md`** — every approved decision, D1 through D95 (D3
+   and D5 don't exist — never assigned; D83–D92 is Day 5c, D93+ Day 6a), append-only, each with the
    reasoning behind it. Don't re-litigate something already decided here
    without a new entry. D46–D50 cover all of Day 3 (lead conversion, the
    Deals API, the Deals UI, the pipeline board, and the Convert dialog) —
@@ -280,9 +280,22 @@ specific package you're about to work on.
   apps/web 126/126 (719).** Not clicked through in a browser
   (`MANUAL-TEST-DAY5C.md` §9). PRD 5.10 gaps reported in D92, not built.
 
+- **Day 6a (Settings, global search, CSV import — the last three PRD core
+  features) is complete (2026-11-25): Settings (D93), Global search (D94),
+  CSV import of leads and contacts (D95).** `/settings` hub, organisation
+  profile, lead sources, pipeline stages, My profile with change password;
+  a top-bar search (Ctrl+K) across all five record types; `/leads/import`
+  and `/contacts/import` with column mapping, row-by-row preview, duplicate
+  skip and an errors file. No migration. **apps/api 644/644, apps/web
+  147/147 (791).** Manual steps: `docs/MANUAL-TEST-DAY6A.md`. Resume prompt:
+  `docs/DAY-6A-HANDOVER-PROMPT.md`.
+
 ## The next work, in order
 
-Day 5c is finished. Next, in order: (1) the user's browser pass of
+Day 6a is finished. Next, in order: (0) the user reviews and commits Day 6a
+and decides the approved-deviation candidates listed in
+`docs/PROJECT-STATE.md` §13; then the browser pass of
+`docs/MANUAL-TEST-DAY6A.md` §1–§5; (1) the user's browser pass of
 `docs/MANUAL-TEST-DAY5C.md` §1–§9 and any fixes it surfaces; (2) the user's
 organisation PDF details and `pnpm staging:migrate` (both Day 5c
 migrations); (3) Day 6 (testing, stabilisation) — confirm its scope with the

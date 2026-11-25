@@ -13,10 +13,14 @@ function toLeadSourceResponse(source: LeadSource): LeadSourceResponse {
   };
 }
 
-/** Active sources only, ordered for a dropdown — not a paginated admin list (lead source management is P1). */
-export async function listActiveLeadSources(ctx: RequestContext): Promise<LeadSourceResponse[]> {
+/**
+ * Ordered for a dropdown. Active sources only by default; `includeInactive`
+ * adds retired ones (each carries isActive) so a screen can still name the
+ * source a record already has. Management lives in Settings (D93).
+ */
+export async function listLeadSourcesForPicker(ctx: RequestContext, includeInactive: boolean): Promise<LeadSourceResponse[]> {
   const rows = await prisma.leadSource.findMany({
-    where: { ...scoped(ctx), isActive: true },
+    where: { ...scoped(ctx), ...(includeInactive ? {} : { isActive: true }) },
     orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   });
   return rows.map(toLeadSourceResponse);

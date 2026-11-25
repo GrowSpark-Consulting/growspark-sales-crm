@@ -24,7 +24,8 @@ describe('POST /api/v1/auth/change-password', () => {
     expect(res.status).toBe(401);
   });
 
-  it('refuses a wrong current password and leaves the password and sessions untouched', async () => {
+  // 422 + a field error, never 401 — the web app signs the user out on any 401 (D93).
+  it('refuses a wrong current password with a 422 field error and leaves the password and sessions untouched', async () => {
     const tenant = await createTestTenant();
     const { token } = await createSession(tenant.organization.id, tenant.adminUser.id);
     const app = createApp();
@@ -34,8 +35,9 @@ describe('POST /api/v1/auth/change-password', () => {
       newPassword: 'brand-new-password-1',
     });
 
-    expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe('UNAUTHENTICATED');
+    expect(res.status).toBe(422);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    expect(res.body.error.details).toEqual([{ path: 'currentPassword', message: 'Current password is incorrect' }]);
 
     const user = await prisma.user.findUniqueOrThrow({ where: { id: tenant.adminUser.id } });
     expect(await verifyPassword(user.passwordHash, tenant.adminPassword)).toBe(true);

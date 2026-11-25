@@ -3957,3 +3957,290 @@ Built to the approved plan in `docs/DAY-5C-HANDOVER-PROMPT.md`.
   export answer 401 unauthenticated, `/reports` answers 200. Not clicked
   through in a browser. Not committed; nothing run against staging or
   written to `crm_dev`.
+
+## D93 — Day 6a, feature 1: Settings (2026-11-25)
+
+Day 6a adds the last three PRD core features one at a time: Settings, global
+search, CSV import. Plan approved by the user with these decisions: lead
+sources and stages managed as below; search open to every signed-in user
+with per-group read checks; import skips duplicate emails (archived records
+count) and creates missing companies for contacts; 1 MB / 1,000 rows; the
+user commits. **No migration, no new dependency, no new permission** —
+everything uses the existing Admin-only `settings:manage`.
+
+- **API** (`apps/api/src/modules/settings/`, all `settings:manage`):
+  `GET|PATCH /settings/organization`; `GET|POST /settings/lead-sources`,
+  `PATCH /settings/lead-sources/:id` (name and/or isActive), `PUT
+  /settings/lead-sources/order`; `GET|POST /settings/pipeline-stages`, `PATCH
+  /settings/pipeline-stages/:id`, `PUT /settings/pipeline-stages/order`,
+  `DELETE /settings/pipeline-stages/:id`. Stage writes return the whole
+  renumbered list. Shared schemas: `packages/shared/src/settings.ts`.
+- **Organisation profile**: name, legal name, address, GSTIN, phone, email,
+  website (the D84 PDF header columns). The D84 validator moved from
+  `apps/api/src/lib/organization-details.ts` into shared (the API lib
+  re-exports it, so `org:set-details` and its test are unchanged). Only
+  fields whose value actually changes are written; one
+  `organization.details_updated` audit row with the Admin as actor and the
+  field **names** only; an unchanged save writes nothing. **Currency (INR)
+  and time zone (Asia/Kolkata) are shown read-only** — the formatters assume
+  INR/Indian grouping, and changing the zone would shift past reports and
+  quotation numbering (approved-deviation candidate).
+- **Lead sources**: add, rename, deactivate/reactivate, reorder (the full id
+  list, every id once, else 422). No delete (leads reference their source).
+  Names unique per organisation ignoring case (409). **"Website", "Manual"
+  and "Import" are locked** (409 `LOCKED` on rename/deactivate; their names
+  cannot be taken either) because intake, the manual lead form and CSV
+  import find them by name. Audit: `lead_source.created/updated/
+  deactivated/reactivated/reordered`.
+- **Inactive sources, everywhere else** (found while building this, fixed):
+  leads and deals previously accepted any source in the organisation. Now a
+  lead/deal cannot be created with, or moved to, an inactive source (422 on
+  `sourceId`), but an edit that resends the record's *own* current source
+  still works. `GET /lead-sources` gained `?includeInactive=true` (each row
+  already carried `isActive`): detail pages and the Leads list use it so a
+  retired source's name still shows; lead/deal forms offer active sources
+  plus the record's current one, labelled "(inactive)"
+  (`selectableLeadSources`).
+- **Pipeline stages**: rename any stage; change an open stage's probability
+  (Won 100 / Lost 0 fixed, 422); add an open stage (placed after the last
+  open one); reorder open stages (Won and Lost always stay last); delete
+  only a **never-used** open stage — no deal (archived included) and no
+  stage-history row may reference it (409 `STAGE_IN_USE`, "rename it
+  instead") — and never the last open stage. Positions are renumbered 1..n
+  in one transaction (rows are first shifted +10000, because the
+  `(organization, pipeline, position)` unique index is not deferrable).
+  **A probability change does not rewrite existing deals** (each deal copied
+  its stage's probability on entry, D7/D47). Reordering changes the "first
+  open stage" where new and reopened deals start — intended, stated on
+  screen. Audit: `pipeline_stage.created/updated/reordered/deleted`.
+- **Concurrency**: every structural change (add, reorder, delete) first
+  takes `SELECT ... FOR UPDATE` on the organisation row, so two Admins
+  cannot interleave a read-then-renumber. Proven: 5 parallel stage adds give
+  positions 1..11 with Won/Lost last; with the lock removed the test fails.
+- **Change password**: the user asked to confirm it signs out every *other*
+  session and keeps the current one. It already did — it deletes all of the
+  user's sessions and issues the caller a fresh cookie; the existing test
+  proves both halves (other session 401, new cookie 200). No change there.
+  **One real bug fixed**: a wrong current password answered **401**, which
+  the web app's global handler treats as an expired session and signs the
+  user out. Now **422 `VALIDATION_FAILED`** with a `currentPassword` field
+  error; test updated and shown to fail against the old 401.
+- **Screens**: `/settings` hub (both roles; Staff see only My profile,
+  Admins also Organisation, Lead sources, Pipeline stages, and links to the
+  existing Users, API keys and Audit log pages); `/settings/profile` (name,
+  email, role read-only; change password with a type-it-again field);
+  `/settings/organization`; `/settings/lead-sources` (up/down arrows, Add,
+  Rename, Deactivate/Reactivate, "System" badge); `/settings/pipeline` (up/
+  down for open stages, Add, Edit, Delete only when deletable). One shared
+  `SettingItemDialog` validates with the same shared schema the API uses.
+  Sidebar gained one **Settings** item for both roles; the existing Users,
+  API Keys and Audit Log items were kept where they were. Admin pages send
+  Staff to `/forbidden` (convenience only; the API is the control).
+  `apiDelete` added to `lib/api-client.ts` (first DELETE call).
+- **Left out (approved-deviation candidates, PRD 5.11)**: custom fields;
+  editable currency/date format/time zone; saved filters (list filters are
+  already in the URL); notification preferences (already D91).
+- **Tests**: API `tests/settings/{organization,lead-sources,pipeline-stages}
+  .test.ts` (20) + the updated change-password test; web
+  `tests/components/settings-pages.test.tsx` (9). Shown to fail with the
+  guard removed, then restored: wrong-password 401; the stage in-use check;
+  the locked-source check; the settings lock (concurrency); organisation
+  scoping on a lead-source write; the inactive-source check on leads; the
+  dialog sending a probability for Won.
+- **Verified**: `pnpm typecheck` clean; `pnpm lint` 0 errors (the same 3
+  older warnings); `pnpm test` **apps/api 613/613, apps/web 135/135 (748)**.
+  One full run had a single 10-second timeout in an unchanged quotation test
+  (`tests/quotations/crud.test.ts`, "ignores any totals…") while the web
+  suite ran alongside; it passed alone and in a second full run — noted as
+  a load-related flake, not a failure of this change. `pnpm --filter web
+  build` lists all five new pages. Read-only smoke against the user's
+  running dev servers (web PID 6960, API PID 7188, untouched): the new API
+  routes answer 401 unauthenticated, `/settings` and `/settings/profile`
+  answer 200. Not clicked through in a browser.
+
+## D94 — Day 6a, feature 2: Global search (2026-11-25)
+
+Built to the approved plan. **No migration, no new dependency, no new
+permission.**
+
+- **API**: `GET /api/v1/search?q=` (`apps/api/src/modules/search/`), `auth:
+  'authenticated'` (as approved, like Notifications D90). `q` is trimmed,
+  2–100 characters (422 otherwise). The real gate is in the service: each
+  record type is searched only if `hasPermission(ctx.role, <type>:read)`.
+  Today both roles hold every read permission, so Staff see exactly what
+  they can already see in the lists. Every query is organisation-scoped and
+  excludes archived records. At most **5 results per group** (6 fetched, to
+  set `hasMore`), newest-updated first; groups with no match are left out;
+  fixed order Leads, Contacts, Companies, Deals, Quotations. Each result
+  carries title, subtitle and link; each group a "see all" link to its list
+  page with `?q=` (every list page already reads `q` from the URL).
+- **Matching**: the list pages' case-insensitive `contains`, **per word**:
+  every word typed (up to 5) must match at least one field, so "asha rao"
+  finds first name Asha + last name Rao. Fields: leads — first/last name,
+  email, phone, company name; contacts — first/last name, email, phone,
+  **and their company's name** (added while testing: typing a company finds
+  its people; consistent with leads); companies — name, email; deals — name,
+  company name; quotations — number, company name. Quotation status is not
+  shown in results, because a stored SENT may already be effectively
+  EXPIRED (D86), and search must not run the expiry write (tested: stored
+  row stays SENT, no audit row).
+- **Found by the tests and fixed in search**: Prisma's `contains` passes
+  `%` and `_` straight to ILIKE as wildcards, so searching `%%` matched
+  everything. Search escapes them (`escapeLike`). **The same pre-existing
+  quirk exists in every list page's `?q=` search** (leads, companies,
+  contacts, deals, quotations, users). It cannot leak data (still
+  organisation-scoped), it only over-matches; reported, not changed here.
+- **Known difference**: the list pages' own search matches the whole text as
+  one phrase, so a "see all" link for "asha rao" can show fewer rows on the
+  list than search found. Reported; the list search was not changed.
+- **Screen**: `GlobalSearch` (`components/search/global-search.tsx`) in the
+  top bar, left of the bell, on every page, both roles. An ARIA combobox:
+  `role="combobox"`, `aria-expanded`, `aria-controls`,
+  `aria-activedescendant`, a listbox with one labelled group per record
+  type, and a polite live region announcing "Type at least 2 characters",
+  "Searching…", "No matches for …" or the result count. 250 ms debounce
+  (existing `useDebouncedValue`); previous results stay visible while the
+  next request runs. Keyboard: **Ctrl+K / ⌘K** or **/** focuses it (/ is
+  ignored while typing in another field); ↑/↓ move across groups and wrap;
+  Enter opens the highlighted result, or the top result once the shown
+  results match what is typed; Esc closes, a second Esc clears. A "See all
+  matching …" option appears only when a group has more than 5 matches.
+- **Tests**: API `tests/search/search.test.ts` (8): length rules and 401;
+  every type found with correct links; per-word matching and quotation
+  number; **no other-organisation or archived record** (two organisations
+  with identical names, plus an archived lead/company/contact/deal);
+  5-per-group and `hasMore`; `%`/`_` literal; a group disappears when the
+  role loses its read permission (the shared role table is edited in-test
+  and restored); search never runs auto-expiry. Web
+  `tests/components/global-search.test.tsx` (7): 2-character rule, one
+  debounced request, grouping and See-all, arrow keys/wrapping/Enter,
+  Enter-to-top and See-all navigation, Ctrl+K and "/" focus (but not while
+  typing elsewhere), Esc, no-match message. **Shown to fail when the guard
+  was removed, then restored**: organisation scope (leads), the archived
+  filter (contacts), the per-group permission check, the wildcard escape,
+  the debounce, and the "/"-while-typing guard.
+- **Verified**: `pnpm typecheck` clean; `pnpm lint` 0 errors (the same 3
+  older warnings; one new React-compiler error in the first draft — a
+  `setState` inside an effect — was fixed by deriving the highlight from the
+  current query instead); **apps/api 621/621, apps/web 142/142 (763)**;
+  `pnpm --filter web build` passes; read-only smoke against the user's
+  running servers: `/api/v1/search` answers 401 unauthenticated, `/` 200.
+  Not clicked through in a browser.
+
+## D95 — Day 6a, feature 3: CSV import of leads and contacts (2026-11-25)
+
+Built to the approved plan, with the user's two additions (audit records
+the import origin and counts). **No migration, no new dependency, no new
+permission.**
+
+- **API** (`apps/api/src/modules/imports/`): for each of `leads` and
+  `contacts`, `GET /api/v1/imports/<entity>/template`, `POST
+  .../preview`, `POST .../commit`. Declared per record type so each route
+  names its own permission: `leads:write` / `contacts:write` (both roles).
+  A contacts commit that would create companies also needs
+  `companies:write` (403 otherwise; both roles have it today).
+- **Stateless, nothing stored**: the browser reads the file as text and
+  posts `{ csv, mapping? }`. Preview without a mapping returns headers, a
+  sample value per column and a suggested mapping (from header aliases in
+  shared `IMPORT_FIELDS`, e.g. "E-mail", "Mobile Number", "Full Name");
+  preview with a mapping validates every row. **Commit parses and validates
+  the whole file again from scratch** — nothing from a preview is trusted.
+  The file is never written to disk or the database.
+- **Parser** (`apps/api/src/lib/csv-parse.ts`, hand-written): BOM removed;
+  CRLF, LF and lone CR; quoted fields with commas, line breaks and doubled
+  quotes; lenient with a stray quote mid-field; an unclosed quote is a
+  file-level error naming its line; comma only. Blank rows are skipped and
+  counted. **Limits**: 1 MB of UTF-8 (bytes, not characters), 1,000 data
+  rows, 50 columns — each a 422 with a plain message. The JSON body limit
+  is 3 MB **on `/api/v1/imports/*` only** (JSON escaping can roughly double
+  a CSV); every other route keeps 100 KB (tested: a 150 KB lead create is
+  still 413).
+- **Row rules**: the shared `createLeadSchema` / `createContactSchema`
+  (lengths and the email-or-phone rule — over-long text is a row error,
+  never truncated), plus, stricter than manual entry because spreadsheets
+  are messy: **email format checked**; **phone** through the existing
+  lenient parser and then the same strict E.164 check manual entry uses (a
+  bare 10-digit number = +91), so imported numbers are stored exactly like
+  typed ones. Name from First name, or Full name split at the first space.
+  A row whose cell count differs from the header is an error (trailing
+  empty cells are tolerated). Invalid formats are errors; **unknown
+  look-ups fall back with a note**: an unknown or inactive source becomes
+  "Import" with the original text kept as source detail; an owner email
+  that is not an active user makes the importer the owner. Priority must be
+  Low/Medium/High. Lead status is always New.
+- **Duplicates (the user's decision: skip)**: by normalised email, against
+  existing records of the same type in the organisation **including
+  archived ones**, and within the file (first occurrence wins; later ones
+  say "Same email as row N"). Only otherwise-valid rows claim an email, so
+  an invalid row never blocks a later good one. Rows without an email are
+  not duplicate-checked (email only, as approved).
+- **Contacts and companies (the user's decision: create)**: a company name
+  matching an **active** company (normalised name; oldest wins on a tie)
+  links to it; otherwise the company is created in the same transaction,
+  once per distinct name, owned by the importer, and the preview lists it
+  ("Will create company X", plus a summary list). An archived company with
+  the same name is not linked (a new one is created). A row that will not
+  be imported never creates a company.
+- **Leads keep unmapped columns**: values from columns set to "Don't
+  import" are saved in the lead's existing `capturedFields` (header →
+  value), so nothing typed is lost (PRD §9 data-quality rule); the preview
+  names those columns.
+- **Formula-like values** (`=…`, `+…`, `-…`, `@…`) are stored exactly as
+  written and never evaluated; every CSV this app writes neutralises them.
+  **Found by the template test and fixed**: this app's own CSV writer
+  prefixes such cells with an apostrophe (D82), so its own exports — e.g. a
+  phone written as `'+919840012345` — failed to re-import. Import now undoes
+  exactly that prefix (`restoreNeutralizedCell`, the inverse of
+  `neutralizeFormulaInjection`, unit-tested as an exact round trip); the
+  value is still plain text and is neutralised again on any export.
+- **Commit**: one transaction (60 s timeout) that first locks the
+  organisation row (the same per-tenant lock as Settings, D93), so two
+  imports of the same file at once cannot both pass the duplicate check
+  (tested: 20 rows imported once, the second import skips all 20; fails with
+  the lock removed). Leads via one `createMany`; contacts after one
+  `createManyAndReturn` for new companies. **Exactly one audit row**:
+  `import.completed`, entity type `lead`/`contact`, metadata `{ origin:
+  'csv_import', entity, totalRows, imported, skippedDuplicates, errors,
+  blankRowsSkipped, companiesCreated }` — counts only, never row contents
+  (all keys added to the `audit-metadata.ts` allowlist). No per-record
+  `lead.created` rows and **no notifications** for imported rows.
+- **Errors file**: the commit response includes every skipped row as CSV
+  text (built server-side with `rowsToCsv`: BOM, "Row", "Result",
+  "Problem", then the original columns, formula-neutralised); the browser
+  offers it as a download from memory. Not stored.
+- **Template**: `GET .../template` returns two fictional rows whose headers
+  map automatically (from the same field list the mapper uses).
+- **Screens**: `/leads/import` and `/contacts/import` (an "Import CSV"
+  button on each list page): 1 Choose file (1 MB checked in the browser too;
+  sample-file link) → 2 Match the columns (first value per column, a select
+  per column, hints, the server's mapping problems) → 3 Check before
+  importing (counts, companies to be created, kept columns, All/Ready/
+  Duplicates/Errors tabs, a row table with each row's errors and notes) →
+  Import finished (counts, "Download the N skipped rows", links).
+- **Left out (approved-deviation candidates)**: Excel `.xlsx` (needs a
+  parsing library; Excel can save CSV UTF-8 — PRD 5.3 says "CSV/Excel");
+  semicolon-delimited files; importing companies or deals; undo of an
+  import; updating existing records from a file (the user chose skip);
+  duplicate detection by phone or company name.
+- **Tests**: API `tests/lib/csv-parse.test.ts` (10), `tests/imports/
+  leads-import.test.ts` (8), `tests/imports/contacts-import.test.ts` (5) —
+  permissions, template, mapping suggestions, wrong headers and bad
+  mappings, one deliberately messy file (BOM, CRLF, blank rows, quoted
+  commas/newlines, formula text, invalid email/phone/priority, unknown
+  source and owner, duplicates in-file and against an archived record, a
+  5,001-character note, a ragged row, a trailing comma, an unmapped column)
+  checked row by row and against the stored records, the audit row and the
+  errors file; empty/header-only/broken/oversized/too-long/too-wide files;
+  the route-specific body limit; organisation scoping; concurrency; company
+  linking/creation; companies:write. Web `tests/components/import-wizard
+  .test.tsx` (5). **Shown to fail with the guard removed, then restored**:
+  the duplicate check, organisation scoping of the duplicate lookup, the
+  lock, the companies:write check, the apostrophe-prefix restore, the
+  route-specific body limit, and the browser-side 1 MB check.
+- **Verified**: `pnpm typecheck` clean; `pnpm lint` 0 errors (the same 3
+  older warnings); **apps/api 644/644, apps/web 147/147 (791)**; `pnpm
+  --filter web build` lists `/leads/import` and `/contacts/import`;
+  read-only smoke against the user's running servers (web PID 6960; API now
+  PID 3764 — `tsx watch` restarted its own child; nothing stopped by this
+  tool): preview and template answer 401 unauthenticated, both import pages
+  200. Not clicked through in a browser.
