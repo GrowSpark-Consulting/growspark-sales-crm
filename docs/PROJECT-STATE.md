@@ -376,8 +376,9 @@ in `docs/MANUAL-TEST-DAY6A.md` §5, updated there).
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
-  for. Website integration is **on hold** until this CRM is finished. When
-  resumed, it must be purely additive: it must never affect the existing
+  for. The website **is connected** to the CRM (live since 25 Nov 2026), and
+  staging is deployed on Vercel (web), Render (API) and Supabase (database).
+  The integration stays purely additive: it must never affect the existing
   website's workflow, Supabase, SMTP, HubSpot, validation, spam protection, or
   visitor behaviour. **Now written into `CLAUDE.md`** (added in package
   1.2c) — no longer only in chat history and this file.

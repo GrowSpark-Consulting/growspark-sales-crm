@@ -319,7 +319,7 @@ organisation PDF details and `pnpm staging:migrate` (both Day 5c
 migrations); (3) Day 6 (testing, stabilisation) — confirm its scope with the
 user first. Context for any Day 5c follow-up: `docs/DAY-5C-HANDOVER-PROMPT.md`.
 
-## Staging deployment (package 4C — built, database steps confirmed working)
+## Staging deployment (package 4C — deployed on Vercel, Render and Supabase)
 
 Built on 2026-11-23, after Day 4. Full detail in `docs/decisions.md`
 D58–D67 and the complete walkthrough in `docs/STAGING.md` — read that file
@@ -342,22 +342,18 @@ before touching staging, not this summary.
   has **not** been run yet — it needs `APP_ENV=staging` added to the
   user's own `.env.staging.local` first (D64; the file may predate that
   line).
-- **Not yet done: deploying either the Render service or the Vercel
-  project.** The full clicking walkthrough for both is written
-  (`docs/STAGING.md`'s "Render: API" and "Vercel: web" sections — note
-  `render.yaml` is documentation only now, not an applied Blueprint, D69),
-  but nobody has created either yet. That — plus clicking through the
-  deployed app at all — is the next concrete step here, not a new build
-  package.
+- **Staging is deployed**: the API on Render, the web app on Vercel and
+  the database on Supabase. The walkthrough for both services is in
+  `docs/STAGING.md`'s "Render: API" and "Vercel: web" sections (note
+  `render.yaml` is documentation only, not an applied Blueprint, D69).
 - TLS against the real Supabase pooler is confirmed on, via a
   version-specific `pg-connection-string` behaviour that's scheduled to
   change later (D66) — a one-line `sslmode=verify-full` edit to the user's
   own connection string was proposed as the durable fix; not yet confirmed
   whether the user made that edit.
-- **The website-forwarding patch is still explicitly NOT approved and NOT
-  applied.** Nothing in this repo should assume or build toward it without
-  a fresh, explicit approval naming the exact file list, per the hard
-  rules above. Staging is unrelated to this and does not change it.
+- **The website is connected to the CRM** (live since 25 Nov 2026). The
+  website's own repository is still off limits from this repo, per the
+  hard rules above.
 
 ## Open items
 

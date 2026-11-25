@@ -159,7 +159,7 @@ profile share one sign-in — see PROJECT-STATE §10).
 
 ### 8.2 A lead and a deal assigned to Staff
 
-1. [ ] As **Admin**: **Leads** → **New lead**; First name `Notify`, Email
+1. [ ] As **Admin**: **Leads** → **Add lead**; First name `Notify`, Email
        `notify@example.com`, **Owner** = the Staff user; **Create lead**.
 2. [ ] As **Staff**: wait up to one minute, or click back into the tab.
        **Expected**: the bell shows **1**. Open it: "Lead assigned to you:
@@ -171,7 +171,7 @@ profile share one sign-in — see PROJECT-STATE §10).
        the owner (e.g. Job title), save. **Expected (Staff)**: nothing new.
        Then change **Owner** to Admin, save, change it back to Staff, save.
        **Expected (Staff)**: one new "Lead assigned to you: Notify".
-5. [ ] As **Admin**: **Deals** → **New deal** for any company, **Owner** =
+5. [ ] As **Admin**: **Deals** → **Add deal** for any company, **Owner** =
        Staff, create it. **Expected (Staff)**: "Deal assigned to you: <deal
        name>"; clicking it opens the deal.
 6. [ ] As **Admin**, create another lead with **Owner** = Admin (yourself).

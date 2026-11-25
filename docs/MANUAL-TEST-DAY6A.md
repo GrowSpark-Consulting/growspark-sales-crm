@@ -61,22 +61,22 @@ Do not check any box until it has actually been done in a real browser.
 3. [ ] Click **Add source** again and type `trade SHOW`. **Expected**: a red
        message "A lead source called "Trade show" already exists."
 4. [ ] On "Trade show", click the **up arrow** twice. **Expected**: it moves
-       up two rows. Go to **Leads → New lead** and open the **Source**
+       up two rows. Go to **Leads → Add lead** and open the **Source**
        list. **Expected**: the same order.
 5. [ ] Back in Settings → Lead sources, click **Rename** on "Trade show",
        change it to `Trade fair`, **Save**. **Expected**: the new name.
-6. [ ] Create a lead with Source **Trade fair** (Leads → New lead). Then in
+6. [ ] Create a lead with Source **Trade fair** (Leads → Add lead). Then in
        Settings click **Deactivate** on "Trade fair" and confirm.
        **Expected**: Status "Inactive", Leads count 1, a **Reactivate**
        button.
-7. [ ] Leads → New lead → open **Source**. **Expected**: "Trade fair" is
+7. [ ] Leads → Add lead → open **Source**. **Expected**: "Trade fair" is
        **not** offered.
 8. [ ] Open the lead you made in step 6. **Expected**: its Source still
        reads "Trade fair". Click **Edit**. **Expected**: Source shows "Trade
        fair (inactive)". Change only the Job title and **Save**.
        **Expected**: it saves normally.
 9. [ ] Settings → Lead sources → **Reactivate** "Trade fair". **Expected**:
-       Active again, offered on New lead again.
+       Active again, offered on Add lead again.
 
 ### 1.4 Pipeline stages
 

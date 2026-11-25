@@ -43,8 +43,9 @@ nothing reviewed by anyone else — correctness over speed.
   `docker volume rm`, `docker compose down -v`) without asking first.
 - Do not start work outside the current package/step. Never `git push`.
 - Never modify, or run commands in, any repository other than this one. The Grow
-  Spark website repository is off limits; website integration is on hold until
-  the CRM is finished.
+  Spark website repository is off limits. The website is connected to the CRM
+  (live since 25 Nov 2026); staging is deployed on Vercel (web), Render (API)
+  and Supabase (database).
 - Before using any Next.js, Prisma, or Tailwind API, check the documentation for the
   **installed** major version — behavior differs from older examples.
 - Commit locally after each logical unit of work with a clear message. Do not push.
