@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import type { CalculateQuotationInput, QuotationResponse, QuotationTotals } from "@growspark/shared";
-import { apiGet, apiPost } from "@/lib/api-client";
+import type { QuotationResponse } from "@growspark/shared";
+import { apiGet } from "@/lib/api-client";
 
 export interface QuotationsListParams {
   page?: number;
@@ -49,22 +49,6 @@ export function useQuotation(id: string | undefined) {
     queryKey: [QUOTATIONS_QUERY_KEY_ROOT, "detail", id],
     queryFn: () => apiGet<{ data: QuotationResponse }>(`/api/v1/quotations/${id}`),
     enabled: Boolean(id),
-  });
-}
-
-/**
- * Live totals for the quotation form, computed by the server's money rule
- * (POST /quotations/calculate) — the browser never does money arithmetic
- * (D85). `input` should already be debounced by the caller; `null` means
- * "the lines aren't valid yet, don't ask".
- */
-export function useQuotationTotals(input: CalculateQuotationInput | null) {
-  return useQuery({
-    queryKey: [QUOTATIONS_QUERY_KEY_ROOT, "calculate", input],
-    queryFn: () => apiPost<{ data: QuotationTotals }>("/api/v1/quotations/calculate", input),
-    enabled: input !== null,
-    placeholderData: (previous) => previous,
-    retry: false,
   });
 }
 

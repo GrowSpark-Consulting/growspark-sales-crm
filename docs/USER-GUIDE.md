@@ -11,7 +11,7 @@ Version: November 2026. Written for someone evaluating the app, not for develope
 5. [Leads](#5-leads)
 6. [Companies and Contacts](#6-companies-and-contacts)
 7. [Deals and the pipeline](#7-deals-and-the-pipeline)
-8. [Enquiries inbox and the website form](#8-enquiries-inbox-and-the-website-form)
+8. [Form submissions inbox and the website form](#8-form-submissions-inbox-and-the-website-form)
 9. [Quotations](#9-quotations)
 10. [Notifications](#10-notifications)
 11. [Reports](#11-reports)
@@ -28,9 +28,9 @@ Version: November 2026. Written for someone evaluating the app, not for develope
 ## 1. What the app is
 
 Grow Spark Sales & CRM is a web app for the sales team. It covers the whole
-journey from first enquiry to won deal:
+journey from first form submission to won deal:
 
-**enquiry → lead → company and contact → deal → quotation → Won or Lost → reports.**
+**form submission → lead → company and contact → deal → quotation → Won or Lost → reports.**
 
 It runs in a normal web browser. Grow Spark Consulting is the first
 organisation using it. Amounts are in Indian rupees (₹) and dates use India
@@ -42,7 +42,7 @@ and settings.
 | | Admin | Staff (shown as "Staff Executive") |
 | --- | --- | --- |
 | Leads, companies, contacts, deals, activities | Yes | Yes |
-| Quotations, enquiries, reports, CSV export and import | Yes | Yes |
+| Quotations, form submissions, reports, CSV export and import | Yes | Yes |
 | Home dashboard, Today, My Tasks, search, notifications | Yes | Yes |
 | My profile, change own password | Yes | Yes |
 | Users (add, edit, deactivate, reset passwords) | Yes | No |
@@ -70,10 +70,10 @@ Every screen in the app. "Menu" is the left sidebar unless stated.
 | Contacts | Menu → **Contacts** | Yes | Yes | People, linked to a company. |
 | Import contacts | Contacts → **Import CSV** | Yes | Yes | Load contacts from a CSV file (creates missing companies). |
 | Deals | Menu → **Deals** | Yes | Yes | Deals as a **List** or a **Board** (pipeline). |
-| Quotations | Menu → **Quotations** | Yes | Yes | Priced quotations with GST, PDF download and statuses. |
-| Enquiries | Menu → **Enquiries** | Yes | Yes | Inbox of website form submissions. |
+| Quotations | Menu → **Quotations** | Yes | Yes | Priced quotations with a GST rate per line, PDF download and statuses. |
+| Form submissions | Menu → **Form submissions** | Yes | Yes | Inbox of website form submissions (called Enquiries in earlier versions). |
 | Reports | Menu → **Reports** | Yes | Yes | Five ready-made reports, each downloadable as CSV. |
-| Notifications | Bell icon, top right | Yes | Yes | Your own alerts (assignments, enquiries, quotations, tasks). |
+| Notifications | Bell icon, top right | Yes | Yes | Your own alerts (assignments, form submissions, quotations, tasks). |
 | Global search | Search box, top bar (Ctrl+K or /) | Yes | Yes | Find leads, contacts, companies, deals and quotations. |
 | Theme and Log out | Your name, top right | Yes | Yes | Light, Dark or System theme; sign out. |
 | Settings | Menu → **Settings** | Yes | Yes (My profile only) | Hub for profile and admin settings. |
@@ -82,7 +82,7 @@ Every screen in the app. "Menu" is the left sidebar unless stated.
 | Lead sources | Settings → **Lead sources** | Yes | No | Add, rename, reorder, deactivate lead sources. |
 | Pipeline stages | Settings → **Pipeline stages** | Yes | No | Add, rename, reorder, delete deal stages and probabilities. |
 | Users | Menu → **Users** (or Settings) | Yes | No | Add users, change roles, deactivate, reset passwords. |
-| API keys | Menu → **API Keys** (or Settings) | Yes | No | Keys the website uses to send enquiries in. |
+| API keys | Menu → **API Keys** (or Settings) | Yes | No | Keys the website uses to send form submissions in. |
 | Audit log | Menu → **Audit Log** (or Settings) | Yes | No | Who changed what, and when. |
 | Forbidden page | Shown automatically | — | — | Appears if someone opens a page their role cannot use. |
 
@@ -226,7 +226,11 @@ only. You can still save.
   original enquiry is kept. An older lead saved without a company name
   asks for one when you edit it.
 - On the **Overview** tab, under **Change status**, click **New**,
-  **Contacted**, **Qualified** or **Unqualified**.
+  **Contacted**, **Qualified** or **Unqualified**. The current status is
+  highlighted with a tick. While saving, the clicked button shows a spinner
+  and all the buttons are locked; then a message "Status changed to …"
+  appears. The same feedback is used for quotation, deal, task and form
+  submission status buttons.
 - The **History** tab lists every status change, who made it and when.
 
 **Convert a lead**
@@ -347,16 +351,16 @@ The stages and their probabilities are set in Settings → Pipeline stages
 
 ---
 
-## 8. Enquiries inbox and the website form
+## 8. Form submissions inbox and the website form
 
 **How the website form feeds the CRM**
 
 The Grow Spark website's contact form is connected (live since 25 November
-2026). Every enquiry is forwarded to the CRM, using an API key. This is in
+2026). Every form submission is forwarded to the CRM, using an API key. This is in
 addition to the website's own saving, emails and HubSpot flow, which are
 unchanged. If the CRM is asleep or down, the website still works.
 
-When an enquiry arrives, the CRM:
+When a form submission arrives, the CRM:
 
 - stores it exactly as received,
 - creates a lead with source **Website**, unless it has no email or phone
@@ -369,15 +373,16 @@ When an enquiry arrives, the CRM:
 
 **Using the inbox**
 
-1. Menu → **Enquiries**. Filter by status (**Received**, **Lead created**,
+1. Menu → **Form submissions**. Filter by status (**Received**, **Lead created**,
    **Rejected**, **Spam**), form type or date.
-2. Open an enquiry. **Overview** shows the details and a link to its lead.
+2. Open a submission. **Overview** shows the details and a link to its lead.
    **Raw payload** shows exactly what the website sent.
 3. **Mark as spam**: also archives the lead it created.
 4. **Archive** hides it. **Restore** brings it back.
 
 There is no read/unread marker; use the status and **Archive** instead.
-This was agreed for this version.
+This was agreed for this version. The old web address `/enquiries` still
+works: it forwards to `/form-submissions`, so saved links are not broken.
 
 ---
 
@@ -393,21 +398,41 @@ This was agreed for this version.
 3. **Issue date** defaults to today. **Valid until** defaults to 30 days
    later.
 4. Add **Line items**: **Description**, **Qty**, **Unit price (₹)**,
-   optional **Disc. %**. Click **Add line** for more.
-5. Set **Quotation discount (%)** and **GST (%)** (default 18). Add
+   optional **Disc. %** and a **GST %** for each line (default 18; type any
+   rate from 0 to 100, for example 0, 5, 12, 18, 28 or 0.25; **0** means no
+   GST). Click **Add line** for more. There is no discount or GST for the
+   whole quotation any more: discount and GST are set line by line.
+5. Next to the totals, choose **Prices are: Tax exclusive** (default: GST is
+   added on top of the prices you type) or **Tax inclusive** (the prices you
+   type already include GST, and the GST is worked out from them). Add
    **Terms** and **Notes** if needed.
-6. The totals box updates as you type: **Subtotal**, discount, **Taxable
-   amount**, GST, **Total**. Click **Create quotation**.
+6. The totals box updates as you type: **Subtotal** (before GST), one **GST**
+   row for each rate used (for example "GST 5%" and "GST 12.5%"), and
+   **Total**. Each line's **Amount** is what that line costs the customer.
+   Click **Create quotation**.
 
 Each quotation gets a number like **Q-2026-0001**. The numbers restart
 each year.
 
 **PDF**: click **Download PDF**. It shows your organisation's details (from
-Settings → Organisation), the customer, the lines and the totals. Each edit
-makes a new version (…-v1, …-v2).
+Settings → Organisation), the customer, the lines (with each line's GST %)
+and the totals with one GST row per rate. When prices include GST it says
+**"Prices are inclusive of GST"**. Each edit makes a new version (…-v1,
+…-v2). PDFs downloaded earlier are not changed.
+
+**Example**: 1 × ₹1,000 at 18%. Tax exclusive: GST ₹180, total ₹1,180. Tax
+inclusive: ₹847.46 + GST ₹152.54 = ₹1,000.
+
+Quotations made before this change kept their totals exactly: each line got
+its quotation's old GST rate, and an old quotation-wide discount was folded
+into every line's discount.
 
 **Statuses**
 
+- The current status is the highlighted button under **Change status**
+  (top of the page). Only the allowed next steps appear beside it. While a
+  change is saving, a small spinner shows and the buttons are locked so it
+  cannot be sent twice; a message "Status changed to …" confirms it.
 - **Draft** → click **Mark as sent** → **Sent**. A draft whose Valid until
   date has passed can't be sent until you change the date.
 - **Sent** → **Accepted** or **Rejected**. Both are final.
@@ -431,7 +456,7 @@ title to open the record.
 You are notified when:
 
 - a lead or deal is assigned to you by someone else,
-- a website enquiry arrives (everyone is told),
+- a website form submission arrives (everyone is told),
 - a quotation you own is accepted or rejected by someone else,
 - a task assigned to you is due today or overdue (checked when you open the
   app).
@@ -515,12 +540,12 @@ Menu → **Settings**. Staff see only **My profile**. Admins also see an
 - **Fictional data only** on staging and in demos. Never enter real
   customer details.
 - **Nothing is deleted.** Leads, companies, contacts, deals, quotations and
-  enquiries are archived and can be restored.
+  form submissions are archived and can be restored.
 - **Not in this version** (agreed or reported, not forgotten):
   - no "forgot password" email; an Admin resets passwords
   - no emails of any kind (notifications are in-app only)
   - no product or service catalogue; quotation lines are typed in
-  - one GST rate per quotation, no CGST/SGST/IGST split
+  - a GST rate per line (any rate, 0–100), but no CGST/SGST/IGST split
   - no Excel (.xlsx) import; save as CSV instead
   - no custom fields, no saved filters (bookmark the filtered web address
     instead)
@@ -528,7 +553,7 @@ Menu → **Settings**. Staff see only **My profile**. Admins also see an
   - no notification settings, and no notifications for deal stage changes
     or Won/Lost
   - no bulk actions on lists, no calendar view, no read/unread on
-    enquiries
+    form submissions
   - currency and time zone are fixed (INR, India time)
 
 ---
@@ -556,22 +581,23 @@ After several failed attempts for the same email, further attempts are
 refused for a while ("Too many attempts. Try again later.").
 
 **How does the website form reach the CRM?**
-The website's server sends each enquiry to a private CRM address, with an
+The website's server sends each form submission to a private CRM address, with an
 API key created on the API keys page. Browsers never see the key. It has
 been live since 25 November 2026.
 
 **What if the CRM is down when someone submits the website form?**
 The website still works. It keeps saving, emailing and sending enquiries
-to HubSpot as before, so the enquiry is not lost. If the same enquiry
+to HubSpot as before, so the submission is not lost. If the same submission
 reaches the CRM twice, the CRM recognises its submission ID and ignores
 the repeat.
 
 **How are quotation totals calculated?**
-Line amount = quantity × unit price, minus the line discount. Subtotal =
-sum of lines. Then the quotation discount, then GST on the taxable amount,
-then the total. Rounding to the paisa (half-up) happens once per line,
-once for the discount and once for GST, so the printed figures always add
-up.
+Each line: quantity × unit price, less the line's discount, then the
+line's own GST rate. Tax exclusive: GST is added on top. Tax inclusive: the
+entered price already contains the GST, which is split out of it. Subtotal =
+sum of the lines before GST; one GST row per rate used; Total = sum of the
+lines. Rounding to the paisa (half-up) happens once per line for each amount,
+so the printed figures always add up.
 
 **Why are the totals exact?**
 Money is calculated with exact decimal arithmetic, not computer
@@ -711,10 +737,10 @@ reported and is not yet approved.
 | 5.6 Calendar view | Not built | Approved (D96). My Tasks and Today instead. |
 | 5.6 Timeline on lead, contact, company, deal | Built | |
 | **5.7** Product/service catalogue | Not built | Approved (D87); future item. |
-| 5.7 Items with qty, price, discount, tax | Built differently | Lines typed in; one GST % per quotation; on quotations, not deals (approved, D87). |
+| 5.7 Items with qty, price, discount, tax | Built differently | Lines typed in; discount and GST % per line, with a tax inclusive/exclusive switch per quotation; on quotations, not deals (approved, D87, D101–D103). |
 | 5.7 Number, validity, customer, totals | Built | |
 | 5.7 PDF; linked to deal; status tracking | Built | The PDF is generated on demand, not stored (approved, D87). |
-| **5.8** Enquiries inbox with filters and lead context | Built | |
+| **5.8** Enquiries inbox with filters and lead context | Built | Shown as **Form submissions** in the menu (D104). |
 | 5.8 Inbox read/unread | Not built | Approved (D96). Status, archive and spam instead. |
 | 5.8 Open or create the lead from an enquiry | Built differently | The lead is created automatically on arrival and linked; there is no manual "create lead" for a Rejected enquiry. |
 | 5.8 Notifications: leads, assignments, reminders, overdue | Built differently | A manual lead notifies only its owner; reminders are due-today only (approved, D91). |
@@ -748,10 +774,10 @@ form once with fictional details. It also goes through the website's normal
 emails and HubSpot, so tell the team it is a test. Allow a minute for the
 first page to wake up.
 
-1. **Enquiry arrives.** Sign in as Admin. Notice the bell's red number.
-   Open **Enquiries** and open the new enquiry. Show **Overview** and **Raw
+1. **Form submission arrives.** Sign in as Admin. Notice the bell's red number.
+   Open **Form submissions** and open the new submission. Show **Overview** and **Raw
    payload**.
-2. **Lead.** On the enquiry, click the linked lead. Its source is
+2. **Lead.** On the submission, click the linked lead. Its source is
    **Website** and the original message is under **Original enquiry**.
 3. **Work the lead.** Open the **Timeline** tab, add a **Call** ("Intro
    call"), then click **Qualified** under **Change status**.
@@ -780,3 +806,8 @@ an email or phone; Source optional; company and contact boxes list options
 on click; new phone input rules; My Tasks shows your own tasks by default;
 bulk actions, calendar view and enquiry read/unread recorded as agreed
 omissions.
+
+**Recent changes (27 November 2026):** quotations now have a GST rate on each
+line and a Tax exclusive / Tax inclusive switch (the quotation-wide discount
+and GST boxes are gone); "Enquiries" is now called **Form submissions**;
+status buttons show a spinner, lock while saving and confirm with a message.

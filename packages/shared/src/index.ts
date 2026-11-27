@@ -185,6 +185,13 @@ export {
 } from './enquiries.js';
 export type { SubmissionStatus, ListEnquiriesQuery, EnquiryResponse, EnquiryDetailResponse } from './enquiries.js';
 export { formatIndianDecimal, formatRupees } from './money-format.js';
+export { calculateQuotationAmounts, groupGstByRate, normalizePercent } from './quotation-money.js';
+export type {
+  QuotationMoneyLine,
+  QuotationLineAmounts,
+  QuotationGstBreakdownRow,
+  QuotationAmounts,
+} from './quotation-money.js';
 export {
   QUOTATION_STATUSES,
   QUOTATION_STATUS_TRANSITIONS,

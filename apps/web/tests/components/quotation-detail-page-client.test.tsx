@@ -3,6 +3,9 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { formatRupees, type QuotationResponse } from "@growspark/shared";
 import { QuotationDetailPageClient } from "@/components/quotations/quotation-detail-page-client";
+import { toast } from "sonner";
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
@@ -12,15 +15,16 @@ function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-/** The awkward example: 3 × 0.10, 33.33% discount, 18% GST — exactly what the API returns for it. */
+/** The awkward example: 3 × 0.10, 33.33% line discount, 18% GST — exactly what the API returns for it (D101). */
 function quotationFixture(overrides: Partial<QuotationResponse> = {}): QuotationResponse {
   return {
     id: "q-1", number: "Q-2026-0001", version: 1, pdfReference: "Q-2026-0001-v1", companyId: "co-1", companyName: "Example Foods",
     contactId: "ct-1", contactName: "Asha Rao", dealId: "deal-1", dealName: "Packing line", ownerId: null, ownerName: null,
-    status: "DRAFT", issueDate: "2026-11-24", validUntil: "2026-12-24", currency: "INR", discountPercent: "33.33", taxPercent: "18.00",
-    subtotal: "0.30", discountAmount: "0.10", taxableAmount: "0.20", taxAmount: "0.04", total: "0.24", terms: "Net 30", notes: null,
+    status: "DRAFT", issueDate: "2026-11-24", validUntil: "2026-12-24", currency: "INR", pricesIncludeTax: false,
+    subtotal: "0.20", taxAmount: "0.04", total: "0.24", terms: "Net 30", notes: null,
+    gstBreakdown: [{ rate: "18", taxable: "0.20", gst: "0.04" }],
     sentAt: null, archivedAt: null, createdAt: "2026-11-24T05:00:00Z", updatedAt: "2026-11-24T05:00:00Z",
-    lineItems: [{ id: "l-1", position: 1, description: "Sensor labels", quantity: "3.00", unitPrice: "0.10", discountPercent: "0.00", lineTotal: "0.30" }],
+    lineItems: [{ id: "l-1", position: 1, description: "Sensor labels", quantity: "3.00", unitPrice: "0.10", discountPercent: "33.33", gstPercent: "18.00", taxableAmount: "0.20", gstAmount: "0.04", lineTotal: "0.24" }],
     ...overrides,
   };
 }
@@ -69,14 +73,41 @@ describe("QuotationDetailPageClient", () => {
     renderWithClient(<QuotationDetailPageClient quotationId="q-1" />);
     const totals = await screen.findByTestId("quotation-totals");
 
-    expect(within(totals).getByText(formatRupees("0.30"))).toBeTruthy();
-    expect(within(totals).getByText(`− ${formatRupees("0.10")}`)).toBeTruthy();
     expect(within(totals).getByText(formatRupees("0.20"))).toBeTruthy();
     expect(within(totals).getByText(formatRupees("0.04"))).toBeTruthy();
     expect(within(totals).getByTestId("quotation-total").textContent).toBe("₹ 0.24");
-    expect(within(totals).getByText("Discount (33.33%)")).toBeTruthy();
-    expect(within(totals).getByText("GST (18%)")).toBeTruthy();
+    expect(within(totals).getByText("GST 18%")).toBeTruthy();
+    expect(within(totals).queryByText(/Discount/)).toBeNull();
+    expect(within(totals).queryByText(/Prices are inclusive/)).toBeNull();
     expect(screen.getByRole("link", { name: /Download PDF/ }).getAttribute("href")).toBe("/api/v1/quotations/q-1/pdf");
+  });
+
+  it("shows each line's GST rate and one GST row per rate used", async () => {
+    stubBackend(
+      quotationFixture({
+        subtotal: "2200.00", taxAmount: "185.00", total: "2385.00",
+        gstBreakdown: [{ rate: "5", taxable: "1200.00", gst: "60.00" }, { rate: "12.5", taxable: "1000.00", gst: "125.00" }],
+        lineItems: [
+          { id: "a", position: 1, description: "A", quantity: "1.00", unitPrice: "1200.00", discountPercent: "0.00", gstPercent: "5.00", taxableAmount: "1200.00", gstAmount: "60.00", lineTotal: "1260.00" },
+          { id: "b", position: 2, description: "B", quantity: "1.00", unitPrice: "1000.00", discountPercent: "0.00", gstPercent: "12.50", taxableAmount: "1000.00", gstAmount: "125.00", lineTotal: "1125.00" },
+        ],
+      }),
+    );
+    renderWithClient(<QuotationDetailPageClient quotationId="q-1" />);
+    const totals = await screen.findByTestId("quotation-totals");
+    expect(within(totals).getAllByTestId("quotation-gst-row").map((row) => row.textContent)).toEqual([
+      `GST 5%${formatRupees("60.00")}`,
+      `GST 12.5%${formatRupees("125.00")}`,
+    ]);
+    expect(screen.getByRole("columnheader", { name: "GST" })).toBeTruthy();
+    expect(screen.getByText("12.5%", { selector: "td" })).toBeTruthy();
+  });
+
+  it("says so when prices are inclusive of GST", async () => {
+    stubBackend(quotationFixture({ pricesIncludeTax: true }));
+    renderWithClient(<QuotationDetailPageClient quotationId="q-1" />);
+    const totals = await screen.findByTestId("quotation-totals");
+    expect(within(totals).getByText("Prices are inclusive of GST")).toBeTruthy();
   });
 
   it("a draft can be edited and sent; a sent one can only be accepted or rejected", async () => {
@@ -132,5 +163,32 @@ describe("QuotationDetailPageClient", () => {
     await confirmAction("Accepted", "Mark accepted");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(screen.queryByText("Mark the deal as Won?")).toBeNull();
+  });
+  it("D105: the status group shows the current status as selected, offers only the allowed next steps, and toasts 'Status changed to …'", async () => {
+    stubBackend(quotationFixture({ status: "SENT" }), "OPEN");
+    renderWithClient(<QuotationDetailPageClient quotationId="q-1" />);
+    await screen.findByTestId("quotation-totals");
+
+    const group = screen.getByRole("group", { name: "Change status" });
+    expect(within(group).getAllByRole("button").map((button) => button.textContent)).toEqual(["Sent", "Accepted", "Rejected"]);
+    expect(within(group).getByRole("button", { name: "Sent" }).getAttribute("aria-pressed")).toBe("true");
+
+    await confirmAction("Accepted", "Mark accepted");
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Status changed to Accepted"));
+  });
+
+  it("D105: a draft's group is Draft (selected) + Mark as sent; a final status offers no status buttons at all", async () => {
+    stubBackend(quotationFixture({ status: "DRAFT" }));
+    const { unmount } = renderWithClient(<QuotationDetailPageClient quotationId="q-1" />);
+    await screen.findByTestId("quotation-totals");
+    const group = screen.getByRole("group", { name: "Change status" });
+    expect(within(group).getAllByRole("button").map((button) => button.textContent)).toEqual(["Draft", "Mark as sent"]);
+    unmount();
+    vi.unstubAllGlobals();
+
+    stubBackend(quotationFixture({ status: "ACCEPTED" }));
+    renderWithClient(<QuotationDetailPageClient quotationId="q-1" />);
+    await screen.findByTestId("quotation-totals");
+    expect(screen.queryByRole("group", { name: "Change status" })).toBeNull();
   });
 });

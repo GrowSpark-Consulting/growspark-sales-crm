@@ -102,7 +102,7 @@ export function NotificationsPageClient() {
         emptyDescription={
           unreadOnly
             ? "You're all caught up."
-            : "You'll be told here when a lead or deal is assigned to you, a website enquiry arrives, a quotation you own is accepted or rejected, or one of your tasks is due."
+            : "You'll be told here when a lead or deal is assigned to you, a website form submission arrives, a quotation you own is accepted or rejected, or one of your tasks is due."
         }
         filterBar={
           <div className="flex flex-wrap items-center justify-between gap-2">

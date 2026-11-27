@@ -42,10 +42,11 @@ function sampleQuotation(overrides: Partial<QuotationResponse> = {}): QuotationR
   return {
     id: 'q', number: 'Q-2026-0007', version: 2, pdfReference: 'Q-2026-0007-v2', companyId: 'c', companyName: 'Example Foods',
     contactId: 'k', contactName: 'Asha Rao', dealId: null, dealName: null, ownerId: null, ownerName: null, status: 'SENT',
-    issueDate: '2026-11-24', validUntil: '2026-12-24', currency: 'INR', discountPercent: '33.33', taxPercent: '18.00',
-    subtotal: '0.30', discountAmount: '0.10', taxableAmount: '0.20', taxAmount: '0.04', total: '0.24', terms: 'Net 30', notes: null,
+    issueDate: '2026-11-24', validUntil: '2026-12-24', currency: 'INR', pricesIncludeTax: false,
+    subtotal: '0.20', taxAmount: '0.04', total: '0.24', terms: 'Net 30', notes: null,
     sentAt: null, archivedAt: null, createdAt: '', updatedAt: '',
-    lineItems: [{ id: 'l', position: 1, description: 'Sensor labels', quantity: '3.00', unitPrice: '0.10', discountPercent: '0.00', lineTotal: '0.30' }],
+    gstBreakdown: [{ rate: '18', taxable: '0.20', gst: '0.04' }],
+    lineItems: [{ id: 'l', position: 1, description: 'Sensor labels', quantity: '3.00', unitPrice: '0.10', discountPercent: '33.33', gstPercent: '18.00', taxableAmount: '0.20', gstAmount: '0.04', lineTotal: '0.24' }],
     ...overrides,
   };
 }
@@ -62,13 +63,14 @@ describe('quotation PDF building blocks', () => {
     const model = buildQuotationPdfModel({ quotation: sampleQuotation(), organization, company, contact });
     expect(model.reference).toBe('Q-2026-0007-v2');
     expect(model.totals).toEqual([
-      { label: 'Subtotal', value: formatRupees('0.30') },
-      { label: 'Discount (33.33%)', value: `− ${formatRupees('0.10')}` },
-      { label: 'Taxable amount', value: formatRupees('0.20') },
-      { label: 'GST (18%)', value: formatRupees('0.04') },
+      { label: 'Subtotal', value: formatRupees('0.20') },
+      { label: 'GST 18%', value: formatRupees('0.04') },
       { label: 'Total', value: '₹ 0.24', strong: true },
     ]);
-    expect(model.items).toEqual([{ index: '1', description: 'Sensor labels', quantity: '3', unitPrice: '0.10', discount: '—', amount: '0.30' }]);
+    expect(model.items).toEqual([
+      { index: '1', description: 'Sensor labels', quantity: '3', unitPrice: '0.10', discount: '33.33%', gst: '18%', amount: '0.24' },
+    ]);
+    expect(model.priceNote).toBeNull();
     expect(model.meta).toContainEqual({ label: 'Valid until', value: '24 Dec 2026' });
     expect(model.seller.name).toBe('Example Consulting Pvt Ltd');
     expect(model.seller.lines).toContain('GSTIN: 33ABCDE1234F1Z5');
@@ -82,12 +84,27 @@ describe('quotation PDF building blocks', () => {
     expect(model.seller).toEqual({ name: 'Example Consulting', lines: [] });
   });
 
-  it('omits the discount and taxable rows when there is no discount', () => {
+  it('prints one GST row per rate used, and a per-line GST column (D101)', () => {
     const model = buildQuotationPdfModel({
-      quotation: sampleQuotation({ discountPercent: '0.00', discountAmount: '0.00', taxableAmount: '100.00', subtotal: '100.00', taxAmount: '18.00', total: '118.00' }),
+      quotation: sampleQuotation({
+        subtotal: '2200.00', taxAmount: '185.00', total: '2385.00',
+        gstBreakdown: [{ rate: '5', taxable: '1200.00', gst: '60.00' }, { rate: '12.5', taxable: '1000.00', gst: '125.00' }],
+        lineItems: [
+          { id: 'a', position: 1, description: 'A', quantity: '1.00', unitPrice: '1200.00', discountPercent: '0.00', gstPercent: '5.00', taxableAmount: '1200.00', gstAmount: '60.00', lineTotal: '1260.00' },
+          { id: 'b', position: 2, description: 'B', quantity: '1.00', unitPrice: '1000.00', discountPercent: '0.00', gstPercent: '12.50', taxableAmount: '1000.00', gstAmount: '125.00', lineTotal: '1125.00' },
+        ],
+      }),
       organization, company, contact,
     });
-    expect(model.totals.map((row) => row.label)).toEqual(['Subtotal', 'GST (18%)', 'Total']);
+    expect(model.totals.map((row) => row.label)).toEqual(['Subtotal', 'GST 5%', 'GST 12.5%', 'Total']);
+    expect(model.items.map((item) => item.gst)).toEqual(['5%', '12.5%']);
+  });
+
+  it('adds the "Prices are inclusive of GST" note only when prices include tax, and keeps the same totals rows', () => {
+    const inclusive = buildQuotationPdfModel({ quotation: sampleQuotation({ pricesIncludeTax: true }), organization, company, contact });
+    expect(inclusive.priceNote).toBe('Prices are inclusive of GST');
+    const exclusive = buildQuotationPdfModel({ quotation: sampleQuotation(), organization, company, contact });
+    expect(exclusive.priceNote).toBeNull();
   });
 
   it('formats dates without any time-zone shift', () => {
@@ -102,7 +119,7 @@ describe('quotation PDF building blocks', () => {
     expect(short.toString('latin1')).toContain('Q-2026-0007-v2; total INR 0.24');
 
     const manyLines = Array.from({ length: 60 }, (_, index) => ({
-      id: String(index), position: index + 1, description: `Line ${index + 1}`, quantity: '1.00', unitPrice: '1.00', discountPercent: '0.00', lineTotal: '1.00',
+      id: String(index), position: index + 1, description: `Line ${index + 1}`, quantity: '1.00', unitPrice: '1.00', discountPercent: '0.00', gstPercent: '18.00', taxableAmount: '1.00', gstAmount: '0.18', lineTotal: '1.18',
     }));
     const long = await renderQuotationPdf(buildQuotationPdfModel({ quotation: sampleQuotation({ lineItems: manyLines }), organization, company, contact }));
     expect(isCompletePdf(long)).toBe(true);
@@ -117,7 +134,7 @@ describe('GET /api/v1/quotations/:id/pdf', () => {
     const app = createApp();
     const api = await signIn(app, tenant, 'staff');
     const context = await createQuotationContext(tenant);
-    const created = (await api.post('/api/v1/quotations', quotationBody(context, { lineItems: AWKWARD_LINES, discountPercent: '33.33', taxPercent: '18' }))).body.data;
+    const created = (await api.post('/api/v1/quotations', quotationBody(context, { lineItems: AWKWARD_LINES }))).body.data;
     expect(created.total).toBe('0.24');
 
     const res = await api.get(`/api/v1/quotations/${created.id}/pdf`).buffer(true).parse((response, callback) => {

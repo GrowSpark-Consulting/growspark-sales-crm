@@ -4542,3 +4542,195 @@ instead of a plain Mine/Everyone toggle.
   older warnings); **apps/api 658/658, apps/web 183/183 (841)**, run one
   after the other; `pnpm --filter web build` passes. Not clicked through in a
   browser.
+
+## D101 — Day 7, change 1a: a GST rate on every quotation line, any rate 0–100 (2026-11-27)
+
+The manager's review asked for GST per line item and an inclusive/exclusive
+switch. D85's money rule is replaced by the rule below; D85's other guarantees
+(exact decimals, half-up rounding, the screen/PDF/API showing the same text)
+all still hold.
+
+- **Rule — one function in `packages/shared/src/quotation-money.ts`
+  (`calculateQuotationAmounts`), used by the API and by the quotation form's
+  live preview.** The API stays the source of truth: it recalculates on every
+  create/edit and ignores any totals a client sends. Arithmetic is BigInt on
+  integer-scaled values (not floats, and not a decimal library — `packages/
+  shared` has no dependency to add), half-up to 2 dp, once per line per amount:
+  ```
+  lineGross   = round2(qty × unit price × (1 − line discount % / 100))
+  Exclusive:  taxable = lineGross;  gst = round2(taxable × gst% / 100);  total = taxable + gst
+  Inclusive:  taxable = round2(lineGross / (1 + gst% / 100));  gst = lineGross − taxable;  total = lineGross
+  Subtotal = Σ taxable;  GST breakdown = Σ gst per distinct rate;  Total = Σ line total
+  ```
+  Because every line amount is already a whole number of paise, Subtotal +
+  the GST rows = Total to the paisa, always (tested over 40 mixed-rate lines).
+- **Per-line GST rate**: any number 0–100 with up to 2 decimals (0, 3, 5, 12,
+  18, 28, 0.25, 12.5…); 0 is allowed (exempt). New lines default to 18. The
+  form requires the box to be filled ("Enter a GST rate (0 if exempt)") so a
+  blank is never mistaken for "exempt"; an API client that omits `gstPercent`
+  gets 18 (the old quotation default, so older callers keep working).
+- **Worked checks, each a test** (`apps/api/tests/lib/quotation-money.test.ts`):
+  exclusive 1 × ₹1,000 @ 18% → 1000.00 / 180.00 / 1180.00; inclusive →
+  847.46 / 152.54 / 1000.00; a mixed 5% + 12.5% quotation → two breakdown rows
+  ("GST 5%", "GST 12.5%"); plus a 2,000-line comparison with an independent
+  Decimal.js implementation (exclusive and inclusive) — identical results.
+- **Stored per line**: `gst_percent`, `taxable_amount`, `gst_amount`,
+  `line_total` (= what the customer pays for the line). Quotation columns:
+  `subtotal` (= Σ taxable, i.e. before GST — its meaning changed from "before
+  quotation discount"), `tax_amount`, `total`. The GST breakdown by rate is
+  **derived on read from the stored line values** (`groupGstByRate`), never
+  recalculated, so a saved quotation can never print a different figure than
+  it was saved with.
+- **The live preview no longer calls `POST /quotations/calculate`** (it runs
+  the shared function in the browser — the user's explicit instruction, which
+  overrides CLAUDE.md's "no business logic in the frontend" for this one
+  shared function; the API recalculates anyway). The endpoint stays, now
+  taking `{ lineItems, pricesIncludeTax }` and answering with the new totals
+  shape, in case anything else wants server-side figures; it is simply unused
+  by the form (the `useQuotationTotals` hook was deleted).
+- **Migration `20261127100000_quotation_per_line_gst`** — see D102 for the data
+  migration and why the old columns were dropped.
+- **Audit**: `quotation.created` / `quotation.updated` metadata gained
+  `pricesIncludeTax` (added to the audit allowlist); `total` is unchanged in
+  meaning. Tests assert the exact metadata.
+- **PDF**: a **GST** column per line, the GST breakdown rows by rate in the
+  totals block, and a "Prices are inclusive of GST" note when the switch is on.
+  Previously downloaded PDFs are files already in someone's hands and are not
+  touched (PDFs are never stored, D84, so there is nothing stored to change).
+- **Not done**: CGST/SGST/IGST split, HSN/SAC codes (still D87's future item).
+
+## D102 — Day 7, change 1b: the quotation-level discount is removed; the data migration (2026-11-27)
+
+- **Discount is per line only** (the existing line Disc. %). The quotation-wide
+  "Quotation discount (%)" box is gone from the form, API, detail view and PDF.
+  A client that still sends `discountPercent`/`taxPercent` at quotation level
+  has those keys stripped by Zod and ignored (never applied) — tested.
+- **Data migration (hand-written SQL, no data lost)**, run by the user via
+  `pnpm db:migrate` / `pnpm staging:migrate`. For every existing line:
+  `gst_percent` = its quotation's old `tax_percent`; `discount_percent` =
+  `dl + dq − dl×dq/100` (the user's fold formula), rounded to the column's 2 dp;
+  `taxable_amount` = `round2(qty × price × (1−dl/100) × (1−dq/100))` computed
+  from the **exact** combined factor (so rounding the stored percent cannot
+  move the amount); `gst_amount` = `round2(taxable × rate / 100)`; `line_total`
+  = taxable + GST. `prices_include_tax` = false for every quotation.
+  `quotations.subtotal` becomes the old taxable amount (`subtotal −
+  discount_amount`). **`tax_amount` and `total` are not touched, so no existing
+  quotation's total can change.**
+- **Rounding caveat, disclosed**: the old rule rounded the discount and the GST
+  once on the whole quotation; the new rule rounds per line. For a multi-line
+  quotation the sum of the new per-line values can differ from the stored
+  totals by a paisa. The migration leaves the stored totals exactly as issued
+  and prints a NOTICE with how many quotations that affects. Only a Draft can
+  be edited, and saving a Draft recalculates it by the new rule.
+- **Verified on a throwaway database** (`crm_migtest`, built from the real
+  migration files, six fixtures: no discount, quotation discount only, line +
+  quotation discount, the 3 × 0.10 / 33.33% / 18% case, 0% GST, a multi-line
+  12.5% case): every `total` and `tax_amount` identical before and after; five
+  of six match their new line sums exactly, one (the combined-discount case)
+  differs by ₹0.01 in the line sums (66.79 vs the stored 66.80 taxable), which
+  is the caveat above. `prisma migrate diff` against the migrated `crm_test`
+  reports no drift from `schema.prisma`. The throwaway database was dropped
+  afterwards.
+- **Columns dropped, not left unused**: `quotations.discount_percent`,
+  `tax_percent`, `discount_amount`. Leaving them would keep two sources of
+  truth that could disagree. Nothing is lost: the folded discount and the old
+  rate live on in each line. The cost: this is not reversible by a code
+  rollback — after `pnpm staging:migrate`, the previously deployed API (which
+  selects those columns) would fail on quotations until the new API is
+  deployed. Run the migration and deploy the API together.
+- Old CHECKs on the dropped columns went with them; `quotations_amounts_non_
+  negative` was re-created without `discount_amount`; new CHECKs: line
+  `gst_percent` 0–100, line `taxable_amount`/`gst_amount` ≥ 0.
+
+## D103 — Day 7, change 1c: one "prices are tax inclusive/exclusive" switch per quotation (2026-11-27)
+
+- Stored as `quotations.prices_include_tax` (boolean, default false = tax
+  exclusive), changeable only while the quotation is a Draft like everything
+  else on it; `PATCH` with only the switch re-runs the maths over the stored
+  lines (version +1, audited). Duplicate copies it.
+- UI: a two-button "Prices are: Tax exclusive / Tax inclusive" control next to
+  the totals (pressed-state buttons, keyboard accessible), with one line of
+  help text under it; the totals box shows Subtotal, one GST row per rate and
+  Total, and "Prices are inclusive of GST" when on. The line "Amount" column
+  shows the line total. The detail page shows the same totals box.
+- Totals are the customer-facing numbers in both modes: with the switch on, the
+  total equals the sum of the prices typed (₹1,000 stays ₹1,000), and only the
+  split into subtotal and GST changes.
+
+## D104 — Day 7, change 2: "Enquiries" is now "Form submissions" — UI text and web route only (2026-11-27)
+
+- **Changed**: the sidebar item, page title, empty states, filter text, toasts,
+  confirm dialogs, the notification text ("New form submission from …") and
+  its link, the Notifications page help text, the API-keys description, the
+  audit-log link target, and the web route `/enquiries` → `/form-submissions`
+  (route folder moved with `git mv`). Singular "Enquiry" → "Submission".
+- **Old links keep working**: `next.config.ts` has a permanent (308) redirect
+  `/enquiries/:path*` → `/form-submissions/:path*` (covers the list, a detail
+  page and a query string; verified against a real `next dev` server on a
+  throwaway port: `/enquiries` → `/form-submissions`, `/enquiries/abc-123` →
+  `/form-submissions/abc-123`, `?status=SPAM` preserved). The rule is anchored
+  at the start of the path, so `/api/v1/enquiries` is not matched and the API
+  rewrite is untouched (both tested).
+- **Deliberately NOT changed**: database tables/columns (`website_submissions`
+  …), API routes (`/api/v1/enquiries`, `/api/v1/intake/website-enquiries`),
+  permission keys, the `NEW_ENQUIRY` notification type and every other stored
+  value, the website intake endpoint and contract (`docs/intake-contract.md`
+  untouched), the code identifiers (`EnquiriesPageClient`, `use-enquiries`,
+  `enquiryStatusLabel` … — renaming internals would be churn with no user
+  visible effect and would drift from the API names they call), and the
+  CSV-import column alias "enquiry".
+- **Kept on purpose, flagged for the user**: the lead page's **"Original
+  enquiry"** heading (and the lead's Requirement wording) — that is the lead's
+  own captured text for leads from any source, not the inbox; and the PRD
+  clause names quoted in the user guide's coverage table. Say the word and
+  "Original enquiry" becomes "Original submission".
+- **Not found / nothing to change**: the global search has no enquiries group
+  (it searches leads, contacts, companies, deals, quotations), Home and
+  Reports have no enquiry wording, and the permission keys have no display
+  labels anywhere in the UI.
+
+## D105 — Day 7, change 3: visible feedback on every status-change button group (2026-11-27)
+
+- **One shared component**, `apps/web/components/ui/status-button-group.tsx`
+  (`StatusButtonGroup`), now behind every status-change button group:
+  lead status (`Change status`), quotation status (Mark as sent / Accepted /
+  Rejected), deal Close as Won / Close as Lost / Reopen, form-submission Mark
+  as spam, and task Complete / Cancel in My Tasks, Today and every record
+  timeline. It wraps **the caller's own API call, unchanged** — `onSelect` *is*
+  the existing function; which options exist is still decided by the caller
+  (lead: the four open statuses; quotation: only the transitions in the shared
+  `QUOTATION_STATUS_TRANSITIONS`). No transition rule, endpoint or status
+  logic was touched.
+- **Feedback**: pointer cursor; background change on hover; a pressed state; a
+  2 px focus ring for keyboard users; while saving, a spinner on the clicked
+  button and **every button in the group disabled** (a second click is
+  impossible and tested); on success the new status shows as selected (primary
+  style + tick + `aria-pressed`) and the toast "Status changed to <Status>"
+  appears; the refetched record then takes over from the optimistic selection.
+  The current status is shown as the selected button on leads and quotations;
+  tasks and form submissions are pure actions (the row/badge changes), and
+  deal Won/Lost/Reopen likewise (the status badge changes).
+- **Errors keep their existing handling**: leads, tasks, timeline and today
+  already showed an error toast (same message, now produced by the group);
+  confirmation-dialog flows (quotation, deal, spam) keep their error banner
+  inside the dialog. Nothing got an error handler it did not have.
+- **"Existing mutation's pending state"**: these screens call `apiPost`
+  directly rather than a TanStack `useMutation`, so the pending state is the
+  group's own awaiting of the caller's promise (the pipeline board, which does
+  use `useMutation`, is a drag-and-drop/dropdown, not a button group, and was
+  left alone, as was the deal page's "Move stage" menu).
+- **Found while doing it, not fixed globally**: the shared `Button` carries
+  Tailwind's `outline-none`, which (utilities beat the base layer) switches off
+  the global `:focus-visible` ring from `globals.css` — so, as far as the CSS
+  says, ordinary buttons have no visible keyboard focus. The status groups set
+  their own focus ring; changing `Button` itself would touch every screen, so
+  it is reported instead. (Not confirmed in a browser.)
+- **Texts changed**: the old per-screen success toasts for these actions
+  ("Quotation marked sent.", `"<subject>" was completed.`, "Deal closed as
+  Won.", "Deal reopened.") became "Status changed to <Status>"; the spam toast
+  reads "Status changed to Spam. Its linked lead, if any, was archived."
+- **Tests**: `status-button-group.test.tsx` (selected current, no-op on the
+  current, spinner on the clicked button only, all disabled while saving,
+  double click ignored, success toast + selection, error toast + unchanged
+  selection, confirmation dialogs incl. in-dialog errors, pure-action groups,
+  the refetch taking over) and the lead/quotation page tests.

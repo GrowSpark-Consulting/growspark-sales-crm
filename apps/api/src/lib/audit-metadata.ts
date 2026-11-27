@@ -44,6 +44,7 @@ const ALLOWED_METADATA_KEYS = new Set([
   'number',
   'version',
   'total',
+  'pricesIncludeTax',
   'duplicatedFromNumber',
   // CSV import (D95): where the records came from and the counts — never row contents.
   'origin',

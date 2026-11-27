@@ -27,7 +27,7 @@ const ADMIN_LINKS: SettingsLink[] = [
   { href: "/settings/lead-sources", title: "Lead sources", description: "Add, rename, reorder or retire the sources a lead can come from.", icon: Tags },
   { href: "/settings/pipeline", title: "Pipeline stages", description: "Rename, reorder, add or remove deal stages and their probabilities.", icon: ListOrdered },
   { href: "/users", title: "Users", description: "Add people, change roles, deactivate accounts, reset passwords.", icon: Users },
-  { href: "/settings/api-keys", title: "API keys", description: "Keys the website uses to send enquiries into the CRM.", icon: KeyRound },
+  { href: "/settings/api-keys", title: "API keys", description: "Keys the website uses to send form submissions into the CRM.", icon: KeyRound },
   { href: "/settings/audit-log", title: "Audit log", description: "Who changed what, and when.", icon: History },
 ];
 

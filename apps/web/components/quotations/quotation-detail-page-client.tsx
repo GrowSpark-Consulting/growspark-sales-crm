@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { Download, Pencil } from "lucide-react";
-import { formatIndianDecimal, formatRupees, type QuotationResponse } from "@growspark/shared";
+import { QUOTATION_STATUS_TRANSITIONS, formatIndianDecimal, formatRupees, type QuotationResponse, type QuotationStatus } from "@growspark/shared";
 import { apiPost, ApiError } from "@/lib/api-client";
 import { QUOTATIONS_QUERY_KEY_ROOT, quotationPdfHref, useQuotation } from "@/hooks/use-quotations";
 import { DEALS_QUERY_KEY_ROOT, useDeal } from "@/hooks/use-deals";
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { StatusButtonGroup } from "@/components/ui/status-button-group";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { QuotationTotalsSummary } from "@/components/quotations/quotation-totals";
@@ -102,6 +103,7 @@ function LineItemsTable({ quotation }: { quotation: QuotationResponse }) {
             <TableHead className="text-right">Qty</TableHead>
             <TableHead className="text-right">Unit price (₹)</TableHead>
             <TableHead className="text-right">Disc.</TableHead>
+            <TableHead className="text-right">GST</TableHead>
             <TableHead className="text-right">Amount (₹)</TableHead>
           </TableRow>
         </TableHeader>
@@ -113,6 +115,7 @@ function LineItemsTable({ quotation }: { quotation: QuotationResponse }) {
               <TableCell className="gs-num text-right">{formatPercent(item.quantity)}</TableCell>
               <TableCell className="gs-num text-right">{formatIndianDecimal(item.unitPrice)}</TableCell>
               <TableCell className="gs-num text-right">{item.discountPercent === "0.00" ? "—" : `${formatPercent(item.discountPercent)}%`}</TableCell>
+              <TableCell className="gs-num text-right">{formatPercent(item.gstPercent)}%</TableCell>
               <TableCell className="gs-num text-right">{formatIndianDecimal(item.lineTotal)}</TableCell>
             </TableRow>
           ))}
@@ -120,6 +123,45 @@ function LineItemsTable({ quotation }: { quotation: QuotationResponse }) {
       </Table>
     </div>
   );
+}
+
+type QuotationStatusOption = {
+  label: string;
+  statusLabel: string;
+  variant?: "destructive";
+  confirm: { title: string; description: string; confirmLabel: string; destructive?: boolean };
+};
+
+/** How each status the user can request is labelled and confirmed (texts unchanged from before D105). */
+function quotationActionOption(quotation: QuotationResponse, next: QuotationStatus): QuotationStatusOption {
+  if (next === "SENT") {
+    return {
+      label: "Mark as sent",
+      statusLabel: "Sent",
+      confirm: {
+        title: "Mark quotation as sent",
+        description: `${quotation.number} will be marked Sent and can no longer be edited. It expires automatically after ${formatDate(quotation.validUntil)}.`,
+        confirmLabel: "Mark as sent",
+      },
+    };
+  }
+  if (next === "ACCEPTED") {
+    return {
+      label: "Accepted",
+      statusLabel: "Accepted",
+      confirm: { title: "Mark quotation as accepted", description: `The customer accepted ${quotation.number}. This is final.`, confirmLabel: "Mark accepted" },
+    };
+  }
+  return {
+    label: "Rejected",
+    statusLabel: "Rejected",
+    confirm: {
+      title: "Mark quotation as rejected",
+      description: `The customer rejected ${quotation.number}. This is final; you can duplicate it to send a revised quotation.`,
+      confirmLabel: "Mark rejected",
+      destructive: true,
+    },
+  };
 }
 
 export function QuotationDetailPageClient({ quotationId }: { quotationId: string }) {
@@ -135,8 +177,8 @@ export function QuotationDetailPageClient({ quotationId }: { quotationId: string
   }
 
   async function changeStatus(status: "SENT" | "ACCEPTED" | "REJECTED") {
+    // The status group shows the success toast ("Status changed to …") and any error.
     const result = await apiPost<{ data: QuotationResponse }>(`/api/v1/quotations/${quotationId}/status`, { status });
-    toast.success(`Quotation marked ${quotationStatusLabel(result.data.status).toLowerCase()}.`);
     invalidate();
     if (status === "ACCEPTED" && result.data.dealId && dealQuery.data?.data.status === "OPEN") {
       setWonPromptOpen(true);
@@ -190,6 +232,15 @@ export function QuotationDetailPageClient({ quotationId }: { quotationId: string
   }
 
   const archived = Boolean(quotation.archivedAt);
+  // The current status is the selected button; the others are exactly the
+  // transitions the shared rule allows from it (nothing else is offered).
+  const statusOptions = [
+    { value: quotation.status, label: quotationStatusLabel(quotation.status) },
+    ...QUOTATION_STATUS_TRANSITIONS[quotation.status].map((next) => ({
+      value: next,
+      ...quotationActionOption(quotation, next),
+    })),
+  ];
   const dealStillOpen = quotation.status === "ACCEPTED" && Boolean(quotation.dealId) && dealQuery.data?.data.status === "OPEN";
 
   return (
@@ -218,38 +269,19 @@ export function QuotationDetailPageClient({ quotationId }: { quotationId: string
                 </Link>
               </Button>
             )}
-            {quotation.status === "DRAFT" && !archived && (
-              <ConfirmActionDialog
-                triggerLabel="Mark as sent"
-                title="Mark quotation as sent"
-                description={`${quotation.number} will be marked Sent and can no longer be edited. It expires automatically after ${formatDate(quotation.validUntil)}.`}
-                confirmLabel="Mark as sent"
-                onConfirm={() => changeStatus("SENT")}
-              />
-            )}
-            {quotation.status === "SENT" && !archived && (
-              <ConfirmActionDialog
-                triggerLabel="Accepted"
-                title="Mark quotation as accepted"
-                description={`The customer accepted ${quotation.number}. This is final.`}
-                confirmLabel="Mark accepted"
-                onConfirm={() => changeStatus("ACCEPTED")}
-              />
-            )}
-            {quotation.status === "SENT" && !archived && (
-              <ConfirmActionDialog
-                triggerLabel="Rejected"
-                title="Mark quotation as rejected"
-                description={`The customer rejected ${quotation.number}. This is final; you can duplicate it to send a revised quotation.`}
-                confirmLabel="Mark rejected"
-                destructive
-                onConfirm={() => changeStatus("REJECTED")}
+            {statusOptions.length > 1 && !archived && (
+              <StatusButtonGroup
+                groupLabel="Change status"
+                options={statusOptions}
+                current={quotation.status}
+                onSelect={(status) => changeStatus(status as "SENT" | "ACCEPTED" | "REJECTED")}
+                errorMessage="Could not change status. Please try again."
               />
             )}
             <ConfirmActionDialog
               triggerLabel="Duplicate"
               title="Duplicate quotation"
-              description={`A new draft will be created with a new number and today's date, copying ${quotation.number}'s company, contact, deal, line items, discount, tax, terms and notes.`}
+              description={`A new draft will be created with a new number and today's date, copying ${quotation.number}'s company, contact, deal, line items (with their discounts and GST rates), tax setting, terms and notes.`}
               confirmLabel="Duplicate"
               onConfirm={duplicate}
             />
@@ -308,7 +340,10 @@ export function QuotationDetailPageClient({ quotationId }: { quotationId: string
                   </Alert>
                 )}
                 <LineItemsTable quotation={quotation} />
-                <QuotationTotalsSummary totals={quotation} discountPercent={quotation.discountPercent} taxPercent={quotation.taxPercent} />
+                <QuotationTotalsSummary
+                  totals={{ subtotal: quotation.subtotal, gstBreakdown: quotation.gstBreakdown ?? [], total: quotation.total }}
+                  pricesIncludeTax={quotation.pricesIncludeTax}
+                />
                 <div className="grid gap-4 rounded-lg border border-line bg-surface p-4 sm:grid-cols-2">
                   <div className="sm:col-span-2">
                     <Field label="Terms" value={quotation.terms ? <span className="whitespace-pre-wrap">{quotation.terms}</span> : null} />

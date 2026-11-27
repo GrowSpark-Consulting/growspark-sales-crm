@@ -19,6 +19,7 @@ export const QUOTATION_STATUS_TRANSITIONS: Readonly<Record<QuotationStatus, read
   EXPIRED: [],
 };
 
+/** Default GST rate of a new line item (D101); every line carries its own rate, 0 (exempt) is allowed. */
 export const DEFAULT_QUOTATION_TAX_PERCENT = '18';
 export const DEFAULT_QUOTATION_VALIDITY_DAYS = 30;
 export const MAX_QUOTATION_LINE_ITEMS = 100;
@@ -51,6 +52,8 @@ export const quotationLineItemInputSchema = z.object({
   quantity: quantityInput,
   unitPrice: moneyInput,
   discountPercent: percentInput.optional(),
+  /** Any rate 0–100 with up to 2 decimals (0, 5, 12.5, 0.25…). Omitted means the default rate (18). */
+  gstPercent: percentInput.optional(),
 });
 export type QuotationLineItemInput = z.input<typeof quotationLineItemInputSchema>;
 
@@ -63,8 +66,8 @@ export const quotationCreatableFields = {
   ownerId: z.uuid().nullable().optional(),
   issueDate: z.iso.date().optional(),
   validUntil: z.iso.date().optional(),
-  discountPercent: percentInput.optional(),
-  taxPercent: percentInput.optional(),
+  /** true: line prices already include GST; false (default): GST is added on top (D101). */
+  pricesIncludeTax: z.boolean().optional(),
   terms: optionalLongText,
   notes: optionalLongText,
   lineItems: z
@@ -86,10 +89,9 @@ export const updateQuotationSchema = z
   .refine(validUntilNotBeforeIssue, validUntilMessage);
 export type UpdateQuotationInput = z.output<typeof updateQuotationSchema>;
 
-/** Line items + the two quotation-level percentages: everything the money rule needs (POST /quotations/calculate). */
+/** Line items + the inclusive/exclusive toggle: everything the money rule needs (POST /quotations/calculate). */
 export const calculateQuotationSchema = z.object({
-  discountPercent: percentInput.optional(),
-  taxPercent: percentInput.optional(),
+  pricesIncludeTax: z.boolean().optional(),
   lineItems: quotationCreatableFields.lineItems,
 });
 export type CalculateQuotationInput = z.output<typeof calculateQuotationSchema>;
@@ -116,12 +118,20 @@ export const listQuotationsQuerySchema = pageQuerySchema.extend({
 });
 export type ListQuotationsQuery = z.infer<typeof listQuotationsQuerySchema>;
 
+export const quotationGstBreakdownRowSchema = z.object({
+  /** Normalised rate: "18", "12.5", "0.25". */
+  rate: z.string(),
+  taxable: z.string(),
+  gst: z.string(),
+});
+
 export const quotationTotalsSchema = z.object({
+  /** Σ taxable (pre-GST) amounts. */
   subtotal: z.string(),
-  discountAmount: z.string(),
-  taxableAmount: z.string(),
+  gstBreakdown: z.array(quotationGstBreakdownRowSchema),
   taxAmount: z.string(),
   total: z.string(),
+  /** Per line: what the customer pays for the line. */
   lineTotals: z.array(z.string()),
 });
 export type QuotationTotals = z.infer<typeof quotationTotalsSchema>;
@@ -133,6 +143,11 @@ export const quotationLineItemResponseSchema = z.object({
   quantity: z.string(),
   unitPrice: z.string(),
   discountPercent: z.string(),
+  gstPercent: z.string(),
+  /** The line's pre-GST value (what GST is charged on). */
+  taxableAmount: z.string(),
+  gstAmount: z.string(),
+  /** What the customer pays for the line: taxable + GST (exclusive) or the entered amount (inclusive). */
   lineTotal: z.string(),
 });
 export type QuotationLineItemResponse = z.infer<typeof quotationLineItemResponseSchema>;
@@ -156,14 +171,13 @@ export const quotationResponseSchema = z.object({
   issueDate: z.string(),
   validUntil: z.string(),
   currency: z.string(),
-  discountPercent: z.string(),
-  taxPercent: z.string(),
+  pricesIncludeTax: z.boolean(),
+  /** Σ line taxable amounts (pre-GST). */
   subtotal: z.string(),
-  discountAmount: z.string(),
-  /** subtotal − discount amount: what GST is charged on. */
-  taxableAmount: z.string(),
   taxAmount: z.string(),
   total: z.string(),
+  /** GST by rate, built from the stored line amounts. Present on single-quotation responses; omitted from list rows. */
+  gstBreakdown: z.array(quotationGstBreakdownRowSchema).optional(),
   terms: z.string().nullable(),
   notes: z.string().nullable(),
   sentAt: z.string().nullable(),

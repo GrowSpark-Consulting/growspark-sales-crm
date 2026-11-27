@@ -41,7 +41,7 @@ export function EnquiriesPageClient() {
       header: "Received",
       sortable: true,
       render: (enquiry) => (
-        <Link href={`/enquiries/${enquiry.id}`} className="body-strong text-ink hover:underline">
+        <Link href={`/form-submissions/${enquiry.id}`} className="body-strong text-ink hover:underline">
           {formatDate(enquiry.receivedAt)} {formatTime(enquiry.receivedAt)}
         </Link>
       ),
@@ -92,10 +92,10 @@ export function EnquiriesPageClient() {
         pageSize={pageSize}
         total={listQuery.data?.meta.total ?? 0}
         onPageChange={(nextPage) => setParams({ page: nextPage })}
-        emptyTitle={archived ? "No archived enquiries" : "No enquiries yet"}
+        emptyTitle={archived ? "No archived form submissions" : "No form submissions yet"}
         emptyDescription={
           archived
-            ? "Enquiries you archive will appear here."
+            ? "Form submissions you archive will appear here."
             : "Website form submissions will appear here once the intake API receives one."
         }
         filterBar={
@@ -148,7 +148,7 @@ export function EnquiriesPageClient() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ANY}>Active enquiries</SelectItem>
+                <SelectItem value={ANY}>Active submissions</SelectItem>
                 <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>

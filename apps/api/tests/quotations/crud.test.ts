@@ -39,12 +39,16 @@ describe('Quotations: create and read', () => {
     expect(q.dealName).toBe('Example Foods automation');
     expect(q.issueDate).toBe(todayKey());
     expect(q.validUntil).toBe(addDays(todayKey(), 30));
-    expect(q.taxPercent).toBe('18.00');
-    expect(q.discountPercent).toBe('0.00');
+    expect(q.pricesIncludeTax).toBe(false);
     // 2 × 45,000 less 10% = 81,000; + 1,25,000 = 2,06,000; GST 18% = 37,080
-    expect(q).toMatchObject({ subtotal: '206000.00', discountAmount: '0.00', taxableAmount: '206000.00', taxAmount: '37080.00', total: '243080.00' });
+    expect(q).toMatchObject({ subtotal: '206000.00', taxAmount: '37080.00', total: '243080.00', gstBreakdown: [{ rate: '18', taxable: '206000.00', gst: '37080.00' }] });
+    expect(q).not.toHaveProperty('discountPercent');
+    expect(q).not.toHaveProperty('taxPercent');
+    expect(q).not.toHaveProperty('discountAmount');
     expect(q.lineItems).toHaveLength(2);
-    expect(q.lineItems[0]).toMatchObject({ position: 1, quantity: '2.00', unitPrice: '45000.00', discountPercent: '10.00', lineTotal: '81000.00' });
+    expect(q.lineItems[0]).toMatchObject({
+      position: 1, quantity: '2.00', unitPrice: '45000.00', discountPercent: '10.00', gstPercent: '18.00', taxableAmount: '81000.00', gstAmount: '14580.00', lineTotal: '95580.00',
+    });
     expect(q.terms).toBe('Net 30');
 
     const getRes = await api.get(`/api/v1/quotations/${q.id}`);
@@ -52,7 +56,7 @@ describe('Quotations: create and read', () => {
     expect(getRes.body.data.total).toBe('243080.00');
   });
 
-  it('ignores any totals the client sends and recomputes them (awkward numbers: 3 × 0.10, 33.33%, 18%)', async () => {
+  it('ignores any totals the client sends and recomputes them (awkward numbers: 3 × 0.10, 33.33% line discount, 18%)', async () => {
     const tenant = await createTestTenant();
     const app = createApp();
     const api = await signIn(app, tenant);
@@ -61,13 +65,11 @@ describe('Quotations: create and read', () => {
     const res = await api.post('/api/v1/quotations', {
       ...quotationBody(context),
       lineItems: AWKWARD_LINES,
-      discountPercent: '33.33',
-      taxPercent: 18,
       subtotal: '1.00',
       total: '999.99',
     });
     expect(res.status).toBe(201);
-    expect(res.body.data).toMatchObject({ subtotal: '0.30', discountAmount: '0.10', taxableAmount: '0.20', taxAmount: '0.04', total: '0.24' });
+    expect(res.body.data).toMatchObject({ subtotal: '0.20', taxAmount: '0.04', total: '0.24' });
 
     const stored = await prisma.quotation.findUniqueOrThrow({ where: { id: res.body.data.id } });
     expect(stored.total.toFixed(2)).toBe('0.24');
@@ -79,13 +81,78 @@ describe('Quotations: create and read', () => {
     const api = await signIn(app, tenant, 'staff');
 
     const res = await api.post('/api/v1/quotations/calculate', {
-      lineItems: [{ description: 'x', quantity: '3', unitPrice: '33.33' }],
-      discountPercent: '33.33',
-      taxPercent: '18',
+      lineItems: [{ description: 'x', quantity: '3', unitPrice: '33.33', discountPercent: '33.33', gstPercent: '18' }],
     });
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ lineTotals: ['99.99'], subtotal: '99.99', discountAmount: '33.33', taxableAmount: '66.66', taxAmount: '12.00', total: '78.66' });
+    // 99.99 less 33.33% = 66.66; GST 18% = 11.9988 -> 12.00; total 78.66
+    expect(res.body.data).toEqual({
+      lineTotals: ['78.66'], subtotal: '66.66', gstBreakdown: [{ rate: '18', taxable: '66.66', gst: '12.00' }], taxAmount: '12.00', total: '78.66',
+    });
     expect(await prisma.quotation.count()).toBe(0);
+  });
+
+  it('GST is per line: any rate 0–100 with 2 decimals, one breakdown row per rate, a missing rate defaults to 18', async () => {
+    const tenant = await createTestTenant();
+    const app = createApp();
+    const api = await signIn(app, tenant);
+    const context = await createQuotationContext(tenant);
+
+    const res = await api.post('/api/v1/quotations', quotationBody(context, {
+      lineItems: [
+        { description: 'Five', quantity: '1', unitPrice: '1000.00', gstPercent: '5' },
+        { description: 'Exempt', quantity: '1', unitPrice: '300.00', gstPercent: '0' },
+        { description: 'Odd', quantity: '2', unitPrice: '500.00', gstPercent: '12.5' },
+        { description: 'Quarter', quantity: '1', unitPrice: '1000.00', gstPercent: 0.25 },
+        { description: 'Default', quantity: '1', unitPrice: '100.00' },
+      ],
+    }));
+    expect(res.status).toBe(201);
+    const q = res.body.data;
+    expect(q.lineItems.map((item: { gstPercent: string }) => item.gstPercent)).toEqual(['5.00', '0.00', '12.50', '0.25', '18.00']);
+    expect(q.gstBreakdown).toEqual([
+      { rate: '0', taxable: '300.00', gst: '0.00' },
+      { rate: '0.25', taxable: '1000.00', gst: '2.50' },
+      { rate: '5', taxable: '1000.00', gst: '50.00' },
+      { rate: '12.5', taxable: '1000.00', gst: '125.00' },
+      { rate: '18', taxable: '100.00', gst: '18.00' },
+    ]);
+    expect(q).toMatchObject({ subtotal: '3400.00', taxAmount: '195.50', total: '3595.50' });
+  });
+
+  it('the inclusive/exclusive toggle is stored, changes the maths, and can be switched while the quotation is a draft', async () => {
+    const tenant = await createTestTenant();
+    const app = createApp();
+    const api = await signIn(app, tenant);
+    const context = await createQuotationContext(tenant);
+    const lineItems = [{ description: 'Workshop', quantity: '1', unitPrice: '1000.00', gstPercent: '18' }];
+
+    const exclusive = (await api.post('/api/v1/quotations', quotationBody(context, { lineItems }))).body.data;
+    expect(exclusive).toMatchObject({ pricesIncludeTax: false, subtotal: '1000.00', taxAmount: '180.00', total: '1180.00' });
+
+    const inclusive = (await api.post('/api/v1/quotations', quotationBody(context, { lineItems, pricesIncludeTax: true }))).body.data;
+    expect(inclusive).toMatchObject({ pricesIncludeTax: true, subtotal: '847.46', taxAmount: '152.54', total: '1000.00' });
+    expect(inclusive.lineItems[0]).toMatchObject({ taxableAmount: '847.46', gstAmount: '152.54', lineTotal: '1000.00' });
+
+    // Switching the toggle alone on a draft re-runs the maths over the stored lines.
+    const switched = await api.patch(`/api/v1/quotations/${exclusive.id}`, { pricesIncludeTax: true });
+    expect(switched.status).toBe(200);
+    expect(switched.body.data).toMatchObject({ pricesIncludeTax: true, subtotal: '847.46', taxAmount: '152.54', total: '1000.00', version: 2 });
+    const stored = await prisma.quotation.findUniqueOrThrow({ where: { id: exclusive.id } });
+    expect(stored.pricesIncludeTax).toBe(true);
+  });
+
+  it('a retired quotation-level discount or GST sent by an old client is ignored, never applied', async () => {
+    const tenant = await createTestTenant();
+    const app = createApp();
+    const api = await signIn(app, tenant);
+    const context = await createQuotationContext(tenant);
+    const res = await api.post('/api/v1/quotations', quotationBody(context, {
+      lineItems: [{ description: 'x', quantity: '1', unitPrice: '1000.00', gstPercent: '18' }],
+      discountPercent: '50',
+      taxPercent: '28',
+    }));
+    expect(res.status).toBe(201);
+    expect(res.body.data.total).toBe('1180.00');
   });
 
   it('numbers are sequential per organisation and never collide under concurrent creates', async () => {
@@ -111,7 +178,7 @@ describe('Quotations: create and read', () => {
     const tenant = await createTestTenant();
     const context = await createQuotationContext(tenant);
     const ctx = { userId: tenant.adminUser.id, orgId: tenant.organization.id, role: toSharedRole(tenant.adminUser.role) };
-    const body = { ...quotationBody(context), discountPercent: undefined, taxPercent: undefined } as never;
+    const body = quotationBody(context) as never;
 
     const late2026 = await quotationsService.createQuotation(ctx, body, new Date('2026-12-31T10:00:00.000Z'));
     const again2026 = await quotationsService.createQuotation(ctx, body, new Date('2026-12-31T12:00:00.000Z'));
@@ -145,7 +212,11 @@ describe('Quotations: create and read', () => {
     expect((await api.post('/api/v1/quotations', quotationBody(context, { lineItems: [] }))).status).toBe(422);
     expect((await api.post('/api/v1/quotations', quotationBody(context, { lineItems: [{ description: 'x', quantity: '1', unitPrice: '1.005' }] }))).status).toBe(422);
     expect((await api.post('/api/v1/quotations', quotationBody(context, { lineItems: [{ description: 'x', quantity: '0', unitPrice: '1' }] }))).status).toBe(422);
-    expect((await api.post('/api/v1/quotations', quotationBody(context, { taxPercent: '100.01' }))).status).toBe(422);
+    expect((await api.post('/api/v1/quotations', quotationBody(context, { lineItems: [{ description: 'x', quantity: '1', unitPrice: '1', gstPercent: '100.01' }] }))).status).toBe(422);
+    expect((await api.post('/api/v1/quotations', quotationBody(context, { lineItems: [{ description: 'x', quantity: '1', unitPrice: '1', gstPercent: '-1' }] }))).status).toBe(422);
+    expect((await api.post('/api/v1/quotations', quotationBody(context, { lineItems: [{ description: 'x', quantity: '1', unitPrice: '1', gstPercent: '18.005' }] }))).status).toBe(422);
+    expect((await api.post('/api/v1/quotations', quotationBody(context, { lineItems: [{ description: 'x', quantity: '1', unitPrice: '1', discountPercent: '100.5' }] }))).status).toBe(422);
+    expect((await api.post('/api/v1/quotations', quotationBody(context, { pricesIncludeTax: 'yes' }))).status).toBe(422);
     expect((await api.post('/api/v1/quotations', quotationBody(context, { issueDate: '2026-11-20', validUntil: '2026-11-19' }))).status).toBe(422);
     expect(await prisma.quotation.count()).toBe(0);
   });
@@ -160,8 +231,7 @@ describe('Quotations: edit, status, duplicate, archive', () => {
     const created = (await api.post('/api/v1/quotations', quotationBody(context))).body.data;
 
     const res = await api.patch(`/api/v1/quotations/${created.id}`, {
-      lineItems: [{ description: 'Only line', quantity: '3', unitPrice: '33.33' }],
-      discountPercent: '33.33',
+      lineItems: [{ description: 'Only line', quantity: '3', unitPrice: '33.33', discountPercent: '33.33', gstPercent: '18' }],
       notes: 'Revised',
     });
     expect(res.status).toBe(200);
@@ -224,7 +294,7 @@ describe('Quotations: edit, status, duplicate, archive', () => {
     const staff = await signIn(app, tenant, 'staff');
     const context = await createQuotationContext(tenant);
     const source = (
-      await admin.post('/api/v1/quotations', quotationBody(context, { issueDate: '2026-01-05', validUntil: '2026-01-20', discountPercent: '33.33', terms: 'Net 30' }))
+      await admin.post('/api/v1/quotations', quotationBody(context, { issueDate: '2026-01-05', validUntil: '2026-01-20', pricesIncludeTax: true, terms: 'Net 30' }))
     ).body.data;
     await admin.post(`/api/v1/quotations/${source.id}/status`, { status: 'SENT' });
     await admin.post(`/api/v1/quotations/${source.id}/archive`);
@@ -245,10 +315,10 @@ describe('Quotations: edit, status, duplicate, archive', () => {
     expect(copy.dealId).toBe(context.deal.id);
     expect(copy.ownerId).toBe(tenant.staffUser.id);
     expect(copy.terms).toBe('Net 30');
-    expect(copy).toMatchObject({ subtotal: source.subtotal, discountAmount: source.discountAmount, taxAmount: source.taxAmount, total: source.total });
-    expect(copy.lineItems.map((item: { description: string; lineTotal: string }) => [item.description, item.lineTotal])).toEqual(
-      source.lineItems.map((item: { description: string; lineTotal: string }) => [item.description, item.lineTotal]),
-    );
+    expect(copy).toMatchObject({ pricesIncludeTax: true, subtotal: source.subtotal, taxAmount: source.taxAmount, total: source.total, gstBreakdown: source.gstBreakdown });
+    type Line = { description: string; gstPercent: string; discountPercent: string; taxableAmount: string; gstAmount: string; lineTotal: string };
+    const pick = (item: Line) => [item.description, item.gstPercent, item.discountPercent, item.taxableAmount, item.gstAmount, item.lineTotal];
+    expect(copy.lineItems.map(pick)).toEqual(source.lineItems.map(pick));
 
     const audit = await prisma.auditEvent.findFirstOrThrow({ where: { entityId: copy.id, action: 'quotation.duplicated' } });
     expect(audit.actorId).toBe(tenant.staffUser.id);
@@ -339,7 +409,7 @@ describe('Quotations: list filters, permissions, isolation, audit', () => {
     const auditRes = await api.get('/api/v1/audit-events?entityType=quotation&pageSize=50');
     expect(auditRes.status).toBe(200);
     const created = auditRes.body.data.find((row: { action: string }) => row.action === 'quotation.created');
-    expect(created.metadata).toEqual({ number, companyId: context.company.id, contactId: context.contact.id, dealId: context.deal.id, total: '243080.00' });
+    expect(created.metadata).toEqual({ number, companyId: context.company.id, contactId: context.contact.id, dealId: context.deal.id, total: '243080.00', pricesIncludeTax: false });
     const statusRow = auditRes.body.data.find((row: { action: string }) => row.action === 'quotation.status_changed');
     expect(statusRow.metadata).toEqual({ number, fromStatus: 'DRAFT', toStatus: 'SENT' });
   });

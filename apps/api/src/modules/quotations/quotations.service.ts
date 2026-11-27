@@ -20,7 +20,7 @@ import { writeAudit } from '../../lib/audit.js';
 import { toSkipTake, buildPaginationMeta } from '../../lib/pagination.js';
 import { buildOrderBy } from '../../lib/list-query.js';
 import { orgDateKey } from '../../lib/org-time.js';
-import { calculateQuotationTotals, toMoneyString, type MoneyLineInput } from '../../lib/quotation-money.js';
+import { calculateQuotationAmounts, groupGstByRate, toMoneyString, type QuotationAmounts, type QuotationMoneyLine } from '../../lib/quotation-money.js';
 import { allocateQuotationNumber } from '../../lib/quotation-number.js';
 import { logger } from '../../logger.js';
 import { notifyQuotationDecision } from '../notifications/notifications.service.js';
@@ -84,11 +84,15 @@ function toLineItemResponse(item: QuotationLineItem): QuotationLineItemResponse 
     quantity: item.quantity.toFixed(2),
     unitPrice: toMoneyString(item.unitPrice),
     discountPercent: item.discountPercent.toFixed(2),
+    gstPercent: item.gstPercent.toFixed(2),
+    taxableAmount: toMoneyString(item.taxableAmount),
+    gstAmount: toMoneyString(item.gstAmount),
     lineTotal: toMoneyString(item.lineTotal),
   };
 }
 
 function toQuotationResponse(quotation: QuotationWithSummary, todayKey: string): QuotationResponse {
+  const lineItems = quotation.lineItems?.map(toLineItemResponse);
   return {
     id: quotation.id,
     number: quotation.number,
@@ -106,11 +110,8 @@ function toQuotationResponse(quotation: QuotationWithSummary, todayKey: string):
     issueDate: dateKey(quotation.issueDate),
     validUntil: dateKey(quotation.validUntil),
     currency: quotation.currency,
-    discountPercent: quotation.discountPercent.toFixed(2),
-    taxPercent: quotation.taxPercent.toFixed(2),
+    pricesIncludeTax: quotation.pricesIncludeTax,
     subtotal: toMoneyString(quotation.subtotal),
-    discountAmount: toMoneyString(quotation.discountAmount),
-    taxableAmount: quotation.subtotal.minus(quotation.discountAmount).toFixed(2),
     taxAmount: toMoneyString(quotation.taxAmount),
     total: toMoneyString(quotation.total),
     terms: quotation.terms,
@@ -119,7 +120,7 @@ function toQuotationResponse(quotation: QuotationWithSummary, todayKey: string):
     archivedAt: quotation.archivedAt ? quotation.archivedAt.toISOString() : null,
     createdAt: quotation.createdAt.toISOString(),
     updatedAt: quotation.updatedAt.toISOString(),
-    ...(quotation.lineItems ? { lineItems: quotation.lineItems.map(toLineItemResponse) } : {}),
+    ...(lineItems ? { lineItems, gstBreakdown: groupGstByRate(lineItems) } : {}),
   };
 }
 
@@ -284,7 +285,15 @@ function assertDates(issueDate: string, validUntil: string): void {
   }
 }
 
-function lineItemRows(orgId: string, quotationId: string, lines: readonly (MoneyLineInput & { description: string })[], lineTotals: string[]) {
+/** A line as the service holds it: description + the money inputs, GST rate always present. */
+type ServiceLine = QuotationMoneyLine & { description: string; gstPercent: string };
+
+/** Fills the default GST rate (18) for a line that arrived without one. */
+function withDefaultGst(line: QuotationMoneyLine & { description: string }): ServiceLine {
+  return { ...line, gstPercent: line.gstPercent ?? DEFAULT_QUOTATION_TAX_PERCENT };
+}
+
+function lineItemRows(orgId: string, quotationId: string, lines: readonly ServiceLine[], amounts: QuotationAmounts) {
   return lines.map((line, index) => ({
     organizationId: orgId,
     quotationId,
@@ -293,21 +302,30 @@ function lineItemRows(orgId: string, quotationId: string, lines: readonly (Money
     quantity: new Prisma.Decimal(line.quantity),
     unitPrice: new Prisma.Decimal(line.unitPrice),
     discountPercent: new Prisma.Decimal(line.discountPercent ?? '0'),
-    lineTotal: new Prisma.Decimal(lineTotals[index]!),
+    gstPercent: new Prisma.Decimal(line.gstPercent),
+    taxableAmount: new Prisma.Decimal(amounts.lines[index]!.taxable),
+    gstAmount: new Prisma.Decimal(amounts.lines[index]!.gst),
+    lineTotal: new Prisma.Decimal(amounts.lines[index]!.total),
   }));
 }
 
-function totalsData(totals: ReturnType<typeof calculateQuotationTotals>) {
+function totalsData(amounts: QuotationAmounts) {
   return {
-    subtotal: new Prisma.Decimal(totals.subtotal),
-    discountAmount: new Prisma.Decimal(totals.discountAmount),
-    taxAmount: new Prisma.Decimal(totals.taxAmount),
-    total: new Prisma.Decimal(totals.total),
+    subtotal: new Prisma.Decimal(amounts.subtotal),
+    taxAmount: new Prisma.Decimal(amounts.taxAmount),
+    total: new Prisma.Decimal(amounts.total),
   };
 }
 
 export function calculateTotals(input: CalculateQuotationInput): QuotationTotals {
-  return calculateQuotationTotals(input.lineItems, input.discountPercent ?? '0', input.taxPercent ?? DEFAULT_QUOTATION_TAX_PERCENT);
+  const amounts = calculateQuotationAmounts(input.lineItems.map(withDefaultGst), input.pricesIncludeTax ?? false);
+  return {
+    subtotal: amounts.subtotal,
+    gstBreakdown: amounts.gstBreakdown,
+    taxAmount: amounts.taxAmount,
+    total: amounts.total,
+    lineTotals: amounts.lines.map((line) => line.total),
+  };
 }
 
 export async function createQuotation(ctx: RequestContext, input: CreateQuotationInput, now = new Date()): Promise<QuotationResponse> {
@@ -315,9 +333,9 @@ export async function createQuotation(ctx: RequestContext, input: CreateQuotatio
   const issueDate = input.issueDate ?? todayKey;
   const validUntil = input.validUntil ?? addDaysToKey(issueDate, DEFAULT_QUOTATION_VALIDITY_DAYS);
   assertDates(issueDate, validUntil);
-  const discountPercent = input.discountPercent ?? '0';
-  const taxPercent = input.taxPercent ?? DEFAULT_QUOTATION_TAX_PERCENT;
-  const totals = calculateQuotationTotals(input.lineItems, discountPercent, taxPercent);
+  const pricesIncludeTax = input.pricesIncludeTax ?? false;
+  const lines = input.lineItems.map(withDefaultGst);
+  const amounts = calculateQuotationAmounts(lines, pricesIncludeTax);
 
   const createdId = await prisma.$transaction(async (tx) => {
     const relations: Relations = {
@@ -335,19 +353,18 @@ export async function createQuotation(ctx: RequestContext, input: CreateQuotatio
         ...relations,
         issueDate: dateFromKey(issueDate),
         validUntil: dateFromKey(validUntil),
-        discountPercent: new Prisma.Decimal(discountPercent),
-        taxPercent: new Prisma.Decimal(taxPercent),
-        ...totalsData(totals),
+        pricesIncludeTax,
+        ...totalsData(amounts),
         terms: input.terms || null,
         notes: input.notes || null,
       },
     });
-    await tx.quotationLineItem.createMany({ data: lineItemRows(ctx.orgId, quotation.id, input.lineItems, totals.lineTotals) });
+    await tx.quotationLineItem.createMany({ data: lineItemRows(ctx.orgId, quotation.id, lines, amounts) });
     await writeAudit(tx, ctx, {
       action: 'quotation.created',
       entityType: 'quotation',
       entityId: quotation.id,
-      metadata: { number, companyId: relations.companyId, contactId: relations.contactId, dealId: relations.dealId, total: totals.total },
+      metadata: { number, companyId: relations.companyId, contactId: relations.contactId, dealId: relations.dealId, total: amounts.total, pricesIncludeTax },
     });
     return quotation.id;
   });
@@ -375,15 +392,17 @@ export async function updateQuotation(ctx: RequestContext, id: string, input: Up
     const validUntil = input.validUntil ?? dateKey(existing.validUntil);
     assertDates(issueDate, validUntil);
 
-    const lines = input.lineItems ?? existing.lineItems.map((item) => ({
-      description: item.description,
-      quantity: item.quantity.toFixed(2),
-      unitPrice: item.unitPrice.toFixed(2),
-      discountPercent: item.discountPercent.toFixed(2),
-    }));
-    const discountPercent = input.discountPercent ?? existing.discountPercent.toFixed(2);
-    const taxPercent = input.taxPercent ?? existing.taxPercent.toFixed(2);
-    const totals = calculateQuotationTotals(lines, discountPercent, taxPercent);
+    const lines: ServiceLine[] = input.lineItems
+      ? input.lineItems.map(withDefaultGst)
+      : existing.lineItems.map((item) => ({
+          description: item.description,
+          quantity: item.quantity.toFixed(2),
+          unitPrice: item.unitPrice.toFixed(2),
+          discountPercent: item.discountPercent.toFixed(2),
+          gstPercent: item.gstPercent.toFixed(2),
+        }));
+    const pricesIncludeTax = input.pricesIncludeTax ?? existing.pricesIncludeTax;
+    const amounts = calculateQuotationAmounts(lines, pricesIncludeTax);
 
     // Conditional on the status read above, so a concurrent "mark as sent"
     // can't slip in between this check and the write.
@@ -393,9 +412,8 @@ export async function updateQuotation(ctx: RequestContext, id: string, input: Up
         ...relations,
         issueDate: dateFromKey(issueDate),
         validUntil: dateFromKey(validUntil),
-        discountPercent: new Prisma.Decimal(discountPercent),
-        taxPercent: new Prisma.Decimal(taxPercent),
-        ...totalsData(totals),
+        pricesIncludeTax,
+        ...totalsData(amounts),
         ...(input.terms !== undefined ? { terms: input.terms || null } : {}),
         ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
         version: { increment: 1 },
@@ -404,12 +422,12 @@ export async function updateQuotation(ctx: RequestContext, id: string, input: Up
     if (count === 0) throw new ApiError(409, 'CONFLICT', 'This quotation changed while you were editing it. Reload and try again.');
 
     await tx.quotationLineItem.deleteMany({ where: { quotationId: existing.id } });
-    await tx.quotationLineItem.createMany({ data: lineItemRows(ctx.orgId, existing.id, lines, totals.lineTotals) });
+    await tx.quotationLineItem.createMany({ data: lineItemRows(ctx.orgId, existing.id, lines, amounts) });
     await writeAudit(tx, ctx, {
       action: 'quotation.updated',
       entityType: 'quotation',
       entityId: existing.id,
-      metadata: { number: existing.number, version: existing.version + 1, changedFields: Object.keys(input), total: totals.total },
+      metadata: { number: existing.number, version: existing.version + 1, changedFields: Object.keys(input), total: amounts.total, pricesIncludeTax },
     });
     return existing.id;
   });
@@ -488,10 +506,8 @@ export async function duplicateQuotation(ctx: RequestContext, id: string, now = 
         issueDate: dateFromKey(todayKey),
         validUntil: dateFromKey(addDaysToKey(todayKey, DEFAULT_QUOTATION_VALIDITY_DAYS)),
         currency: source.currency,
-        discountPercent: source.discountPercent,
-        taxPercent: source.taxPercent,
+        pricesIncludeTax: source.pricesIncludeTax,
         subtotal: source.subtotal,
-        discountAmount: source.discountAmount,
         taxAmount: source.taxAmount,
         total: source.total,
         terms: source.terms,
@@ -507,6 +523,9 @@ export async function duplicateQuotation(ctx: RequestContext, id: string, now = 
         quantity: item.quantity,
         unitPrice: item.unitPrice,
         discountPercent: item.discountPercent,
+        gstPercent: item.gstPercent,
+        taxableAmount: item.taxableAmount,
+        gstAmount: item.gstAmount,
         lineTotal: item.lineTotal,
       })),
     });

@@ -1,20 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { activityTypeSchema, PRIORITIES, type ActivityResponse, type Priority } from "@growspark/shared";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
+import { StatusButtonGroup } from "@/components/ui/status-button-group";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useActivitiesList, ACTIVITIES_QUERY_KEY_ROOT } from "@/hooks/use-activities";
 import { useListUrlState } from "@/hooks/use-list-url-state";
 import { useMe } from "@/hooks/use-me";
 import { useUserOptions } from "@/hooks/use-user-options";
-import { apiPost, ApiError } from "@/lib/api-client";
+import { apiPost } from "@/lib/api-client";
 import { formatDate, formatTime } from "@/lib/format";
 import {
   activityRecordHref,
@@ -25,6 +24,11 @@ import {
 import { priorityBadgeVariant, priorityLabel } from "@/lib/lead-presentation";
 
 const ANY = "ANY";
+/** The two ways an open task leaves "Open" — the same two API calls as before (D105 only adds the feedback). */
+const ACTIVITY_STATUS_OPTIONS = [
+  { value: "complete", label: "Complete", statusLabel: "Completed", variant: "default" },
+  { value: "cancel", label: "Cancel", statusLabel: "Cancelled", variant: "outline" },
+] as const;
 /** D100: values of the "Assigned to" filter's `assignee` URL param besides a user id; absent means "me". */
 const ASSIGNEE_ME = "me";
 const ASSIGNEE_ALL = "all";
@@ -81,15 +85,11 @@ export function TasksPageClient() {
     });
   }
 
+  // The status group shows the success toast and, if this throws, the error toast.
   async function changeStatus(activity: ActivityResponse, action: "complete" | "cancel") {
-    try {
-      await apiPost(`/api/v1/activities/${activity.id}/${action}`);
-      await queryClient.invalidateQueries({ queryKey: [ACTIVITIES_QUERY_KEY_ROOT] });
-      await queryClient.invalidateQueries({ queryKey: ["today"] });
-      toast.success(action === "complete" ? `"${activity.subject}" was completed.` : `"${activity.subject}" was cancelled.`);
-    } catch (cause) {
-      toast.error(cause instanceof ApiError ? cause.message : "Could not update this activity. Please try again.");
-    }
+    await apiPost(`/api/v1/activities/${activity.id}/${action}`);
+    await queryClient.invalidateQueries({ queryKey: [ACTIVITIES_QUERY_KEY_ROOT] });
+    await queryClient.invalidateQueries({ queryKey: ["today"] });
   }
 
   const columns: DataTableColumn<ActivityResponse>[] = [
@@ -149,14 +149,13 @@ export function TasksPageClient() {
       align: "right",
       render: (activity) =>
         activity.status === "OPEN" ? (
-          <div className="flex justify-end gap-2">
-            <Button size="sm" onClick={() => void changeStatus(activity, "complete")}>
-              Complete
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => void changeStatus(activity, "cancel")}>
-              Cancel
-            </Button>
-          </div>
+          <StatusButtonGroup
+            groupLabel={`Change status of ${activity.subject}`}
+            className="justify-end"
+            options={ACTIVITY_STATUS_OPTIONS}
+            onSelect={(action) => changeStatus(activity, action)}
+            errorMessage="Could not update this activity. Please try again."
+          />
         ) : (
           <div className="flex justify-end">
             <Badge variant={activityStatusBadgeVariant(activity.status)}>{activityStatusLabel(activity.status)}</Badge>

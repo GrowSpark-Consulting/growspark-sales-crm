@@ -469,7 +469,7 @@ FKs: organization_id → organizations.id; lead_id → leads.id (nullable).
 No CHECKs. No `created_at` — `received_at` serves that role (judgment call,
 see Phase A report section (b)).
 
-## quotations (D83, migration `20261124181711_add_quotations`)
+## quotations (D83, migration `20261124181711_add_quotations`; reshaped by `20261127100000_quotation_per_line_gst`, D101–D103)
 
 | Column | Type | Null | Default |
 |---|---|---|---|
@@ -485,10 +485,8 @@ see Phase A report section (b)).
 | issue_date | date | NO | |
 | valid_until | date | NO | |
 | currency | text | NO | 'INR' |
-| discount_percent | decimal(5,2) | NO | 0 |
-| tax_percent | decimal(5,2) | NO | 18 |
+| prices_include_tax | boolean | NO | false |
 | subtotal | decimal(14,2) | NO | |
-| discount_amount | decimal(14,2) | NO | |
 | tax_amount | decimal(14,2) | NO | |
 | total | decimal(14,2) | NO | |
 | terms | text | YES | |
@@ -504,10 +502,13 @@ Indexes: (organization_id, status, valid_until); (organization_id, issue_date);
 FKs: organization_id, company_id, contact_id, deal_id (nullable), owner_id
 (nullable, → users).
 **Hand-written CHECKs**: `quotations_number_not_blank`; `quotations_version_positive`
-(version >= 1); `quotations_discount_percent_range` and `quotations_tax_percent_range`
-(BETWEEN 0 AND 100); `quotations_amounts_non_negative` (subtotal, discount_amount,
-tax_amount, total all >= 0); `quotations_valid_until_after_issue` (valid_until >= issue_date).
+(version >= 1); `quotations_amounts_non_negative` (subtotal, tax_amount, total all >= 0);
+`quotations_valid_until_after_issue` (valid_until >= issue_date).
 Percentages are decimal(5,2), not the integer 0..100 used elsewhere (33.33% must fit).
+**D101–D103**: the quotation-level `discount_percent`, `tax_percent` and `discount_amount`
+columns were dropped; discount and GST live on the lines. `subtotal` = sum of the lines'
+taxable (pre-GST) amounts, `tax_amount` = sum of their GST, `total` = sum of their line
+totals. `prices_include_tax` is the per-quotation inclusive/exclusive switch.
 
 ## quotation_line_items
 
@@ -521,13 +522,19 @@ Percentages are decimal(5,2), not the integer 0..100 used elsewhere (33.33% must
 | quantity | decimal(12,2) | NO | |
 | unit_price | decimal(14,2) | NO | |
 | discount_percent | decimal(5,2) | NO | 0 |
+| gst_percent | decimal(5,2) | NO | |
+| taxable_amount | decimal(14,2) | NO | |
+| gst_amount | decimal(14,2) | NO | |
 | line_total | decimal(14,2) | NO | |
 | created_at | timestamptz(3) | NO | now() |
 
 PK: id. Unique: `quotation_line_items_quotation_id_position_key` (quotation_id, position).
 Index: (organization_id, quotation_id). FKs: organization_id; quotation_id → quotations.id.
 **Hand-written CHECKs**: description not blank; quantity > 0; unit_price >= 0;
-discount_percent BETWEEN 0 AND 100; line_total >= 0; position >= 1.
+discount_percent BETWEEN 0 AND 100; gst_percent BETWEEN 0 AND 100;
+taxable_amount, gst_amount and line_total >= 0; position >= 1.
+`taxable_amount` is the line's pre-GST value, `gst_amount` its GST and `line_total` what the
+customer pays for the line (taxable + GST, or the entered amount when prices include tax).
 Rows are replaced wholesale (delete + insert, in the edit transaction) while the
 quotation is a Draft.
 

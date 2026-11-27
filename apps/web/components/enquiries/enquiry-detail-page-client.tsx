@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { StatusButtonGroup } from "@/components/ui/status-button-group";
 import { formatDate, formatTime } from "@/lib/format";
 import { enquiryStatusBadgeVariant, enquiryStatusLabel } from "@/lib/enquiry-presentation";
 
@@ -27,20 +28,20 @@ export function EnquiryDetailPageClient({ enquiryId }: { enquiryId: string }) {
   const enquiryQuery = useEnquiry(enquiryId);
 
   async function markSpam() {
+    // The status group shows the success toast and any error.
     await apiPost(`/api/v1/enquiries/${enquiryId}/mark-spam`);
-    toast.success("Enquiry marked as spam. Its linked lead, if any, was archived.");
     void queryClient.invalidateQueries({ queryKey: [ENQUIRIES_QUERY_KEY_ROOT] });
   }
 
   async function archive() {
     await apiPost(`/api/v1/enquiries/${enquiryId}/archive`);
-    toast.success("Enquiry archived.");
+    toast.success("Submission archived.");
     void queryClient.invalidateQueries({ queryKey: [ENQUIRIES_QUERY_KEY_ROOT] });
   }
 
   async function restore() {
     await apiPost(`/api/v1/enquiries/${enquiryId}/restore`);
-    toast.success("Enquiry restored.");
+    toast.success("Submission restored.");
     void queryClient.invalidateQueries({ queryKey: [ENQUIRIES_QUERY_KEY_ROOT] });
   }
 
@@ -59,7 +60,7 @@ export function EnquiryDetailPageClient({ enquiryId }: { enquiryId: string }) {
     return (
       <Alert variant="destructive">
         <AlertDescription>
-          {notFound ? "This enquiry does not exist, or was deleted." : "Could not load this enquiry."}
+          {notFound ? "This submission does not exist, or was deleted." : "Could not load this submission."}
         </AlertDescription>
       </Alert>
     );
@@ -79,28 +80,39 @@ export function EnquiryDetailPageClient({ enquiryId }: { enquiryId: string }) {
       actions={
         <>
           {enquiry.status !== "SPAM" && (
-            <ConfirmActionDialog
-              triggerLabel="Mark as spam"
-              title="Mark enquiry as spam"
-              description="This enquiry will be marked as spam. If it created a Lead, that Lead will be archived too."
-              confirmLabel="Mark as spam"
-              destructive
-              onConfirm={markSpam}
+            <StatusButtonGroup
+              groupLabel="Change status"
+              options={[
+                {
+                  value: "SPAM",
+                  label: "Mark as spam",
+                  statusLabel: "Spam",
+                  confirm: {
+                    title: "Mark submission as spam",
+                    description: "This submission will be marked as spam. If it created a Lead, that Lead will be archived too.",
+                    confirmLabel: "Mark as spam",
+                    destructive: true,
+                  },
+                },
+              ]}
+              onSelect={() => markSpam()}
+              successMessage={() => "Status changed to Spam. Its linked lead, if any, was archived."}
+              errorMessage="Could not mark this submission as spam. Please try again."
             />
           )}
           {enquiry.archivedAt ? (
             <ConfirmActionDialog
               triggerLabel="Restore"
-              title="Restore enquiry"
-              description="This enquiry will reappear in the active enquiries list."
+              title="Restore submission"
+              description="This submission will reappear in the active form submissions list."
               confirmLabel="Restore"
               onConfirm={restore}
             />
           ) : (
             <ConfirmActionDialog
               triggerLabel="Archive"
-              title="Archive enquiry"
-              description="This enquiry will be hidden from the active enquiries list. You can restore it later."
+              title="Archive submission"
+              description="This submission will be hidden from the active form submissions list. You can restore it later."
               confirmLabel="Archive"
               destructive
               onConfirm={archive}

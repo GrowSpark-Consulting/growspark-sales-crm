@@ -54,7 +54,7 @@ describe('Notifications API: list and unread count', () => {
     });
     const quotation = await prisma.quotation.create({
       data: { organizationId: orgId, number: 'Q-2026-0007', companyId: company.id, contactId: contact.id, issueDate: new Date('2026-11-01'), validUntil: new Date('2026-12-01'),
-        discountPercent: 0, taxPercent: 18, subtotal: 0, discountAmount: 0, taxAmount: 0, total: 0 },
+        subtotal: 0, taxAmount: 0, total: 0 },
     });
     const rows: [NotificationType, string][] = [
       ['DEAL_ASSIGNED', deal.id],
@@ -75,7 +75,7 @@ describe('Notifications API: list and unread count', () => {
       DEAL_ASSIGNED: { title: 'Deal assigned to you: Big deal', href: `/deals/${deal.id}` },
       TASK_DUE_TODAY: { title: 'Task due today: Call back', href: `/deals/${deal.id}` },
       TASK_OVERDUE: { title: 'Task overdue: Tidy up', href: `/contacts/${contact.id}` },
-      NEW_ENQUIRY: { title: 'New website enquiry from Asha Rao', href: `/enquiries/${submission.id}` },
+      NEW_ENQUIRY: { title: 'New form submission from Asha Rao', href: `/form-submissions/${submission.id}` },
       QUOTATION_ACCEPTED: { title: 'Quotation Q-2026-0007 accepted (Example Foods)', href: `/quotations/${quotation.id}` },
       QUOTATION_REJECTED: { title: 'Quotation Q-2026-0007 rejected (Example Foods)', href: `/quotations/${quotation.id}` },
     });

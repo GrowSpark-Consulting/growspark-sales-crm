@@ -1,20 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import type { TodayResponse } from "@growspark/shared";
 import { Button } from "@/components/ui/button";
+import { StatusButtonGroup } from "@/components/ui/status-button-group";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AddFollowUpDialog } from "@/components/activities/add-follow-up-dialog";
 import { useToday, ACTIVITIES_QUERY_KEY_ROOT } from "@/hooks/use-activities";
 import { useListUrlState } from "@/hooks/use-list-url-state";
-import { apiPost, ApiError } from "@/lib/api-client";
+import { apiPost } from "@/lib/api-client";
 import { formatDate, formatTime } from "@/lib/format";
 
 type TodaySectionKey = keyof TodayResponse["data"];
 type TodayItem = TodayResponse["data"][TodaySectionKey]["items"][number];
+
+const COMPLETE_OPTIONS = [{ value: "complete", label: "Complete", statusLabel: "Completed", variant: "default" }] as const;
 
 const SECTIONS: { key: TodaySectionKey; title: string; emptyText: string; canComplete: boolean }[] = [
   { key: "overdueTasks", title: "Overdue", emptyText: "Nothing overdue.", canComplete: true },
@@ -32,15 +34,11 @@ export function TodayPageClient() {
   const scope = searchParams.get("scope") === "all" ? "all" : "mine";
   const today = useToday(scope);
 
+  // The status group shows the success toast and, if this throws, the error toast.
   async function completeTask(item: TodayItem) {
-    try {
-      await apiPost(`/api/v1/activities/${item.id}/complete`);
-      await queryClient.invalidateQueries({ queryKey: ["today"] });
-      await queryClient.invalidateQueries({ queryKey: [ACTIVITIES_QUERY_KEY_ROOT] });
-      toast.success(`"${item.title}" was completed.`);
-    } catch (cause) {
-      toast.error(cause instanceof ApiError ? cause.message : "Could not complete this task. Please try again.");
-    }
+    await apiPost(`/api/v1/activities/${item.id}/complete`);
+    await queryClient.invalidateQueries({ queryKey: ["today"] });
+    await queryClient.invalidateQueries({ queryKey: [ACTIVITIES_QUERY_KEY_ROOT] });
   }
 
   return (
@@ -92,7 +90,7 @@ export function TodayPageClient() {
   );
 }
 
-function TodaySections({ data, onComplete }: { data: TodayResponse["data"]; onComplete: (item: TodayItem) => void }) {
+function TodaySections({ data, onComplete }: { data: TodayResponse["data"]; onComplete: (item: TodayItem) => Promise<unknown> }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {SECTIONS.map((section) => {
@@ -121,9 +119,12 @@ function TodaySections({ data, onComplete }: { data: TodayResponse["data"]; onCo
                     </div>
                     <div className="flex items-center gap-2">
                       {section.canComplete && (
-                        <Button size="sm" onClick={() => onComplete(item)}>
-                          Complete
-                        </Button>
+                        <StatusButtonGroup
+                          groupLabel={`Change status of ${item.title}`}
+                          options={COMPLETE_OPTIONS}
+                          onSelect={() => onComplete(item)}
+                          errorMessage="Could not complete this task. Please try again."
+                        />
                       )}
                       {item.recordType && item.recordId && (
                         <AddFollowUpDialog owner={item.recordType} recordId={item.recordId} recordLabel={item.title} />

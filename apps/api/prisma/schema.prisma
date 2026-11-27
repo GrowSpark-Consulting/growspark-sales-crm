@@ -660,10 +660,11 @@ model Quotation {
   issueDate       DateTime        @map("issue_date") @db.Date
   validUntil      DateTime        @map("valid_until") @db.Date
   currency        String          @default("INR")
-  discountPercent Decimal         @default(0) @map("discount_percent") @db.Decimal(5, 2)
-  taxPercent      Decimal         @default(18) @map("tax_percent") @db.Decimal(5, 2)
+  // D101: discount and GST are per line item; the quotation only records
+  // whether line prices already include GST. subtotal = sum of the lines'
+  // taxable (pre-GST) amounts; taxAmount = sum of their GST.
+  pricesIncludeTax Boolean        @default(false) @map("prices_include_tax")
   subtotal        Decimal         @db.Decimal(14, 2)
-  discountAmount  Decimal         @map("discount_amount") @db.Decimal(14, 2)
   taxAmount       Decimal         @map("tax_amount") @db.Decimal(14, 2)
   total           Decimal         @db.Decimal(14, 2)
   terms           String?
@@ -680,8 +681,8 @@ model Quotation {
   owner        User?               @relation("QuotationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   lineItems    QuotationLineItem[]
 
-  // CHECKs added by hand to the migration SQL: percentages 0..100, money
-  // >= 0, valid_until >= issue_date, version >= 1, number not blank.
+  // CHECKs added by hand to the migration SQL: money >= 0, valid_until >=
+  // issue_date, version >= 1, number not blank.
   @@unique([organizationId, number])
   @@index([organizationId, status, validUntil])
   @@index([organizationId, issueDate])
@@ -700,14 +701,21 @@ model QuotationLineItem {
   quantity        Decimal  @db.Decimal(12, 2)
   unitPrice       Decimal  @map("unit_price") @db.Decimal(14, 2)
   discountPercent Decimal  @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  // D101: each line has its own GST rate (any 0..100, 2 dp). taxableAmount is
+  // the line's pre-GST value, gstAmount its GST, lineTotal what the customer
+  // pays for the line (taxable + GST, or the entered amount when the
+  // quotation's prices include tax).
+  gstPercent      Decimal  @map("gst_percent") @db.Decimal(5, 2)
+  taxableAmount   Decimal  @map("taxable_amount") @db.Decimal(14, 2)
+  gstAmount       Decimal  @map("gst_amount") @db.Decimal(14, 2)
   lineTotal       Decimal  @map("line_total") @db.Decimal(14, 2)
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   quotation    Quotation    @relation(fields: [quotationId], references: [id], onDelete: Restrict)
 
-  // CHECKs added by hand: quantity > 0, unit_price >= 0, discount 0..100,
-  // line_total >= 0, description not blank.
+  // CHECKs added by hand: quantity > 0, unit_price >= 0, discount and GST
+  // 0..100, taxable/gst/line_total >= 0, description not blank.
   @@unique([quotationId, position])
   @@index([organizationId, quotationId])
   @@map("quotation_line_items")

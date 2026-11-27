@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { StatusButtonGroup } from "@/components/ui/status-button-group";
 import { CloseLostDialog } from "@/components/deals/close-lost-dialog";
 import { DealContactsTab } from "@/components/deals/deal-contacts-tab";
 import { QuotationsTab } from "@/components/quotations/quotations-tab";
@@ -77,21 +78,22 @@ export function DealDetailPageClient({ dealId }: { dealId: string }) {
     }
   }
 
+  // Close as Won and Reopen go through the status group, which shows the
+  // success toast ("Status changed to …") and any error; Lost has its own form
+  // dialog and shows the same toast itself.
   async function closeWon() {
     await apiPost(`/api/v1/deals/${dealId}/close`, { status: "WON" });
-    toast.success("Deal closed as Won.");
     invalidate();
   }
 
   async function closeLost(reason: LossReason, note?: string) {
     await apiPost(`/api/v1/deals/${dealId}/close`, { status: "LOST", lostReason: reason, lostNote: note });
-    toast.success("Deal closed as Lost.");
+    toast.success("Status changed to Lost");
     invalidate();
   }
 
   async function reopen() {
     await apiPost(`/api/v1/deals/${dealId}/reopen`);
-    toast.success("Deal reopened.");
     invalidate();
   }
 
@@ -160,23 +162,39 @@ export function DealDetailPageClient({ dealId }: { dealId: string }) {
           )}
 
           {!closed && (
-            <ConfirmActionDialog
-              triggerLabel="Close as Won"
-              title="Close deal as Won"
-              description={`${deal.name} will be marked Won at 100% probability.`}
-              confirmLabel="Close as Won"
-              onConfirm={closeWon}
+            <StatusButtonGroup
+              groupLabel="Close deal"
+              options={[
+                {
+                  value: "WON",
+                  label: "Close as Won",
+                  statusLabel: "Won",
+                  confirm: { title: "Close deal as Won", description: `${deal.name} will be marked Won at 100% probability.`, confirmLabel: "Close as Won" },
+                },
+              ]}
+              onSelect={() => closeWon()}
+              errorMessage="Could not close this deal. Please try again."
+              trailing={({ busy }) => <CloseLostDialog onConfirm={closeLost} disabled={busy} />}
             />
           )}
-          {!closed && <CloseLostDialog onConfirm={closeLost} />}
 
           {closed && (
-            <ConfirmActionDialog
-              triggerLabel="Reopen"
-              title="Reopen deal"
-              description={`${deal.name} will return to the pipeline's first open stage (${stages.find((s) => s.type === "OPEN")?.name ?? "the first open stage"}).`}
-              confirmLabel="Reopen"
-              onConfirm={reopen}
+            <StatusButtonGroup
+              groupLabel="Reopen deal"
+              options={[
+                {
+                  value: "OPEN",
+                  label: "Reopen",
+                  statusLabel: "Open",
+                  confirm: {
+                    title: "Reopen deal",
+                    description: `${deal.name} will return to the pipeline's first open stage (${stages.find((s) => s.type === "OPEN")?.name ?? "the first open stage"}).`,
+                    confirmLabel: "Reopen",
+                  },
+                },
+              ]}
+              onSelect={() => reopen()}
+              errorMessage="Could not reopen this deal. Please try again."
             />
           )}
 

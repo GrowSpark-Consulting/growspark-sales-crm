@@ -1,24 +1,23 @@
 "use client";
 
-import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import type { TimelineEntry } from "@growspark/shared";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { StatusButtonGroup } from "@/components/ui/status-button-group";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiPost, ApiError } from "@/lib/api-client";
+import { apiPost } from "@/lib/api-client";
 import { formatDate, formatTime } from "@/lib/format";
 import { TIMELINE_QUERY_KEY_ROOT, useRecordTimeline, type TimelineOwner } from "@/hooks/use-activities";
 import { ActivityComposer } from "@/components/activities/activity-composer";
 
+const TIMELINE_STATUS_OPTIONS = [
+  { value: "complete", label: "Complete", statusLabel: "Completed", variant: "outline" },
+  { value: "cancel", label: "Cancel", statusLabel: "Cancelled", variant: "ghost" },
+] as const;
+
 function TimelineActivity({ entry, onAction }: { entry: TimelineEntry; onAction: (id: string, action: "complete" | "cancel") => Promise<void> }) {
-  const [pending, setPending] = useState(false);
-  async function act(action: "complete" | "cancel") {
-    setPending(true);
-    try { await onAction(entry.id, action); } finally { setPending(false); }
-  }
   return (
     <li className="space-y-2 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -26,10 +25,14 @@ function TimelineActivity({ entry, onAction }: { entry: TimelineEntry; onAction:
           <p className="body-strong">{entry.title}</p>
           <p className="small text-ink-muted">{formatDate(entry.at)} · {formatTime(entry.at)}</p>
         </div>
-        {entry.status === "OPEN" && <div className="flex gap-2">
-          <Button size="sm" variant="outline" disabled={pending} onClick={() => void act("complete")}>Complete</Button>
-          <Button size="sm" variant="ghost" disabled={pending} onClick={() => void act("cancel")}>Cancel</Button>
-        </div>}
+        {entry.status === "OPEN" && (
+          <StatusButtonGroup
+            groupLabel={`Change status of ${entry.title}`}
+            options={TIMELINE_STATUS_OPTIONS}
+            onSelect={(action) => onAction(entry.id, action)}
+            errorMessage="Could not update this activity. Please try again."
+          />
+        )}
       </div>
       {entry.description && <p className="body whitespace-pre-wrap">{entry.description}</p>}
       {entry.status === "DONE" && entry.completedAt && <p className="small text-success">
@@ -43,17 +46,13 @@ function TimelineActivity({ entry, onAction }: { entry: TimelineEntry; onAction:
 export function RecordTimeline({ owner, recordId }: { owner: TimelineOwner; recordId: string }) {
   const queryClient = useQueryClient();
   const timeline = useRecordTimeline(owner, recordId);
+  // The status group shows the success toast and, if this throws, the error toast.
   async function act(id: string, action: "complete" | "cancel") {
-    try {
-      await apiPost(`/api/v1/activities/${id}/${action}`);
-      await queryClient.invalidateQueries({ queryKey: [TIMELINE_QUERY_KEY_ROOT, owner, recordId] });
-      await queryClient.invalidateQueries({ queryKey: ["activities"] });
-      if (owner === "leads") await queryClient.invalidateQueries({ queryKey: ["leads"] });
-      if (owner === "deals") await queryClient.invalidateQueries({ queryKey: ["deals"] });
-      toast.success(action === "complete" ? "Activity completed." : "Activity cancelled.");
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not update this activity. Please try again.");
-    }
+    await apiPost(`/api/v1/activities/${id}/${action}`);
+    await queryClient.invalidateQueries({ queryKey: [TIMELINE_QUERY_KEY_ROOT, owner, recordId] });
+    await queryClient.invalidateQueries({ queryKey: ["activities"] });
+    if (owner === "leads") await queryClient.invalidateQueries({ queryKey: ["leads"] });
+    if (owner === "deals") await queryClient.invalidateQueries({ queryKey: ["deals"] });
   }
   const pages = timeline.data?.pages ?? [];
   const entries = pages.flatMap((page) => page.data);

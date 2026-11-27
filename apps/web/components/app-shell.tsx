@@ -38,7 +38,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/contacts": "Contacts",
   "/deals": "Deals",
   "/quotations": "Quotations",
-  "/enquiries": "Enquiries",
+  "/form-submissions": "Form submissions",
   "/notifications": "Notifications",
   "/reports": "Reports",
   "/settings": "Settings",
@@ -150,8 +150,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <NavItem href="/quotations" active={pathname.startsWith("/quotations")} icon={FileText}>
             Quotations
           </NavItem>
-          <NavItem href="/enquiries" active={pathname.startsWith("/enquiries")} icon={Inbox}>
-            Enquiries
+          <NavItem href="/form-submissions" active={pathname.startsWith("/form-submissions")} icon={Inbox}>
+            Form submissions
           </NavItem>
           <NavItem href="/reports" active={pathname.startsWith("/reports")} icon={ChartColumn}>
             Reports

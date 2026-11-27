@@ -199,7 +199,7 @@ async function presentNotifications(orgId: string, rows: readonly Notification[]
       }
       case 'NEW_ENQUIRY': {
         const lead = submissionById.get(row.entityId)?.lead;
-        return { title: lead ? `New website enquiry from ${personName(lead.firstName, lead.lastName)}` : 'New website enquiry', href: `/enquiries/${row.entityId}` };
+        return { title: lead ? `New form submission from ${personName(lead.firstName, lead.lastName)}` : 'New form submission', href: `/form-submissions/${row.entityId}` };
       }
       case 'QUOTATION_ACCEPTED':
       case 'QUOTATION_REJECTED': {

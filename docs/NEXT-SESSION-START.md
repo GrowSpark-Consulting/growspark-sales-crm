@@ -79,9 +79,9 @@ next.
    detailed reference; skim its table of contents (the `##` headings) and
    come back to specific sections as needed rather than reading linearly
    every time.
-4. **`docs/decisions.md`** — every approved decision, D1 through D100 (D3
+4. **`docs/decisions.md`** — every approved decision, D1 through D105 (D3
    and D5 don't exist — never assigned; D83–D92 is Day 5c, D93–D95 Day 6a,
-   D96–D100 Day 6b), append-only, each with the
+   D96–D100 Day 6b, D101–D105 Day 7), append-only, each with the
    reasoning behind it. Don't re-litigate something already decided here
    without a new entry. D46–D50 cover all of Day 3 (lead conversion, the
    Deals API, the Deals UI, the pipeline board, and the Convert dialog) —
@@ -307,7 +307,24 @@ specific package you're about to work on.
   steps: `docs/MANUAL-TEST-DAY6B.md` (D98 also updated
   `MANUAL-TEST-DAY6A.md` §5). Resume prompt: `docs/DAY-6B-HANDOVER-PROMPT.md`.
 
+- **Day 7 (three changes from the manager's review) is complete (2026-11-27),
+  D101–D105.** D101–D103: quotation GST rate per line (any 0–100) plus a Tax
+  inclusive/exclusive switch per quotation, the quotation-wide discount and GST
+  removed, one shared BigInt money function (`packages/shared`) for the API and
+  the form preview; migration `20261127100000_quotation_per_line_gst` (applied
+  to `crm_test` only). D104: "Enquiries" renamed **Form submissions** (UI text
+  and web route; `/enquiries` redirects; DB/API/permission keys unchanged).
+  D105: shared `StatusButtonGroup` gives every status-change button group a
+  spinner, a locked group while saving, a selected current status and a
+  "Status changed to …" toast. **apps/api 671/671, apps/web 207/207
+  (878).** Manual steps: `docs/MANUAL-TEST-DAY7.md`. The user still has to
+  run `pnpm db:migrate` (crm_dev) and, before pushing, `pnpm staging:migrate`.
+
 ## The next work, in order
+
+Day 7 (above) is finished and not yet committed. Before anything else the user
+runs `pnpm db:migrate`, the browser pass of `docs/MANUAL-TEST-DAY7.md`, then
+`pnpm staging:migrate` together with the deploy.
 
 Day 6b is finished. Next, in order: (0) the user reviews and commits Day 6b
 and decides the open items in `docs/PROJECT-STATE.md` §13 (the Day 6a

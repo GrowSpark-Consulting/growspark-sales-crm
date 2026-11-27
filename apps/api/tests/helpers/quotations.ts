@@ -45,8 +45,8 @@ export async function createQuotationContext(tenant: TestTenant, name = 'Example
   return { company, contact, deal };
 }
 
-/** The awkward example from the brief: 3 × 0.10, 33.33% discount, 18% GST -> total 0.24. */
-export const AWKWARD_LINES = [{ description: 'Sensor labels', quantity: '3', unitPrice: '0.10' }];
+/** The awkward example: 3 × 0.10, 33.33% line discount, 18% GST -> total 0.24 (D85/D101). */
+export const AWKWARD_LINES = [{ description: 'Sensor labels', quantity: '3', unitPrice: '0.10', discountPercent: '33.33', gstPercent: '18' }];
 
 export function quotationBody(context: Awaited<ReturnType<typeof createQuotationContext>>, extra: object = {}) {
   return {
@@ -54,8 +54,8 @@ export function quotationBody(context: Awaited<ReturnType<typeof createQuotation
     contactId: context.contact.id,
     dealId: context.deal.id,
     lineItems: [
-      { description: 'Discovery workshop', quantity: '2', unitPrice: '45000.00', discountPercent: '10' },
-      { description: 'Process mapping', quantity: '1', unitPrice: '125000.00' },
+      { description: 'Discovery workshop', quantity: '2', unitPrice: '45000.00', discountPercent: '10', gstPercent: '18' },
+      { description: 'Process mapping', quantity: '1', unitPrice: '125000.00', gstPercent: '18' },
     ],
     ...extra,
   };

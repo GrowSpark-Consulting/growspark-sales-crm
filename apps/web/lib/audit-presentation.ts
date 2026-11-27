@@ -12,7 +12,7 @@ const ENTITY_DETAIL_PATH: Record<string, string> = {
   company: "/companies",
   contact: "/contacts",
   deal: "/deals",
-  websiteSubmission: "/enquiries",
+  websiteSubmission: "/form-submissions",
 };
 
 export function auditEntityHref(entityType: string, entityId: string | null): string | null {

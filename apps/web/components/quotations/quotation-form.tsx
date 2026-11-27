@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,7 +8,10 @@ import { Plus, Trash2 } from "lucide-react";
 import {
   DEFAULT_QUOTATION_TAX_PERCENT,
   MAX_QUOTATION_LINE_ITEMS,
+  calculateQuotationAmounts,
   calculateQuotationSchema,
+  formatIndianDecimal,
+  normalizePercent,
   quotationCreatableFields,
   quotationLineItemInputSchema,
   type CalculateQuotationInput,
@@ -29,8 +32,6 @@ import { QuotationTotalsSummary } from "@/components/quotations/quotation-totals
 import { useCompany } from "@/hooks/use-companies";
 import { useContact } from "@/hooks/use-contacts";
 import { useDeal, useDealsList } from "@/hooks/use-deals";
-import { useQuotationTotals } from "@/hooks/use-quotations";
-import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { handleApiFormError } from "@/lib/handle-form-error";
 
 const NO_DEAL = "NO_DEAL";
@@ -43,19 +44,29 @@ function blankToUndefined<T extends z.ZodType>(schema: T) {
 /**
  * Built from the shared field validators (no re-declared rules): only the
  * optional text boxes are wrapped so an empty box means "not given".
- * Money/quantity/percent values stay strings end to end — the server does
- * all the arithmetic.
+ * Money/quantity/percent values stay strings end to end. The live preview
+ * runs the same shared calculateQuotationAmounts() the API runs (D101); the
+ * API still recalculates on save and is the source of truth.
  */
 const quotationFormSchema = z.object({
   ...quotationCreatableFields,
   issueDate: blankToUndefined(z.iso.date()),
   validUntil: blankToUndefined(z.iso.date()),
-  discountPercent: blankToUndefined(quotationCreatableFields.discountPercent.unwrap()),
-  taxPercent: blankToUndefined(quotationCreatableFields.taxPercent.unwrap()),
+  pricesIncludeTax: z.boolean(),
   lineItems: z
     .array(
       quotationLineItemInputSchema.extend({
         discountPercent: blankToUndefined(quotationLineItemInputSchema.shape.discountPercent.unwrap()),
+        // Required in the form so "blank" is never mistaken for "exempt": type 0 for no GST.
+        gstPercent: z
+          .string()
+          .trim()
+          .min(1, "Enter a GST rate (0 if exempt)")
+          .superRefine((value, ctx) => {
+            // The shared validator decides what a valid rate is; this only forwards its messages.
+            const result = quotationLineItemInputSchema.shape.gstPercent.unwrap().safeParse(value);
+            if (!result.success) for (const issue of result.error.issues) ctx.addIssue({ code: "custom", message: issue.message });
+          }),
       }),
     )
     .min(1, "Add at least one line item")
@@ -69,14 +80,15 @@ interface QuotationFormValues {
   ownerId: string | null | undefined;
   issueDate: string;
   validUntil: string;
-  discountPercent: string;
-  taxPercent: string;
+  pricesIncludeTax: boolean;
   terms: string;
   notes: string;
-  lineItems: { description: string; quantity: string; unitPrice: string; discountPercent: string }[];
+  lineItems: { description: string; quantity: string; unitPrice: string; discountPercent: string; gstPercent: string }[];
 }
 
-const BLANK_LINE = { description: "", quantity: "1", unitPrice: "", discountPercent: "" };
+const LINE_FIELD_LABELS = { quantity: "quantity", unitPrice: "unit price", discountPercent: "discount percent", gstPercent: "GST percent" } as const;
+
+const BLANK_LINE = { description: "", quantity: "1", unitPrice: "", discountPercent: "", gstPercent: DEFAULT_QUOTATION_TAX_PERCENT };
 
 /** Exported so a test can assert the D42 reset target is genuinely blank. */
 export function quotationToFormValues(
@@ -91,8 +103,7 @@ export function quotationToFormValues(
     ownerId: quotation ? quotation.ownerId : defaults.ownerId,
     issueDate: quotation?.issueDate ?? "",
     validUntil: quotation?.validUntil ?? "",
-    discountPercent: quotation ? trimZero(quotation.discountPercent) : "",
-    taxPercent: quotation?.taxPercent ?? DEFAULT_QUOTATION_TAX_PERCENT,
+    pricesIncludeTax: quotation?.pricesIncludeTax ?? false,
     terms: quotation?.terms ?? "",
     notes: quotation?.notes ?? "",
     lineItems: quotation?.lineItems?.map((item) => ({
@@ -100,18 +111,35 @@ export function quotationToFormValues(
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       discountPercent: trimZero(item.discountPercent),
+      gstPercent: normalizePercent(item.gstPercent),
     })) ?? [{ ...BLANK_LINE }],
   };
 }
 
-/** The live-totals request, or null while the lines aren't valid yet (validated with the shared schema, not re-implemented). */
-export function toCalculateInput(values: Pick<QuotationFormValues, "lineItems" | "discountPercent" | "taxPercent">): CalculateQuotationInput | null {
+/** The live-preview input, or null while the lines aren't valid yet (validated with the shared schema, not re-implemented). */
+export function toCalculateInput(values: Pick<QuotationFormValues, "lineItems" | "pricesIncludeTax">): CalculateQuotationInput | null {
   const parsed = calculateQuotationSchema.safeParse({
-    discountPercent: values.discountPercent || undefined,
-    taxPercent: values.taxPercent || undefined,
-    lineItems: values.lineItems.map((line) => ({ ...line, discountPercent: line.discountPercent || undefined })),
+    pricesIncludeTax: values.pricesIncludeTax,
+    lineItems: values.lineItems.map((line) => ({
+      ...line,
+      discountPercent: line.discountPercent || undefined,
+      // A blank GST box is not "default": the form refuses it on submit, so there is no preview until it is filled.
+      gstPercent: line.gstPercent === "" ? undefined : line.gstPercent,
+    })),
   });
-  return parsed.success ? parsed.data : null;
+  if (!parsed.success) return null;
+  return parsed.data.lineItems.every((line) => line.gstPercent !== undefined) ? parsed.data : null;
+}
+
+/** The preview amounts for the form, from the same shared rule the API uses; null while the lines are incomplete. */
+export function previewQuotationAmounts(values: Pick<QuotationFormValues, "lineItems" | "pricesIncludeTax">) {
+  const input = toCalculateInput(values);
+  if (!input) return null;
+  try {
+    return calculateQuotationAmounts(input.lineItems, input.pricesIncludeTax ?? false);
+  } catch {
+    return null;
+  }
 }
 
 export interface QuotationFormProps {
@@ -146,9 +174,9 @@ export function QuotationForm({
   });
   const lines = useFieldArray({ control: form.control, name: "lineItems" });
 
-  const [companyId, contactId, watchedLines, discountPercent, taxPercent] = useWatch({
+  const [companyId, contactId, watchedLines, pricesIncludeTax] = useWatch({
     control: form.control,
-    name: ["companyId", "contactId", "lineItems", "discountPercent", "taxPercent"],
+    name: ["companyId", "contactId", "lineItems", "pricesIncludeTax"],
   });
   const companyQuery = useCompany(companyId || undefined);
   const contactQuery = useContact(contactId || undefined);
@@ -174,10 +202,11 @@ export function QuotationForm({
     };
   }, [isEdit, defaultOwnerId, defaultCompanyId, defaultDealId, form]);
 
-  const calculateInput = toCalculateInput({ lineItems: watchedLines ?? [], discountPercent: discountPercent ?? "", taxPercent: taxPercent ?? "" });
-  const debouncedInput = useDebouncedValue(calculateInput ? JSON.stringify(calculateInput) : null, 300);
-  const totalsQuery = useQuotationTotals(debouncedInput ? (JSON.parse(debouncedInput) as CalculateQuotationInput) : null);
-  const lineTotals = calculateInput ? totalsQuery.data?.data.lineTotals : undefined;
+  const preview = useMemo(
+    () => previewQuotationAmounts({ lineItems: watchedLines ?? [], pricesIncludeTax: pricesIncludeTax ?? false }),
+    [watchedLines, pricesIncludeTax],
+  );
+  const lineTotals = preview?.lines.map((line) => line.total);
 
   // zodResolver hands handleSubmit the schema's *output* (blank boxes already
   // turned into "not given"), typed here as the raw form values because this
@@ -339,6 +368,40 @@ export function QuotationForm({
           />
         </div>
 
+        <FormField
+          control={form.control}
+          name="pricesIncludeTax"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel id="prices-are-label">Prices are:</FormLabel>
+              <FormControl>
+                <div role="group" aria-labelledby="prices-are-label" className="inline-flex w-fit justify-self-start rounded-md border border-line p-0.5">
+                  {[
+                    { value: false, label: "Tax exclusive" },
+                    { value: true, label: "Tax inclusive" },
+                  ].map((option) => (
+                    <Button
+                      key={option.label}
+                      type="button"
+                      size="sm"
+                      variant={field.value === option.value ? "default" : "ghost"}
+                      aria-pressed={field.value === option.value}
+                      onClick={() => field.onChange(option.value)}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </FormControl>
+              <p className="small text-ink-muted">
+                {field.value
+                  ? "The prices you enter already include GST; the GST is split out of them."
+                  : "GST is added on top of the prices you enter."}
+              </p>
+            </FormItem>
+          )}
+        />
+
         <fieldset className="space-y-3">
           <legend className="h2 mb-2">Line items</legend>
           <div className="overflow-x-auto rounded-lg border border-line">
@@ -349,6 +412,7 @@ export function QuotationForm({
                   <th className="w-24 p-2 text-right font-medium">Qty *</th>
                   <th className="w-36 p-2 text-right font-medium">Unit price (₹) *</th>
                   <th className="w-24 p-2 text-right font-medium">Disc. %</th>
+                  <th className="w-24 p-2 text-right font-medium">GST % *</th>
                   <th className="w-32 p-2 text-right font-medium">Amount (₹)</th>
                   <th className="w-10 p-2" aria-label="Remove" />
                 </tr>
@@ -370,7 +434,7 @@ export function QuotationForm({
                         )}
                       />
                     </td>
-                    {(["quantity", "unitPrice", "discountPercent"] as const).map((key) => (
+                    {(["quantity", "unitPrice", "discountPercent", "gstPercent"] as const).map((key) => (
                       <td key={key} className="p-2">
                         <FormField
                           control={form.control}
@@ -380,7 +444,7 @@ export function QuotationForm({
                               <FormControl>
                                 <NumericInput
                                   className="text-right"
-                                  aria-label={`Line ${index + 1} ${key === "unitPrice" ? "unit price" : key === "discountPercent" ? "discount percent" : "quantity"}`}
+                                  aria-label={`Line ${index + 1} ${LINE_FIELD_LABELS[key]}`}
                                   value={value}
                                   onValueChange={onChange}
                                   {...field}
@@ -392,7 +456,7 @@ export function QuotationForm({
                         />
                       </td>
                     ))}
-                    <td className="gs-num p-2 pt-4 text-right text-ink-muted">{lineTotals?.[index] ?? "…"}</td>
+                    <td className="gs-num p-2 pt-4 text-right text-ink-muted">{lineTotals?.[index] === undefined ? "…" : formatIndianDecimal(lineTotals[index])}</td>
                     <td className="p-2">
                       <Button
                         type="button"
@@ -426,43 +490,19 @@ export function QuotationForm({
         </fieldset>
 
         <div className="grid gap-6 sm:grid-cols-2">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="discountPercent"
-              render={({ field: { value, onChange, ...field } }) => (
-                <FormItem>
-                  <FormLabel>Quotation discount (%)</FormLabel>
-                  <FormControl>
-                    <NumericInput value={value} onValueChange={onChange} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="taxPercent"
-              render={({ field: { value, onChange, ...field } }) => (
-                <FormItem>
-                  <FormLabel>GST (%)</FormLabel>
-                  <FormControl>
-                    <NumericInput value={value} onValueChange={onChange} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid gap-2 sm:col-span-2">
+          <div className="space-y-4">
+            <div className="grid gap-2">
               <label className="label text-ink-muted">Currency</label>
               <Input value="INR" disabled />
             </div>
           </div>
           <QuotationTotalsSummary
-            totals={calculateInput ? totalsQuery.data?.data : undefined}
-            discountPercent={discountPercent || "0"}
-            taxPercent={taxPercent || DEFAULT_QUOTATION_TAX_PERCENT}
-            pending={totalsQuery.isFetching}
+            totals={
+              preview
+                ? { subtotal: preview.subtotal, gstBreakdown: preview.gstBreakdown, total: preview.total }
+                : undefined
+            }
+            pricesIncludeTax={pricesIncludeTax ?? false}
           />
         </div>
 

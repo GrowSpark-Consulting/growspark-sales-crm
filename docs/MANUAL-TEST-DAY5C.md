@@ -36,16 +36,16 @@ terminal.
        a result), then a **Contact** (only that company's contacts are
        offered), then a **Deal** from the dropdown.
 3. [ ] In line 1 type Description `Sensor labels`, Qty `3`, Unit price `0.10`.
-       Set **Quotation discount (%)** to `33.33`, leave **GST (%)** at `18`.
-       **Expected**, within about half a second, in the totals box on the
-       right: Subtotal **₹ 0.30**, Discount (33.33%) **− ₹ 0.10**, Taxable
-       amount **₹ 0.20**, GST (18%) **₹ 0.04**, Total **₹ 0.24**; the line's
-       Amount column shows **0.30**.
+       Set that line's **Disc. %** to `33.33`, leave its **GST %** at `18`
+       (changed in Day 7: discount and GST are per line, see
+       `MANUAL-TEST-DAY7.md`). **Expected**, immediately, in the totals box on
+       the right: Subtotal **₹ 0.20**, GST 18% **₹ 0.04**, Total **₹ 0.24**;
+       the line's Amount column shows **0.24**.
 4. [ ] Click **Add line**; type `Workshop`, Qty `2`, Unit price `45000`,
-       Disc. % `10`. **Expected**: that line's Amount shows **81000.00**,
-       totals update.
+       Disc. % `10`, GST % `18`. **Expected**: that line's Amount shows
+       **95,580.00** (81,000.00 + 14,580.00 GST), totals update.
 5. [ ] Try a bad value: Unit price `1.005`. **Expected**: totals show `…`
-       (the server isn't asked until the lines are valid); on **Create
+       (no total is shown until the lines are valid); on **Create
        quotation**, an error appears under that field. Fix it back to `45000`.
 6. [ ] Click **Create quotation**. **Expected**: you land on the new
        quotation's page; title **Q-2026-0001** (current year); status badge

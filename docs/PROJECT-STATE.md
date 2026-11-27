@@ -373,6 +373,29 @@ address. No migration, no new dependency, no permission change. **apps/api
 (`docs/MANUAL-TEST-DAY6B.md` §1–§4; D98 also changed some expected results
 in `docs/MANUAL-TEST-DAY6A.md` §5, updated there).
 
+**Update, 2026-11-27 (Day 7) — three changes from the manager's review, all
+done (D101–D105).** **D101–D103**: quotations now carry a **GST rate on every
+line** (any 0–100, 2 dp, default 18, 0 allowed) and one **"Prices are: Tax
+exclusive / Tax inclusive"** switch per quotation; the quotation-wide
+discount and GST boxes are gone (discount is per line only). One shared
+function (`packages/shared/src/quotation-money.ts`, BigInt, half-up) is used
+by the API (source of truth, recalculates on save) and by the form's live
+preview; totals = Subtotal (pre-GST), one GST row per rate, Total. PDF has a
+GST column, per-rate GST rows and "Prices are inclusive of GST". Migration
+`20261127100000_quotation_per_line_gst` (hand-written data migration, old
+quotation totals untouched, old columns dropped; **applied to `crm_test` only —
+`crm_dev` via `pnpm db:migrate` and staging via `pnpm staging:migrate` are the
+user's**). **D104**: "Enquiries" is now **Form submissions** in the UI and web
+route (`/enquiries` 308-redirects to `/form-submissions`); DB, API routes,
+permission keys, stored values and the website intake endpoint untouched.
+**D105**: one shared `StatusButtonGroup` (spinner on the clicked button, whole
+group disabled while saving, current status highlighted, "Status changed to …"
+toast, hover/active/focus styles) behind every status-change button group
+(leads, quotations, deals, form submissions, tasks). **apps/api 671/671,
+apps/web 207/207 (878).** Not clicked through in a browser
+(`docs/MANUAL-TEST-DAY7.md`). Nothing committed or pushed; nothing run against
+staging or written to `crm_dev`.
+
 ## 2. Hard constraints
 
 - **(a) Grow Spark website repository**: must not be touched, read, or looked
@@ -1993,6 +2016,11 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 - D89 — Notifications started: migration `20261124191130_add_notifications` + shared schemas only; no text/personal data stored, titles built at read time
 - D91 — Notifications: five approved PRD deviations; future items notification preferences and deal-change notifications
 - D92 — Reports: `reports:read`, five reports + CSV, shared range rule/queries with Home, reconciliation test, PRD 5.10 gaps reported
+- D101 — Quotations: GST rate on every line (any 0–100), one shared BigInt money function for API + form preview, GST breakdown by rate derived from stored lines, `POST /quotations/calculate` kept but unused by the form
+- D102 — Quotation-level discount removed; hand-written data migration folds it into each line (old totals untouched, old columns dropped); throwaway-database verification
+- D103 — Per-quotation "prices are tax inclusive/exclusive" switch (`prices_include_tax`)
+- D104 — "Enquiries" renamed "Form submissions" in UI text and web route only (308 redirect); DB/API/permission keys/stored values/intake endpoint unchanged
+- D105 — Shared `StatusButtonGroup`: spinner + disabled group while saving, selected current status, success toast, hover/active/focus styles on every status-change button group
 - D90 — Notifications built: service, four endpoints (org + user scoped), triggers after commit (best-effort), task reminders on load (dedupe keys, 50 cap), bell polling 60 s paused when hidden, Render free-tier effect, PRD 5.8/5.11 gaps reported
 
 ## 10. Gotchas and lessons learned
@@ -2483,6 +2511,8 @@ skipping D3/D5, presumably reserved in the user's own roadmap).
 
 ## 14. Open questions and unverified items
 
+- **Day 7 (D101–D105) has not been clicked through in a browser** (`docs/MANUAL-TEST-DAY7.md`). Specifically unverified: how the quotation form's totals box, the Tax inclusive/exclusive control and the new PDF GST column look and print; that the status buttons' spinner/focus ring render as intended in both themes; and (D105) whether ordinary `Button`s really show no keyboard focus ring because of `outline-none`.
+- **Migration `20261127100000_quotation_per_line_gst` has been applied to `crm_test` only.** `crm_dev` needs `pnpm db:migrate`; staging needs `pnpm staging:migrate`, run together with the API deploy (the old API selects the dropped columns). A multi-line quotation made before the change can show line values that differ from its stored totals by a paisa (D102); the stored totals are kept as issued.
 - **Day 6b (D97–D100) has not been clicked through in a browser.** In
   particular, how the phone input feels with real keyboards, IME/mobile
   number pads and real clipboard contents, and the picker dropdowns' look in
@@ -3753,3 +3783,46 @@ log just records that a session happened and what it covered.
   user's call): `CLAUDE.md` and §2(a) here still say website integration
   is on hold; `docs/NEXT-SESSION-START.md` still says neither Render nor
   Vercel has been deployed.
+
+### 2026-11-27 (Day 7) — manager's review: per-line GST, Form submissions, status button feedback (D101–D105)
+
+- **Rules for the session** (from the user): never commit or push; nothing run
+  against staging; real env files neither read nor edited; nothing written to
+  `crm_dev`; the website repo and the intake endpoint/contract unchanged; no
+  status-change logic, API call or transition rule changed.
+- **1. Quotations** (D101–D103). New `packages/shared/src/quotation-money.ts`
+  (`calculateQuotationAmounts`, `groupGstByRate`, `normalizePercent`); shared
+  Zod schemas reshaped (`gstPercent` per line, `pricesIncludeTax`, new totals
+  and response shapes; quotation-level discount/tax fields removed);
+  `quotations.service.ts` (create/update/duplicate/calculate, line columns
+  `gst_percent`/`taxable_amount`/`gst_amount`), `quotation-pdf.ts` (GST column,
+  per-rate rows, inclusive note), audit allowlist (`pricesIncludeTax`); web
+  form (GST % column, toggle, local live preview, no server call), totals box,
+  detail page. Migration `20261127100000_quotation_per_line_gst`
+  (hand-written; SCHEMA-SUMMARY updated). Data migration checked on a
+  throwaway database built from the real migration files (dropped afterwards)
+  and applied to `crm_test`; `prisma migrate diff` against it: no drift.
+- **2. Form submissions** (D104). Route folder moved with `git mv`, 308
+  redirect in `next.config.ts` verified on a throwaway `next dev` on port 3199
+  (PID recorded, stopped by exact PID, ports 3000/4000/3199 clear before and
+  after), UI texts, notification title/link (API), audit-log link.
+- **3. Status buttons** (D105). New `components/ui/status-button-group.tsx`;
+  lead, quotation, deal (Won/Reopen; Lost via `trailing`), form submission
+  (spam), tasks, today and timeline now use it; `CloseLostDialog` got a
+  `disabled` prop and a spinner.
+- **Tests**: apps/api 671 (money lib 23 incl. a 2,000-case oracle comparison;
+  quotation CRUD/PDF/audit updated and extended; notifications href/title),
+  apps/web 207 (new `status-button-group`, `redirects`, quotation form/detail,
+  lead detail status tests). `pnpm typecheck` clean; `pnpm lint` 0 errors (the
+  same 3 older React-compiler warnings); `pnpm test` all passing, run in the
+  order typecheck → lint → test.
+- **Docs**: `decisions.md` D101–D105, `docs/MANUAL-TEST-DAY7.md` (new),
+  `USER-GUIDE.md` and `user-guide.html` (both edited by hand with the same
+  changes — the one-off converter mentioned below is not in the repo),
+  `MANUAL-TEST-DAY5C.md` §1 (quotation steps changed), `SCHEMA-SUMMARY.md`,
+  NEXT-SESSION-START, this file.
+- **Flagged, not decided**: the lead's "Original enquiry" label was left as is
+  (D104); the shared `Button` appears to suppress the global focus ring (D105);
+  `POST /quotations/calculate` is now unused by the form (D101).
+- Python edits on Windows: files kept LF (`newline='\n'`); `git mv` staged the
+  two route-file renames in the index (nothing committed).

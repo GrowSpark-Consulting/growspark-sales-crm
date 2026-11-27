@@ -67,8 +67,10 @@ export interface QuotationPdfModel {
   seller: { name: string; lines: string[] };
   meta: { label: string; value: string }[];
   buyer: { name: string; lines: string[] };
-  items: { index: string; description: string; quantity: string; unitPrice: string; discount: string; amount: string }[];
+  items: { index: string; description: string; quantity: string; unitPrice: string; discount: string; gst: string; amount: string }[];
   totals: { label: string; value: string; strong?: boolean }[];
+  /** "Prices are inclusive of GST" when the quotation's prices include tax (D101), otherwise null. */
+  priceNote: string | null;
   terms: string | null;
   notes: string | null;
   /** Plain-ASCII summary written into the PDF's document info (searchable, and checked by tests). */
@@ -119,9 +121,6 @@ function addressLines(party: { addressLine1: string | null; addressLine2: string
 export function buildQuotationPdfModel({ quotation, organization, company, contact }: QuotationPdfInput): QuotationPdfModel {
   const sellerName = organization.legalName || organization.name;
   const contactName = compact([contact.firstName, contact.lastName]).join(' ');
-  const discountPercent = trimDecimal(quotation.discountPercent);
-  const taxPercent = trimDecimal(quotation.taxPercent);
-  const hasDiscount = quotation.discountAmount !== '0.00';
 
   return {
     title: 'Quotation',
@@ -157,19 +156,15 @@ export function buildQuotationPdfModel({ quotation, organization, company, conta
       quantity: trimDecimal(item.quantity),
       unitPrice: formatIndianDecimal(item.unitPrice),
       discount: item.discountPercent === '0.00' ? '—' : `${trimDecimal(item.discountPercent)}%`,
+      gst: `${trimDecimal(item.gstPercent)}%`,
       amount: formatIndianDecimal(item.lineTotal),
     })),
     totals: [
       { label: 'Subtotal', value: formatRupees(quotation.subtotal) },
-      ...(hasDiscount
-        ? [
-            { label: `Discount (${discountPercent}%)`, value: `− ${formatRupees(quotation.discountAmount)}` },
-            { label: 'Taxable amount', value: formatRupees(quotation.taxableAmount) },
-          ]
-        : []),
-      { label: `GST (${taxPercent}%)`, value: formatRupees(quotation.taxAmount) },
+      ...(quotation.gstBreakdown ?? []).map((row) => ({ label: `GST ${trimDecimal(row.rate)}%`, value: formatRupees(row.gst) })),
       { label: 'Total', value: formatRupees(quotation.total), strong: true },
     ],
+    priceNote: quotation.pricesIncludeTax ? 'Prices are inclusive of GST' : null,
     terms: quotation.terms,
     notes: quotation.notes,
     keywords: `${quotation.pdfReference}; total ${quotation.currency} ${quotation.total}`,
@@ -183,10 +178,11 @@ const HEADER_FILL = '#f2f2f2';
 
 const COLUMNS = [
   { key: 'index', label: '#', width: 24, align: 'left' },
-  { key: 'description', label: 'Description', width: 213, align: 'left' },
-  { key: 'quantity', label: 'Qty', width: 44, align: 'right' },
+  { key: 'description', label: 'Description', width: 175, align: 'left' },
+  { key: 'quantity', label: 'Qty', width: 40, align: 'right' },
   { key: 'unitPrice', label: 'Unit price (₹)', width: 80, align: 'right' },
-  { key: 'discount', label: 'Disc.', width: 44, align: 'right' },
+  { key: 'discount', label: 'Disc.', width: 42, align: 'right' },
+  { key: 'gst', label: 'GST', width: 44, align: 'right' },
   { key: 'amount', label: 'Amount (₹)', width: 90, align: 'right' },
 ] as const;
 
@@ -274,7 +270,7 @@ export function renderQuotationPdf(model: QuotationPdfModel): Promise<Buffer> {
 
     // Totals, right-aligned under the table.
     doc.y += 10;
-    const totalsHeight = model.totals.length * 18 + 10;
+    const totalsHeight = model.totals.length * 18 + (model.priceNote ? 24 : 0) + 10;
     if (doc.y + totalsHeight > bottomLimit()) doc.addPage();
     const totalsX = right - 230;
     for (const row of model.totals) {
@@ -286,6 +282,9 @@ export function renderQuotationPdf(model: QuotationPdfModel): Promise<Buffer> {
       doc.text(row.label, totalsX, y + 1, { width: 120 });
       doc.text(row.value, totalsX + 120, y + 1, { width: 110, align: 'right' });
       doc.y = y + 18;
+    }
+    if (model.priceNote) {
+      doc.font('Body').fontSize(8.5).fillColor(MUTED).text(model.priceNote, totalsX, doc.y + 2, { width: 230, align: 'right' });
     }
 
     // Terms and notes.

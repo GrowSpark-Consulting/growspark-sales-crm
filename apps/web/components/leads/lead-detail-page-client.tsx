@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmActionDialog } from "@/components/ui/confirm-action-dialog";
+import { StatusButtonGroup } from "@/components/ui/status-button-group";
 import { ConvertLeadDialog } from "@/components/leads/convert-lead-dialog";
 import { NextActivityField, RecordTimeline } from "@/components/activities/record-timeline";
 import { formatDate, formatTime, formatPhoneForDisplay } from "@/lib/format";
@@ -48,14 +49,10 @@ export function LeadDetailPageClient({ leadId }: { leadId: string }) {
     void queryClient.invalidateQueries({ queryKey: [LEADS_QUERY_KEY_ROOT] });
   }
 
+  // The group shows the success toast and, if this throws, the error toast.
   async function changeStatus(status: OpenLeadStatus) {
-    try {
-      await apiPost(`/api/v1/leads/${leadId}/status`, { status });
-      toast.success(`Status changed to ${leadStatusLabel(status)}.`);
-      void queryClient.invalidateQueries({ queryKey: [LEADS_QUERY_KEY_ROOT] });
-    } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : "Could not change status. Please try again.");
-    }
+    await apiPost(`/api/v1/leads/${leadId}/status`, { status });
+    await queryClient.invalidateQueries({ queryKey: [LEADS_QUERY_KEY_ROOT] });
   }
 
   if (leadQuery.isLoading) {
@@ -86,7 +83,9 @@ export function LeadDetailPageClient({ leadId }: { leadId: string }) {
   // D29: CONVERTED is never offered as a manual target, and a lead that is
   // already CONVERTED (only reachable via the Day 3 convert action) offers
   // no status buttons at all — the API would refuse any change with 409.
-  const availableStatuses = OPEN_LEAD_STATUSES.filter((status) => status !== lead.status);
+  // The current status stays in the group as the selected button; clicking it
+  // does nothing. The API calls and what it allows are unchanged.
+  const statusOptions = OPEN_LEAD_STATUSES.map((status) => ({ value: status, label: leadStatusLabel(status) }));
 
   return (
     <RecordLayout
@@ -182,13 +181,7 @@ export function LeadDetailPageClient({ leadId }: { leadId: string }) {
               {lead.status !== "CONVERTED" && (
                 <div>
                   <p className="label mb-2 text-ink-muted">Change status</p>
-                  <div className="flex flex-wrap gap-2">
-                    {availableStatuses.map((status) => (
-                      <Button key={status} variant="outline" size="sm" onClick={() => changeStatus(status)}>
-                        {leadStatusLabel(status)}
-                      </Button>
-                    ))}
-                  </div>
+                  <StatusButtonGroup groupLabel="Change status" options={statusOptions} current={lead.status as OpenLeadStatus} onSelect={changeStatus} />
                 </div>
               )}
 
